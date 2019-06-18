@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/scottstanie/apertools.svg?branch=master)](https://travis-ci.org/scottstanie/apertools)
 
 # Apertools: tools for InSAR (Interferometric Synthetic Aperture Radar)
 
