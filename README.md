@@ -31,7 +31,7 @@ my_hgt = apertools.sario.load('/file/path/N20W100.hgt')
 ```
 
 #### latlon.py
-Contains LatlonImage class, which loads metadata about an image and acts as a smary numpy array.
+Contains LatlonImage class, which loads metadata about an image and acts as a smart numpy array.
 Includes functionality for slicing/selecting pixels by latitude/longitude, among other things.
 
 Also contains helper functions for maniuplating lat/lon data.
