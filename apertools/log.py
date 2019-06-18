@@ -6,7 +6,7 @@ nice formatting out of the box.
 
 Usage:
 
-    from insar.log import get_log
+    from apertools.log import get_log
     logger = get_log()
 
     logger.info("Something happened")

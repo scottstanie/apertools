@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime
 from os.path import join, dirname
 
-from insar.parsers import Sentinel, Uavsar
+from apertools.parsers import Sentinel, Uavsar
 
 
 class TestSentinel(unittest.TestCase):

@@ -4,7 +4,7 @@ import tempfile
 import shutil
 import matplotlib.pyplot as plt
 
-from insar import plotting, timeseries, sario
+from apertools import plotting, timeseries, sario
 
 
 class TestPlotting(unittest.TestCase):

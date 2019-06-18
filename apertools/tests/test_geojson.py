@@ -3,7 +3,7 @@ import json
 import tempfile
 from os.path import join, dirname
 
-from insar import geojson
+from apertools import geojson
 
 DATAPATH = join(dirname(__file__), 'data')
 
@@ -33,9 +33,8 @@ class TestGeojson(unittest.TestCase):
         self.assertRaises(KeyError, geojson.bounding_box, self.bad_geojson)
 
     def test_format_coords(self):
-        self.assertEqual(
-            geojson.format_coords(self.geojson, decimals=1),
-            '-156.0,18.7,-154.6,18.7,-154.6,20.3,-156.0,20.3,-156.0,18.7')
+        self.assertEqual(geojson.format_coords(self.geojson, decimals=1),
+                         '-156.0,18.7,-154.6,18.7,-154.6,20.3,-156.0,20.3,-156.0,18.7')
 
     def test_corner_input(self):
         result = geojson.corner_coords(self.top_corner, self.dlon, self.dlat)

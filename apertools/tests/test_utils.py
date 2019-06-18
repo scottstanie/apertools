@@ -5,7 +5,7 @@ import tempfile
 import shutil
 import numpy as np
 from numpy.testing import assert_array_equal
-from insar import utils
+from apertools import utils
 
 
 class TestHelpers(unittest.TestCase):

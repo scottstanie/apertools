@@ -7,7 +7,7 @@ import shutil
 import numpy as np
 from numpy.testing import assert_array_almost_equal
 
-from insar import sario
+from apertools import sario
 
 
 class TestLoading(unittest.TestCase):
@@ -16,11 +16,11 @@ class TestLoading(unittest.TestCase):
         self.datapath = join(dirname(__file__), 'data')
         self.rsc_path = join(self.datapath, 'elevation.dem.rsc')
         self.dem_path = join(self.datapath, 'elevation.dem')
-        self.rsc_data = OrderedDict(
-            [('width', 2), ('file_length', 3), ('x_first', -155.676388889), ('y_first',
-                                                                             19.5755555567),
-             ('x_step', 0.000138888888), ('y_step', -0.000138888888), ('x_unit', 'degrees'),
-             ('y_unit', 'degrees'), ('z_offset', 0), ('z_scale', 1), ('projection', 'LL')])
+        self.rsc_data = OrderedDict([('width', 2), ('file_length', 3), ('x_first', -155.676388889),
+                                     ('y_first', 19.5755555567), ('x_step', 0.000138888888),
+                                     ('y_step', -0.000138888888), ('x_unit', 'degrees'),
+                                     ('y_unit', 'degrees'), ('z_offset', 0), ('z_scale', 1),
+                                     ('projection', 'LL')])
 
     def test_get_file_rows_cols(self):
         expected_rows_cols = (3601, 7201)
@@ -80,11 +80,10 @@ class TestLoading(unittest.TestCase):
             self.datapath,
             'S1A_IW_SLC__1SDV_20180420T043026_20180420T043054_021546_025211_81BE.SAFE.small.geo')
         loaded_geo = sario.load_file(geo_path, verbose=True)
-        expected_geo = np.array(
-            [[-27.189274 - 60.105267j, -41.34938 + 82.05109j], [
-                58.716545 + 13.9955j, 68.892 - 42.065178j
-            ], [41.361275 - 152.78986j, -65.905945 - 61.246834j]],
-            dtype='complex64')
+        expected_geo = np.array([[-27.189274 - 60.105267j, -41.34938 + 82.05109j],
+                                 [58.716545 + 13.9955j, 68.892 - 42.065178j],
+                                 [41.361275 - 152.78986j, -65.905945 - 61.246834j]],
+                                dtype='complex64')
         assert_array_almost_equal(expected_geo, loaded_geo)
 
         loaded_dem = sario.load_file(self.dem_path, verbose=True)

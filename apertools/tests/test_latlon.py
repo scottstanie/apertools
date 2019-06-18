@@ -6,7 +6,7 @@ import unittest
 import numpy as np
 from numpy.testing import assert_array_almost_equal
 
-from insar import latlon
+from apertools import latlon
 
 
 class TestLatlonConversion(unittest.TestCase):
