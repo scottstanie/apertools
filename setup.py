@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="apertools",
-    version="0.1.0",
+    version="0.2.0",
     author="Scott Staniewicz",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and processing InSAR data",
@@ -26,6 +26,6 @@ setuptools.setup(
         "Topic :: Scientific/Engineering",
         "Intended Audience :: Science/Research",
     ],
-    install_requires=["numpy", "scipy", "requests", "matplotlib", "click", "sardem"],
+    install_requires=["numpy", "scipy", "requests", "matplotlib", "click", "sardem", "pandas"],
     zip_safe=False,
 )
