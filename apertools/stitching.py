@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """stitching.py: utilities for slicing and combining images
 """
-from __future__ import division
+from __future__ import division, print_function
 import collections
 import itertools
 import glob

@@ -3,7 +3,7 @@
 utils.py: Miscellaneous helper functions
 Email: scott.stanie@utexas.edu
 """
-from __future__ import division
+from __future__ import division, print_function
 import errno
 import os
 import numpy as np

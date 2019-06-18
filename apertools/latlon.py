@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 import copy
 from collections import Iterable
 from numpy import sin, cos, sqrt, arctan2, radians
@@ -54,7 +54,7 @@ class LatlonImage(np.ndarray):
     def __new__(cls, data=None, filename=None, dem_rsc_file=None, dem_rsc=None):
         """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts
 
-        if __new__() returns an instance of cls, then the new instance’s __init__()
+        if __new__() returns an instance of cls, then the new instance's __init__()
         is then called
         Otherwise, the __init__ won't get called:
         https://docs.scipy.org/doc/numpy/user/basics.subclassing.html#a-brief-python-primer-on-new-and-init

@@ -2,12 +2,14 @@
 Utilities for parsing file names of SAR products for relevant info.
 
 """
+from __future__ import division, print_function
 import os
 import re
 import pprint
 from datetime import datetime
 
-from apertools import latlon, utils
+import apertools.latlon
+import apertools.utils
 from apertools.log import get_log
 logger = get_log()
 
@@ -114,7 +116,7 @@ class Sentinel(Base):
         self._safe_dir = self._form_safe_dir(filename)
         self._preview_folder = os.path.join(self._safe_dir, 'preview')
         self.map_overlay_kml = os.path.join(self._preview_folder, 'map-overlay.kml')
-        self._lon_lat_overlay_coords = latlon.map_overlay_coords(self.map_overlay_kml)
+        self._lon_lat_overlay_coords = apertools.latlon.map_overlay_coords(self.map_overlay_kml)
 
 
 # TODO: in 30_20181107T092858_024480_02AF1F_BD80.iso.xml
@@ -293,8 +295,8 @@ class Sentinel(Base):
 
     def overlaps_dem(self, dem_rsc_data):
         """Swath is contained in DEM from rsc data"""
-        dem_extent = latlon.grid_extent(**dem_rsc_data)
-        return latlon.intersects(self.swath_extent, dem_extent)
+        dem_extent = apertools.latlon.grid_extent(**dem_rsc_data)
+        return apertools.latlon.intersects(self.swath_extent, dem_extent)
 
 
 class Uavsar(Base):
@@ -413,7 +415,7 @@ class Uavsar(Base):
         for p in self.POLARIZATIONS:
             shortname = shortname.replace(p, '')
 
-        ext = utils.get_file_ext(shortname)
+        ext = apertools.utils.get_file_ext(shortname)
         # If this is a block we split up and names .1.int, remove that since
         # all have the same .ann file
         shortname = re.sub('\.\d' + ext, ext, shortname)
@@ -459,7 +461,7 @@ class Uavsar(Base):
         def _make_line_regex(ext, field):
             return r'{}.{}'.format(line_keywords.get(ext), field)
 
-        ext = utils.get_file_ext(self.filename)
+        ext = apertools.utils.get_file_ext(self.filename)
         if self.verbose:
             logger.info("Trying to load ann_data from %s", self.ann_filename)
         if not os.path.exists(self.ann_filename):

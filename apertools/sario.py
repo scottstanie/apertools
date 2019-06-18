@@ -3,6 +3,7 @@
 Functions to assist input and output of SAR data
 Email: scott.stanie@utexas.edu
 """
+from __future__ import division, print_function
 import glob
 import math
 import os

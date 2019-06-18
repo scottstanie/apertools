@@ -1,5 +1,6 @@
 """Functions to deal with Line of sight vector computation
 """
+from __future__ import division, print_function
 import os
 import glob
 import numpy as np
