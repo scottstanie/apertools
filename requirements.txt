@@ -1,3 +1,4 @@
+backports.functools_lru_cache
 colorlog==3.1.4
 matplotlib>=1.5.1
 numpy>=1.14.2
