@@ -1,12 +1,11 @@
 language: python
 python:
   - "2.7"
-  - "3.4"
+  - "3.5"
 cache: pip
 install:
   - pip install -r requirements-dev.txt
   - pip install -r requirements.txt
-  - python setup.py build_ext -i
 
 # https://stackoverflow.com/a/35403128
 before_script: # configure a headless display to test plot generation
@@ -15,7 +14,7 @@ before_script: # configure a headless display to test plot generation
   - sleep 3 # give xvfb some time to start
 
 script:
-  nosetests -svd --with-doctest --with-coverage --cover-package=insar --where=insar
+  nosetests -svd --with-doctest --with-coverage --cover-package=apertools --where=apertools
 
 after_success: coveralls
 

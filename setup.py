@@ -14,7 +14,7 @@ setuptools.setup(
     url="https://github.com/scottstanie/apertools",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    classifiers=(
+    classifiers=[
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3.3",
@@ -25,7 +25,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Topic :: Scientific/Engineering",
         "Intended Audience :: Science/Research",
-    ),
+    ],
     install_requires=["numpy", "scipy", "requests", "matplotlib", "click", "sardem"],
     zip_safe=False,
 )
