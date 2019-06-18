@@ -6,7 +6,6 @@ import apertools
 from apertools import *
 # from apertools.scripts import *
 import sardem
-import eof
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
