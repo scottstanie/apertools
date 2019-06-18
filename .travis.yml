@@ -14,7 +14,7 @@ before_script: # configure a headless display to test plot generation
   - sleep 3 # give xvfb some time to start
 
 script:
-  nosetests -svd --with-doctest --with-coverage --cover-package=apertools --where=apertools
+  nosetests -svd --logging-level=INFO --with-doctest --with-coverage --cover-package=apertools --where=apertools
 
 after_success: coveralls
 

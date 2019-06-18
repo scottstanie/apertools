@@ -1,18 +1,21 @@
 import os
 import glob
 import datetime
-import functools
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter1d
+try:
+    from functools import lru_cache
+except ImportError:
+    from backports.functools_lru_cache import lru_cache
 
 import apertools
 
 GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
 
 
-@functools.lru_cache()
+@lru_cache()
 def read_station_df(gps_dir=None, header=None):
     """Read in the name, lat, lon, alt list of gps stations"""
     gps_dir = gps_dir or GPS_DIR
