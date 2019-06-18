@@ -29,8 +29,23 @@ my_dem = apertools.sario.load('/file/path/elevation.dem')
 my_hgt = apertools.sario.load('/file/path/N20W100.hgt')
 ```
 
+#### latlon.py
+Contains LatlonImage class, which loads metadata about an image and acts as a smary numpy array.
+Includes functionality for slicing/selecting pixels by latitude/longitude, among other things.
+
+Also contains helper functions for maniuplating lat/lon data.
+
+#### plotting.py
+Useful plotting functions, including center-shifted colormap (to make 0 values a neutral color), and 3D stack viewing function
+
+
 #### los.py
 Line of sight utilities
+
+
+#### gps.py
+Several functions for using GPS data in conjunction with InSAR stacks
+
 
 #### parsers.py
 
@@ -81,8 +96,6 @@ parser.field_meanings
 ```
 
 UAVSAR parser also exists.
-
-More will be added in the future.
 
 
 #### log.py
