@@ -5,8 +5,8 @@ from numpy import sin, cos, sqrt, arctan2, radians
 from xml.etree import ElementTree
 import os
 import numpy as np
-import sario, utils, kml
-from log import get_log
+from apertools import sario, utils
+from apertools.log import get_log
 
 logger = get_log()
 
@@ -421,10 +421,6 @@ class LatlonImage(np.ndarray):
             # return all(num is not None for num in self.nearest_pixel(lon, lat))
         elif lon_lat_point_list is not None:
             return [grid_contains((lon, lat), **self.dem_rsc) for lon, lat in lon_lat_point_list]
-
-    def to_kml(self, tif_filename, title=None, desc="Description", kml_out=None):
-        """Convert the dem.rsc data into a kml string"""
-        return kml.create_kml(self.dem_rsc, tif_filename, title=title, desc=desc, kml_out=kml_out)
 
     def distance(self, row_col1, row_col2):
         """Find the distance in km between two points on the image

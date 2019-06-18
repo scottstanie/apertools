@@ -17,7 +17,6 @@ Usage:
     # Custom output for this module:
     logger.success("Something great happened: highlight this success")
 """
-import argparse
 import logging
 import time
 

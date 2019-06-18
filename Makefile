@@ -2,7 +2,7 @@
 
 test:
 	@echo "Running doctests and unittests: nose must be installed"
-	nosetests -v --with-doctest --where aperture
+	nosetests -v --logging-level=INFO --with-doctest --where apertools
 
 
 REPO?=pypi

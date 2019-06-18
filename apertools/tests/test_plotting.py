@@ -4,7 +4,7 @@ import tempfile
 import shutil
 import matplotlib.pyplot as plt
 
-from apertools import plotting, timeseries, sario
+from apertools import plotting, sario
 
 
 class TestPlotting(unittest.TestCase):
@@ -13,6 +13,7 @@ class TestPlotting(unittest.TestCase):
         igram_path = join(self.datapath, 'sbas_test')
         self.igram_path = igram_path
         self.stack = sario.load_stack(directory=igram_path, file_ext=".unw")
+        self.file_list = sorted(sario.find_files(igram_path, "*.unw"))
 
     def test_animate_stack(self):
         try:
@@ -22,8 +23,7 @@ class TestPlotting(unittest.TestCase):
             temp_dir = tempfile.mkdtemp()
             plotting.animate_stack(self.stack, display=False)
 
-            igram_files = timeseries.read_intlist(join(self.igram_path, 'intlist'), parse=False)
-            plotting.animate_stack(self.stack, display=False, titles=igram_files)
+            plotting.animate_stack(self.stack, display=False, titles=self.file_list)
 
         finally:
             shutil.rmtree(temp_dir)

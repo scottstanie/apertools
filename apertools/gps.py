@@ -7,9 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import uniform_filter1d
 
-import los
-import latlon
-import kml
+import apertools
 
 GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
 
@@ -111,7 +109,7 @@ def _clean_gps_df(df, start_year, end_year=None):
 def load_gps_station_df(station_name, basedir=GPS_DIR, start_year=2015, end_year=2018):
     """Loads one gps station file's data of ENU displacement since start_year"""
     gps_data_file = os.path.join(basedir, '%s.NA12.tenv3' % station_name)
-    df = pd.read_csv(gps_data_file, header=0, sep='\s+')
+    df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
     return _clean_gps_df(df, start_year, end_year)
 
 
@@ -164,11 +162,11 @@ def load_gps_los_data(insar_dir, station_name=None, to_cm=True, zero_start=True)
     Returns the timeseries, and the datetimes of the points
     """
     lon, lat = station_lonlat(station_name)
-    enu_coeffs = los.find_enu_coeffs(lon, lat, insar_dir)
+    enu_coeffs = apertools.los.find_enu_coeffs(lon, lat, insar_dir)
 
     df = load_gps_station_df(station_name)
     enu_data = df[['east', 'north', 'up']].T
-    los_gps_data = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
+    los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
     if to_cm:
         print("Converting GPS to cm:")
@@ -197,18 +195,18 @@ def find_insar_ts(insar_dir, station_name, defo_name='deformation.npy'):
     Returns the timeseries, and the datetimes of points for plotting
     """
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    geolist, deformation_stack = load_deformation(igrams_dir, filename=defo_name)
-    defo_img = latlon.load_deformation_img(igrams_dir, filename=defo_name)
+    geolist, deformation_stack = apertools.sario.load_deformation(igrams_dir, filename=defo_name)
+    defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_name)
 
     lon, lat = station_lonlat(station_name)
     insar_row, insar_col = defo_img.nearest_pixel(lat=lat, lon=lon)
     # import pdb
     # pdb.set_trace()
-    insar_ts = utils.window_stack(deformation_stack,
-                                  insar_row,
-                                  insar_col,
-                                  window_size=5,
-                                  func=np.mean)
+    insar_ts = apertools.utils.window_stack(deformation_stack,
+                                            insar_row,
+                                            insar_col,
+                                            window_size=5,
+                                            func=np.mean)
     return geolist, insar_ts
 
 
@@ -228,7 +226,7 @@ def plot_gps_vs_insar():
 
     defo_name = 'deformation.npy'
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    defo_img = latlon.load_deformation_img(igrams_dir, filename=defo_name)
+    defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_name)
     station_list = stations_within_image(defo_img)
     for station_name, lon, lat in station_list:
         plt.figure()
@@ -265,7 +263,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
 
     igrams_dir = os.path.join(insar_dir, 'igrams')
-    defo_img = latlon.load_deformation_img(igrams_dir, filename=defo_name)
+    defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_name)
     station_list = stations_within_image(defo_img)
 
     stat1, lon1, lat1 = station_list[0]
@@ -342,7 +340,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
 
 def save_station_points_kml(station_iter):
     for name, lat, lon, alt in station_iter:
-        kml.create_kml(
+        apertools.kml.create_kml(
             title=name,
             desc='GPS station location',
             lon_lat=(lon, lat),

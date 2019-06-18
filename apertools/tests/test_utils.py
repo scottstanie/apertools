@@ -25,24 +25,6 @@ class TestHelpers(unittest.TestCase):
         downsampled = utils.take_looks(self.im, 1, 2)
         assert_array_equal(downsampled, np.array([[0.055], [3.5]]))
 
-    def test_split_array_into_blocks(self):
-        # Even shape test
-        long_arr = np.arange(12).reshape((6, 2))
-        blocks = utils.split_array_into_blocks(long_arr)
-        expected = [
-            np.array([[0, 1], [2, 3]]),
-            np.array([[4, 5], [6, 7]]),
-            np.array([[8, 9], [10, 11]]),
-        ]
-        for idx, block in enumerate(blocks):
-            assert_array_equal(block, expected[idx])
-
-        # Now try uneven block
-        long_arr = np.arange(12).reshape((6, 2))
-        expected.append(np.array([[12, 13]]))
-        for idx, block in enumerate(blocks):
-            assert_array_equal(block, expected[idx])
-
     def test_mkdir_p(self):
         try:
             temp_dir = tempfile.mkdtemp()

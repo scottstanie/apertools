@@ -7,9 +7,8 @@ import re
 import pprint
 from datetime import datetime
 
-import latlon
-import utils
-from log import get_log
+from apertools import latlon, utils
+from apertools.log import get_log
 logger = get_log()
 
 __all__ = ['Sentinel', 'Uavsar']

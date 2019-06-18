@@ -1,7 +1,6 @@
 import subprocess
 import re
-import geojson
-import latlon
+from apertools import geojson, latlon
 
 # TODO: GEOTiff stuff with gdal!
 # Maybe rename this to something not kml, maybe use rasterio
@@ -108,10 +107,10 @@ def rsc_bounds(rsc_data):
     return {'north': north, 'south': south, 'east': east, 'west': west}
 
 
-def parse_quad_kml(quad_kml_filename):
-    lon_lat_overlay_coords = latlon.map_overlay_coords(self.map_overlay_kml)
-    etree = ElementTree.parse(quad_kml_filename)
-    root = etree.getroot()
+# def parse_quad_kml(quad_kml_filename):
+#     lon_lat_overlay_coords = latlon.map_overlay_coords(self.map_overlay_kml)
+#     etree = ElementTree.parse(quad_kml_filename)
+#     root = etree.getroot()
 
 
 def create_kml(rsc_data=None,

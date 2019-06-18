@@ -10,11 +10,10 @@ import pprint
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-
 import sardem
-import parsers
-import utils
-from log import get_log
+
+from apertools import parsers, utils
+from apertools.log import get_log
 logger = get_log()
 
 FLOAT_32_LE = np.dtype('<f4')

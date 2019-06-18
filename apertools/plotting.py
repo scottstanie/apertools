@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from log import get_log
-import utils, latlon
+from apertools.log import get_log
+from apertools import utils, latlon
 
 logger = get_log()
 

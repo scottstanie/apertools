@@ -10,11 +10,10 @@ import subprocess
 # from scipy import interpolate
 import sardem.loading
 
-import latlon
-import timeseries
+from apertools import latlon
 import matplotlib.pyplot as plt
 
-from log import get_log
+from apertools.log import get_log
 logger = get_log()
 
 
