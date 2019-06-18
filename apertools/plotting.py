@@ -78,13 +78,11 @@ def discrete_seismic_colors(n=5):
 
 DISMPH = make_dismph_colormap()
 plt.register_cmap(cmap=DISMPH)
-DISCRETE_SEISMIC5 = matplotlib.colors.LinearSegmentedColormap.from_list('discrete_seismic5',
-                                                                        discrete_seismic_colors(5),
-                                                                        N=5)
+DISCRETE_SEISMIC5 = matplotlib.colors.LinearSegmentedColormap.from_list(
+    'discrete_seismic5', discrete_seismic_colors(5), N=5)
 plt.register_cmap(cmap=DISCRETE_SEISMIC5)
-DISCRETE_SEISMIC7 = matplotlib.colors.LinearSegmentedColormap.from_list('discrete_seismic7',
-                                                                        discrete_seismic_colors(7),
-                                                                        N=7)
+DISCRETE_SEISMIC7 = matplotlib.colors.LinearSegmentedColormap.from_list(
+    'discrete_seismic7', discrete_seismic_colors(7), N=7)
 plt.register_cmap(cmap=DISCRETE_SEISMIC7)
 
 
@@ -207,12 +205,8 @@ def plot_image_shifted(img,
 
     if perform_shift:
         shifted_cmap = make_shifted_cmap(img, cmap_name=cmap, vmin=vmin, vmax=vmax)
-        axes_image = ax.imshow(img,
-                               cmap=shifted_cmap,
-                               extent=extent,
-                               vmin=vmin,
-                               vmax=vmax,
-                               aspect=aspect)
+        axes_image = ax.imshow(
+            img, cmap=shifted_cmap, extent=extent, vmin=vmin, vmax=vmax, aspect=aspect)
     else:
         vmax = _abs_max(img)
         axes_image = ax.imshow(img, cmap=cmap, extent=extent, vmax=vmax, vmin=-vmax, aspect=aspect)
@@ -274,12 +268,8 @@ def view_stack(
         raise ValueError("display_img must be an int or ndarray-like obj")
 
     title = title or "Deformation Time Series"  # Default title
-    plot_image_shifted(img,
-                       fig=imagefig,
-                       title=title,
-                       cmap='seismic',
-                       label=label,
-                       perform_shift=False)
+    plot_image_shifted(
+        img, fig=imagefig, title=title, cmap='seismic', label=label, perform_shift=False)
 
     timefig = plt.figure()
 
@@ -390,12 +380,8 @@ def animate_stack(stack,
         fig.suptitle(titles[idx])
         return axes_image,
 
-    stack_ani = animation.FuncAnimation(fig,
-                                        update_im,
-                                        frames=range(num_images),
-                                        interval=pause_time,
-                                        blit=False,
-                                        repeat=True)
+    stack_ani = animation.FuncAnimation(
+        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True)
 
     if save_title:
         logger.info("Saving to %s", save_title)

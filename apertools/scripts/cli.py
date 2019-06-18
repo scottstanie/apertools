@@ -30,67 +30,6 @@ def cli(ctx, verbose, path):
     ctx.obj['path'] = path
 
 
-# COMMAND: animate
-@cli.command()
-@click.option(
-    "--pause",
-    '-p',
-    default=200,
-    help="For --animate, time in milliseconds to pause"
-    " between stack layers (default 200).")
-@click.option(
-    "--save", '-s', help="If you want to save the animation as a movie,"
-    " title to save file as.")
-@click.option(
-    "--display/--no-display",
-    help="Pop up matplotlib figure to view (instead of just saving)",
-    default=True)
-@click.option("--cmap", default='seismic', help="Colormap for image display.")
-@click.option("--shifted/--no-shifted", default=True, help="Shift colormap to be 0 centered.")
-@click.option("--file-ext", help="If not loading deformation.npy, the extension of files to load")
-@click.option(
-    "--intlist/--no-intlist",
-    default=False,
-    help="If loading other file type, also load `intlist` file  for titles")
-@click.option("--db/--no-db", help="Use dB scale for images (default false)", default=False)
-@click.option("--vmax", type=float, help="Maximum value for imshow")
-@click.option("--vmin", type=float, help="Minimum value for imshow")
-@click.pass_obj
-def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db, vmin, vmax):
-    """Creates animation for 3D image stack.
-
-    If deformation.npy and geolist.npy or .unw files are not in current directory,
-    use the --path option:
-
-        aper --path /path/to/igrams animate
-
-    Note: Default is to load 3D stack named deformation.npy
-    Otherwise, use --file-ext "unw", for example, to grab all files
-    """
-    if file_ext:
-        stack = apertools.sario.load_stack(directory=context['path'], file_ext=file_ext)
-        titles = sorted(apertools.sario.find_files(context['path'], "*" + file_ext))
-    else:
-        geolist, deformation = apertools.sario.load_deformation(context['path'])
-        stack = deformation
-        titles = [d.strftime("%Y-%m-%d") for d in geolist]
-
-    if db:
-        stack = apertools.utils.db(stack)
-
-    apertools.plotting.animate_stack(
-        stack,
-        pause_time=pause,
-        display=display,
-        titles=titles,
-        save_title=save,
-        cmap_name=cmap,
-        shifted=shifted,
-        vmin=vmin,
-        vmax=vmax,
-    )
-
-
 # COMMAND: view-stack
 @cli.command('view-stack')
 @click.option("--filename", default='deformation.npy', help="Name of saved deformation stack")
@@ -126,20 +65,12 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
     else:
         rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
 
-    stack = deformation[:, row_start:row_end, col_start:col_end]
-    _, nrows, ncols = stack.shape
-    new_rsc_data = apertools.latlon.LatlonImage.crop_rsc_data(
-        rsc_data,
-        row_start,
-        col_start,
-        nrows,
-        ncols,
-    )
-    img = apertools.latlon.LatlonImage(data=np.mean(stack[-3:], axis=0), dem_rsc=new_rsc_data)
-    img = img[row_start:row_end, col_start:col_end]
+    deformation = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
+    deformation = deformation[:, row_start:row_end, col_start:col_end]
+    img = np.mean(deformation[-3:], axis=0)
 
     apertools.plotting.view_stack(
-        stack,
+        deformation,
         img,
         geolist=geolist,
         title=title,
@@ -229,6 +160,67 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
         shape=shape,
     )
     print(kml_string)
+
+
+# COMMAND: animate
+@cli.command()
+@click.option(
+    "--pause",
+    '-p',
+    default=200,
+    help="For --animate, time in milliseconds to pause"
+    " between stack layers (default 200).")
+@click.option(
+    "--save", '-s', help="If you want to save the animation as a movie,"
+    " title to save file as.")
+@click.option(
+    "--display/--no-display",
+    help="Pop up matplotlib figure to view (instead of just saving)",
+    default=True)
+@click.option("--cmap", default='seismic', help="Colormap for image display.")
+@click.option("--shifted/--no-shifted", default=True, help="Shift colormap to be 0 centered.")
+@click.option("--file-ext", help="If not loading deformation.npy, the extension of files to load")
+@click.option(
+    "--intlist/--no-intlist",
+    default=False,
+    help="If loading other file type, also load `intlist` file  for titles")
+@click.option("--db/--no-db", help="Use dB scale for images (default false)", default=False)
+@click.option("--vmax", type=float, help="Maximum value for imshow")
+@click.option("--vmin", type=float, help="Minimum value for imshow")
+@click.pass_obj
+def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db, vmin, vmax):
+    """Creates animation for 3D image stack.
+
+    If deformation.npy and geolist.npy or .unw files are not in current directory,
+    use the --path option:
+
+        aper --path /path/to/igrams animate
+
+    Note: Default is to load 3D stack named deformation.npy
+    Otherwise, use --file-ext "unw", for example, to grab all files
+    """
+    if file_ext:
+        stack = apertools.sario.load_stack(directory=context['path'], file_ext=file_ext)
+        titles = sorted(apertools.sario.find_files(context['path'], "*" + file_ext))
+    else:
+        geolist, deformation = apertools.sario.load_deformation(context['path'])
+        stack = deformation
+        titles = [d.strftime("%Y-%m-%d") for d in geolist]
+
+    if db:
+        stack = apertools.utils.db(stack)
+
+    apertools.plotting.animate_stack(
+        stack,
+        pause_time=pause,
+        display=display,
+        titles=titles,
+        save_title=save,
+        cmap_name=cmap,
+        shifted=shifted,
+        vmin=vmin,
+        vmax=vmax,
+    )
 
 
 # COMMAND: dem-rate
