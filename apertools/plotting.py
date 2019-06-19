@@ -231,8 +231,10 @@ def view_stack(
         geolist=None,
         label="Centimeters",
         cmap='seismic',
+        perform_shift=False,
         title='',
         lat_lon=False,
+        line_plot_kwargs=None,
 ):
     """Displays an image from a stack, allows you to click for timeseries
 
@@ -245,9 +247,13 @@ def view_stack(
         label (str): Optional- Label on colorbar/yaxis for plot
             Default = Centimeters
         cmap (str): Optional- colormap to display stack image (default='seismic')
+        perform_shift (bool): default False, make the colormap shift to center at 0
+            e.g. When False, will make  colorbar -10 to 10 if data is within [-1,10]
+            but when True, makes it tight to [-1, 10]
         title (str): Optional- Title for plot
         lat_lon (dict): Optional- Uses latitude and longitude in legend
             instead of row/col
+        line_plot_kwargs (dict): matplotlib options for the line plot
 
     Raises:
         ValueError: if display_img is not an int or the string 'mean'
@@ -261,20 +267,22 @@ def view_stack(
 
     if isinstance(display_img, int):
         img = stack[display_img, :, :]
+    # TODO: is this the best way to check if it's ndarray or Latlonimage?
     elif hasattr(display_img, '__array_finalize__'):
-        # TODO: figure out best way to check ndarray or Latlonimage
         img = display_img
     else:
         raise ValueError("display_img must be an int or ndarray-like obj")
 
     title = title or "Deformation Time Series"  # Default title
     plot_image_shifted(
-        img, fig=imagefig, title=title, cmap='seismic', label=label, perform_shift=False)
+        img, fig=imagefig, title=title, cmap=cmap, label=label, perform_shift=perform_shift)
 
     timefig = plt.figure()
 
     plt.title(title)
     legend_entries = []
+    if not line_plot_kwargs:
+        line_plot_kwargs = dict(marker='o', linestyle='dashed', linewidth=1, markersize=4)
 
     def onclick(event):
         # Ignore right/middle click, clicks off image
@@ -297,7 +305,7 @@ def view_stack(
         else:
             legend_entries.append('Row %s, Col %s' % (row, col))
 
-        plt.plot(geolist, timeline, marker='o', linestyle='dashed', linewidth=1, markersize=4)
+        plt.plot(geolist, timeline, **line_plot_kwargs)
         plt.legend(legend_entries, loc='upper left')
         x_axis_str = "SAR image date" if geolist is not None else "Image number"
         plt.xlabel(x_axis_str)
