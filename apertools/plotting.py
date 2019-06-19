@@ -233,6 +233,7 @@ def view_stack(
         cmap='seismic',
         perform_shift=False,
         title='',
+        legend_loc="upper left",
         lat_lon=False,
         line_plot_kwargs=None,
 ):
@@ -251,6 +252,7 @@ def view_stack(
             e.g. When False, will make  colorbar -10 to 10 if data is within [-1,10]
             but when True, makes it tight to [-1, 10]
         title (str): Optional- Title for plot
+        legend_loc (str): Default 'upper left', for the line plot
         lat_lon (dict): Optional- Uses latitude and longitude in legend
             instead of row/col
         line_plot_kwargs (dict): matplotlib options for the line plot
@@ -306,7 +308,7 @@ def view_stack(
             legend_entries.append('Row %s, Col %s' % (row, col))
 
         plt.plot(geolist, timeline, **line_plot_kwargs)
-        plt.legend(legend_entries, loc='upper left')
+        plt.legend(legend_entries, loc=legend_loc)
         x_axis_str = "SAR image date" if geolist is not None else "Image number"
         plt.xlabel(x_axis_str)
         plt.ylabel(label)
