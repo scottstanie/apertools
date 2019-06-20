@@ -26,7 +26,16 @@ setuptools.setup(
         "Topic :: Scientific/Engineering",
         "Intended Audience :: Science/Research",
     ],
-    install_requires=["numpy", "scipy", "requests", "matplotlib", "click", "sardem", "pandas"],
+    install_requires=[
+        "numpy",
+        "scipy",
+        "requests",
+        "matplotlib",
+        "click",
+        "sardem",
+        "pandas",
+        "h5py",
+    ],
     entry_points={
         "console_scripts": [
             "aper=apertools.scripts.cli:cli",

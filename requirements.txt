@@ -1,6 +1,7 @@
 backports.functools_lru_cache
 click>=6.0
 colorlog==3.1.4
+h5py>=2.9
 matplotlib>=1.5.1
 numpy>=1.14.2
 pandas>=0.24.0
