@@ -9,4 +9,5 @@ from . import los
 from . import parsers
 from . import plotting
 from . import sario
+from . import stitching
 from . import utils
