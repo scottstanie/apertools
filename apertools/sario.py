@@ -1,8 +1,9 @@
 #! /usr/bin/env python
 """Author: Scott Staniewicz
-Functions to assist input and output of SAR data
+Input/Output functions for loading/saving SAR data in binary formats
 Email: scott.stanie@utexas.edu
 """
+
 from __future__ import division, print_function
 import glob
 import math
@@ -10,6 +11,7 @@ import os
 import pprint
 import sys
 import numpy as np
+import h5py
 import matplotlib.pyplot as plt
 import sardem
 
@@ -142,8 +144,8 @@ def load_file(filename,
         return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename):
-        return utils.take_looks(load_complex(filename, ann_info=ann_info, rsc_data=rsc_data),
-                                *looks)
+        return utils.take_looks(
+            load_complex(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
     else:
         return utils.take_looks(load_real(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
 
@@ -414,3 +416,38 @@ def load_deformation(igram_path, filename='deformation.npy'):
         return None, None
 
     return geolist, deformation
+
+
+def create_hdf5_stack(outfile_name=None,
+                      compression=None,
+                      file_list=None,
+                      directory=None,
+                      file_ext=None,
+                      **kwargs):
+    """Make stack as hdf5 file from a list of files
+
+    Args:
+        outfile_name (str): if none provided, creates a file `[file_ext]_stack.h5`
+
+    Returns:
+        outfile_name
+    """
+    if not outfile_name:
+        if not file_ext:
+            file_ext = utils.get_file_ext(file_list[0])
+        outfile_name = "{fext}_stack.h5".format(fext=file_ext.strip("."))
+
+    if utils.get_file_ext(outfile_name) not in (".h5", ".hdf5"):
+        raise ValueError("outfile_name must end in .h5 or .hdf5")
+
+    # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
+    # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
+
+    with h5py.File(outfile_name, "w") as hf:
+        hf.create_dataset(
+            "stack",
+            data=load_stack(file_list=file_list, directory=directory, file_ext=file_ext, **kwargs),
+        )
+        # vsource = h5py.VirtualSource()
+
+    return outfile_name

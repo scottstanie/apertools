@@ -7,6 +7,8 @@ import click
 import apertools
 import sardem
 import numpy as np
+import h5py
+from datetime import datetime
 import matplotlib.pyplot as plt
 from .plot_insar import plot_image
 
@@ -56,7 +58,13 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         aper --path /path/to/igrams view_stack
 
     """
-    geolist, deformation = apertools.sario.load_deformation(context['path'], filename=filename)
+    if filename.endswith(".h5"):
+        h_file = h5py.File(filename, "r")
+        deformation = h_file["deformation"]
+        geolist = [datetime.strptime(g.decode("ascii"), "%Y%m%d").date() for g in h_file["geolist"]]
+    else:
+        geolist, deformation = apertools.sario.load_deformation(context['path'], filename=filename)
+
     if geolist is None or deformation is None:
         return
 

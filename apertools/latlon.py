@@ -212,8 +212,8 @@ class LatlonImage(np.ndarray):
             dslice = None
             lat, lon = slice_items
         else:
-            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" %
-                             (self.ndim, slice_items))
+            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" % (self.ndim,
+                                                                                     slice_items))
 
         if isinstance(lat, slice):
             # Use class step size if None given
