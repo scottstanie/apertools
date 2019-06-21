@@ -212,8 +212,8 @@ class LatlonImage(np.ndarray):
             dslice = None
             lat, lon = slice_items
         else:
-            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" % (self.ndim,
-                                                                                     slice_items))
+            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" %
+                             (self.ndim, slice_items))
 
         if isinstance(lat, slice):
             # Use class step size if None given
@@ -227,13 +227,13 @@ class LatlonImage(np.ndarray):
             lon_step = lon.step or self.lon_step
             lon = np.arange(lon_start, lon_stop, lon_step)
 
-        print("Slicing lat = %s" % lat)
-        print("Slicing lon = %s" % lon)
+        # print("Slicing lat = %s" % lat)
+        # print("Slicing lon = %s" % lon)
         rows, cols = self.nearest_pixel(lon=lon, lat=lat)
-        print("Row: %s" % rows)
-        print("Col: %s" % cols)
-        # TODO: do I care about converting lat slices to index slices? for now assume continuous list
-        # if these are lists/arrays, we need them to be slices
+        # print("Row: %s" % rows)
+        # print("Col: %s" % cols)
+        # TODO: do I care about converting lat slices to index slices?
+        # for now assume continuous list if these are lists/arrays, we need them to be slices
         if isinstance(rows, Iterable):
             rows = slice(min(rows), max(rows) + 1)
         if isinstance(cols, Iterable):
@@ -459,10 +459,10 @@ class LatlonImage(np.ndarray):
         return self.pixel_to_km(1)**2
 
 
-def load_deformation_img(igram_path, n=3, filename='deformation.npy', rsc_filename='dem.rsc'):
+def load_deformation_img(igram_path=".", n=3, filename='deformation.npy', rsc_filename='dem.rsc'):
     """Loads mean of last n images of a deformation stack in LatlonImage
     """
-    defo_stack = np.load(os.path.join(igram_path, filename))
+    defo_stack = sario.load(os.path.join(igram_path, filename))
     rsc_filename = os.path.join(igram_path, rsc_filename)
     img = LatlonImage(data=np.mean(defo_stack[-n:], axis=0), dem_rsc_file=rsc_filename)
     return img

@@ -34,6 +34,103 @@ GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
 STATION_LLH_FILE = "station_llh_all.csv"
 
 
+def load_station_data(station_name,
+                      gps_dir=GPS_DIR,
+                      start_year=2015,
+                      end_year=2018,
+                      download_if_missing=True):
+    """Loads one gps station's ENU data since start_year until end_year
+
+    Args:
+        station_name (str): 4 Letter name of GPS station
+            See http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html for map
+        gps_dir (str): directory containing gps station lla csv for read_station_llas
+        start_year (int), default 2015, cutoff for beginning of GPS data
+        end_year (int): default 2018, cut off for end of GPS data
+        download_if_missing (bool): default True
+    """
+    gps_data_file = os.path.join(gps_dir, '%s.NA12.tenv3' % station_name)
+    if not os.path.exists(gps_data_file):
+        logger.warning("%s does not exist.", gps_data_file)
+        if download_if_missing:
+            logger.info("Downloading %s", station_name)
+            download_station_data(station_name, gps_dir=gps_dir)
+
+    df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
+    return _clean_gps_df(df, start_year, end_year)
+
+
+def stations_within_image(image_ll=None,
+                          image_filename=None,
+                          mask_invalid=True,
+                          gps_dir=None,
+                          gps_filename=None):
+    """Given an image, find gps stations contained in area
+
+    Must have an associated .rsc file, either from being a LatlonImage (passed
+    by image_ll), or have the file in same directory as `image_filename`
+
+    Args:
+        image_ll (LatlonImage): LatlonImage of area with data
+        image_filename (str): filename to load into a LatlonImage
+        mask_invalid (bool): Default true. if true, don't return stations
+            where the image value is NaN or exactly 0
+        gps_dir (str): directory containing gps station lla csv for read_station_llas
+
+    Returns:
+        ndarray: Nx3, with columns ['name', 'lon', 'lat']
+    """
+    if image_ll is None:
+        image_ll = apertools.latlon.LatlonImage(filename=image_filename)
+
+    df = read_station_llas(gps_dir=gps_dir, filename=gps_filename)
+    station_lon_lat_arr = df[['lon', 'lat']].values
+    contains_bools = image_ll.contains(station_lon_lat_arr)
+    candidates = df[contains_bools][['name', 'lon', 'lat']].values
+    good_stations = []
+    if mask_invalid:
+        for name, lon, lat in candidates:
+            val = image_ll[..., lat, lon]
+            if np.isnan(val) or val == 0:
+                continue
+            else:
+                good_stations.append([name, lon, lat])
+    else:
+        good_stations = candidates
+    return good_stations
+
+
+def plot_stations(image_ll=None, image_filename=None, mask_invalid=True):
+    """Plot an GPS station points contained within an image"""
+    if image_ll is None:
+        try:
+            # First check if we want to load the 3D stack "deformation.npy"
+            image_ll = apertools.latlon.load_deformation_img(filename=image_filename)
+        except ValueError:
+            image_ll = apertools.latlon.LatlonImage(filename=image_filename)
+
+    stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
+    # TODO: maybe just plot_image_shifted
+    fig, ax = plt.subplots()
+    axim = ax.imshow(image_ll, extent=image_ll.extent)
+    fig.colorbar(axim)
+
+    for name, lon, lat in stations:
+        ax.plot(lon, lat, 'X', markersize=15, label=name)
+    plt.legend()
+
+
+def save_station_points_kml(station_iter):
+    for name, lat, lon, alt in station_iter:
+        apertools.kml.create_kml(
+            title=name,
+            desc='GPS station location',
+            lon_lat=(lon, lat),
+            kml_out='%s.kml' % name,
+            shape='point',
+        )
+
+
 @lru_cache()
 def read_station_llas(gps_dir=None, header=None, filename=None):
     """Read in the name, lat, lon, alt list of gps stations
@@ -51,38 +148,10 @@ def read_station_llas(gps_dir=None, header=None, filename=None):
 
 
 def station_lonlat(station_name, gps_dir=None):
+    """Return the (lon, lat) of a `station_name`"""
     df = read_station_llas(gps_dir=gps_dir)
     name, lat, lon, alt = df[df['name'] == station_name].iloc[0]
     return lon, lat
-
-
-def stations_within_image(image_ll, mask_invalid=True, gps_dir=None, gps_filename=None):
-    """Given a LatlonImage, find gps stations contained in area
-
-    Args:
-        image_ll (LatlonImage): LatlonImage of area with data
-        mask_invalid (bool): Default true. if true, don't return stations
-            where the image value is NaN or exactly 0
-        gps_dir (str): directory containing gps station lla csv for read_station_llas
-
-    Returns:
-        ndarray: Nx3, with columns ['name', 'lon', 'lat']
-    """
-    df = read_station_llas(gps_dir=gps_dir, filename=gps_filename)
-    station_lon_lat_arr = df[['lon', 'lat']].values
-    contains_bools = image_ll.contains(station_lon_lat_arr)
-    candidates = df[contains_bools][['name', 'lon', 'lat']].values
-    good_stations = []
-    if mask_invalid:
-        for name, lon, lat in candidates:
-            val = image_ll[..., lat, lon]
-            if np.isnan(val) or val == 0:
-                continue
-            else:
-                good_stations.append([name, lon, lat])
-    else:
-        good_stations = candidates
-    return good_stations
 
 
 def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_dir=None, gps_filename=None):
@@ -122,29 +191,9 @@ def download_station_data(station_name, gps_dir=None):
         f.write(response.text)
 
 
-def load_gps_station_df(station_name,
-                        gps_dir=GPS_DIR,
-                        start_year=2015,
-                        end_year=2018,
-                        download_if_missing=True):
-    """Loads one gps station's ENU data since start_year until end_year"""
-    gps_data_file = os.path.join(gps_dir, '%s.NA12.tenv3' % station_name)
-    if not os.path.exists(gps_data_file):
-        logger.warning("%s does not exist.", gps_data_file)
-        if download_if_missing:
-            logger.info("Downloading %s", station_name)
-            download_station_data(station_name, gps_dir=gps_dir)
+def plot_gps_enu(station=None, days_smooth=12):
+    """Plot the east,north,up components of `station`"""
 
-    df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
-    return _clean_gps_df(df, start_year, end_year)
-
-
-def moving_average(arr, window_size=7):
-    """Takes a 1D array and returns the running average of same size"""
-    return uniform_filter1d(arr, size=window_size, mode='nearest')
-
-
-def plot_gps_enu(station=None, station_df=None, days_smooth=12):
     def remove_xticks(ax):
         ax.tick_params(
             axis='x',  # changes apply to the x-axis
@@ -153,8 +202,7 @@ def plot_gps_enu(station=None, station_df=None, days_smooth=12):
             top=False,  # ticks along the top edge are off
             labelbottom=False)
 
-    if station is not None:
-        station_df = load_gps_station_df(station)
+    station_df = load_station_data(station)
 
     fig, axes = plt.subplots(3, 1)
     east_mm = 100 * (station_df['east'] - station_df['east'].iloc[0])
@@ -163,19 +211,19 @@ def plot_gps_enu(station=None, station_df=None, days_smooth=12):
     dts = station_df['dt']
     axes[0].plot(dts, east_mm, 'b.')
     axes[0].set_ylabel('east (cm)')
-    axes[0].plot(dts, moving_average(east_mm, days_smooth), 'r-')
+    axes[0].plot(dts, _moving_average(east_mm, days_smooth), 'r-')
     axes[0].grid(True)
     remove_xticks(axes[0])
 
     axes[1].plot(dts, north_mm, 'b.')
     axes[1].set_ylabel('north (cm)')
-    axes[1].plot(dts, moving_average(north_mm, days_smooth), 'r-')
+    axes[1].plot(dts, _moving_average(north_mm, days_smooth), 'r-')
     axes[1].grid(True)
     remove_xticks(axes[1])
 
     axes[2].plot(dts, up_mm, 'b.')
     axes[2].set_ylabel('up (cm)')
-    axes[2].plot(dts, moving_average(up_mm, days_smooth), 'r-')
+    axes[2].plot(dts, _moving_average(up_mm, days_smooth), 'r-')
     axes[2].grid(True)
     remove_xticks(axes[2])
 
@@ -192,7 +240,7 @@ def load_gps_los_data(insar_dir, station_name=None, to_cm=True, zero_start=True)
     lon, lat = station_lonlat(station_name)
     enu_coeffs = apertools.los.find_enu_coeffs(lon, lat, insar_dir)
 
-    df = load_gps_station_df(station_name)
+    df = load_station_data(station_name)
     enu_data = df[['east', 'north', 'up']].T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
@@ -207,14 +255,19 @@ def load_gps_los_data(insar_dir, station_name=None, to_cm=True, zero_start=True)
 
 
 def difference_gps_stations(station1, station2):
-    df1 = load_gps_station_df(station1)
-    df2 = load_gps_station_df(station2)
+    df1 = load_station_data(station1)
+    df2 = load_station_data(station2)
     merged = pd.merge(df1, df2, how='inner', on=['dt'], suffixes=('_1', '_2'))
     merged['d_east'] = merged['east_1'] - merged['east_2']
     merged['d_north'] = merged['north_1'] - merged['north_2']
     merged['d_up'] = merged['up_1'] - merged['up_2']
     return merged
     # return merged[['dt', 'd_east', 'd_north', 'd_up']]
+
+
+def _moving_average(arr, window_size=7):
+    """Takes a 1D array and returns the running average of same size"""
+    return uniform_filter1d(arr, size=window_size, mode='nearest')
 
 
 def find_insar_ts(insar_dir, station_name, defo_name='deformation.npy'):
@@ -247,7 +300,7 @@ def plot_gps_vs_insar():
     # enu_coeffs = los.find_enu_coeffs(-102.894010019, 31.557733084, insar_dir)
 
     # lon, lat = station_lonlat(station_name)
-    # df = load_gps_station_df(station_name)
+    # df = load_station_data(station_name)
     # enu_data = df[['east', 'north', 'up']].T
     # los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
     # los_gps_data = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
@@ -264,7 +317,7 @@ def plot_gps_vs_insar():
         plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % station_name)
 
         days_smooth = 60
-        los_gps_data_smooth = moving_average(los_gps_data, days_smooth)
+        los_gps_data_smooth = _moving_average(los_gps_data, days_smooth)
         plt.plot(gps_dts,
                  los_gps_data_smooth,
                  'b',
@@ -276,7 +329,7 @@ def plot_gps_vs_insar():
         plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
 
         days_smooth = 5
-        insar_ts_smooth = moving_average(insar_ts, days_smooth)
+        insar_ts_smooth = _moving_average(insar_ts, days_smooth)
         plt.plot(geolist,
                  insar_ts_smooth,
                  'r',
@@ -337,7 +390,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     plt.plot(gps_dts, gps_diff_ts, 'b.', label='gps data: %s' % stat1)
 
     days_smooth = 60
-    los_gps_data_smooth = moving_average(gps_diff_ts, days_smooth)
+    los_gps_data_smooth = _moving_average(gps_diff_ts, days_smooth)
     plt.plot(
         gps_dts,
         los_gps_data_smooth,
@@ -353,7 +406,7 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)
 
     days_smooth = 5
-    insar_diff_smooth = moving_average(insar_diff, days_smooth)
+    insar_diff_smooth = _moving_average(insar_diff, days_smooth)
     plt.plot(geolist,
              insar_diff_smooth,
              'r',
@@ -364,29 +417,6 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     plt.ylabel('cm of cumulative LOS displacement')
     plt.legend()
     return los_gps_data1, los_gps_data2, gps_diff_ts, insar_ts1, insar_ts2, insar_diff
-
-
-def plot_stations(image_ll, mask_invalid=True):
-    stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
-    # TODO: maybe just plot_image_shifted
-    fig, ax = plt.subplots()
-    axim = ax.imshow(image_ll, extent=image_ll.extent)
-    fig.colorbar(axim)
-
-    for name, lon, lat in stations:
-        ax.plot(lon, lat, 'X', markersize=15, label=name)
-    plt.legend()
-
-
-def save_station_points_kml(station_iter):
-    for name, lat, lon, alt in station_iter:
-        apertools.kml.create_kml(
-            title=name,
-            desc='GPS station location',
-            lon_lat=(lon, lat),
-            kml_out='%s.kml' % name,
-            shape='point',
-        )
 
 
 def find_stations_with_data(gps_dir=None):
@@ -432,7 +462,7 @@ def find_station_data_files(gps_dir):
 #     los_vec = np.array(xyz)[0]
 #
 #     station_name = 'TXKM'
-#     df = load_gps_station_df(station_name)
+#     df = load_station_data(station_name)
 #     lon, lat = station_lonlat(station_name)
 #     enu_data = df[['east', 'north', 'up']].T
 #     los_gps_data = los.project_enu_to_los(enu_data, los_vec, lat, lon)
