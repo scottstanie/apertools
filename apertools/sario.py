@@ -131,7 +131,7 @@ def load_file(filename,
         rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
     if ext in IMAGE_EXTS:
-        return np.array(Image.open(filename))
+        return np.array(Image.open(filename).convert("L"))  # L for luminance == grayscale
 
     if ext in SENTINEL_EXTS:
         rsc_file = rsc_file if rsc_file else find_rsc_file(filename, verbose=verbose)
