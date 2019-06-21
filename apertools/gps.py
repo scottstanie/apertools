@@ -1,3 +1,11 @@
+"""gps.py
+Utilities for integrating GPS with InSAR maps
+
+Links:
+list of LLH for all gps stations: ftp://gneiss.nbmg.unr.edu/rapids/llh
+Clickable names to explore: http://geodesy.unr.edu/NGLStationPages/GlobalStationList
+Map of stations: http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html
+"""
 from __future__ import division, print_function
 import os
 import glob
@@ -14,15 +22,22 @@ except ImportError:
 import apertools
 
 GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
+STATION_FILE = "texas_stations.csv"
 
 
 @lru_cache()
-def read_station_df(gps_dir=None, header=None):
-    """Read in the name, lat, lon, alt list of gps stations"""
+def read_station_df(gps_dir=None, header=None, filename=None):
+    """Read in the name, lat, lon, alt list of gps stations
+
+    Assumes file is a csv with "name,lat,lon,alt" as columns
+    Must give "header" argument if there is a header
+    """
     gps_dir = gps_dir or GPS_DIR
-    filename = os.path.join(GPS_DIR, 'texas_stations.csv')
-    print("Searching %s for gps data" % filename)
-    df = pd.read_csv(filename, header=header)
+    filename = filename or STATION_FILE
+    full_filename = os.path.join(GPS_DIR, filename)
+    print("Searching %s for gps data" % full_filename)
+    df = pd.read_csv(full_filename, header=header)
+
     df.columns = ['name', 'lat', 'lon', 'alt']
     return df
 
@@ -33,7 +48,7 @@ def station_lonlat(station_name, gps_dir=None):
     return lon, lat
 
 
-def stations_within_image(image_ll, mask_invalid=True, gps_dir=None):
+def stations_within_image(image_ll, mask_invalid=True, gps_dir=None, gps_filename=None):
     """Given a LatlonImage, find gps stations contained in area
 
     Args:
@@ -45,7 +60,7 @@ def stations_within_image(image_ll, mask_invalid=True, gps_dir=None):
     Returns:
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
     """
-    df = read_station_df(gps_dir=gps_dir)
+    df = read_station_df(gps_dir=gps_dir, filename=gps_filename)
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = image_ll.contains(station_lon_lat_arr)
     candidates = df[contains_bools][['name', 'lon', 'lat']].values
@@ -60,6 +75,18 @@ def stations_within_image(image_ll, mask_invalid=True, gps_dir=None):
     else:
         good_stations = candidates
     return good_stations
+
+
+def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_dir=None, gps_filename=None):
+    if rsc_data is None:
+        if rsc_filename is None:
+            raise ValueError("Need rsc_data or rsc_filename")
+        rsc_data = apertools.sario.load(rsc_filename)
+
+    df = read_station_df(gps_dir=gps_dir, filename=gps_filename)
+    station_lon_lat_arr = df[['lon', 'lat']].values
+    contains_bools = apertools.latlon.grid_contains(station_lon_lat_arr, **rsc_data)
+    return df[contains_bools][['name', 'lon', 'lat']].values
 
 
 def plot_stations(image_ll, mask_invalid=True):
