@@ -13,6 +13,7 @@ import sys
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from PIL import Image
 import sardem
 
 from apertools import parsers, utils
@@ -24,6 +25,7 @@ COMPLEX_64_LE = np.dtype('<c8')
 
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw', '.unwflat']
 UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor', '.grd']
+IMAGE_EXTS = ['.png', '.tif', '.tiff', '.jpg']
 
 # Notes: .grd, .mlc can be either real or complex for UAVSAR,
 # .amp files are real only for UAVSAR, complex for sentinel processing
@@ -127,6 +129,10 @@ def load_file(filename,
     rsc_data = None
     if rsc_file:
         rsc_data = sardem.loading.load_dem_rsc(rsc_file)
+
+    if ext in IMAGE_EXTS:
+        return np.array(Image.open(filename))
+
     if ext in SENTINEL_EXTS:
         rsc_file = rsc_file if rsc_file else find_rsc_file(filename, verbose=verbose)
         rsc_data = sardem.loading.load_dem_rsc(rsc_file)
@@ -144,8 +150,8 @@ def load_file(filename,
         return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename):
-        return utils.take_looks(
-            load_complex(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
+        return utils.take_looks(load_complex(filename, ann_info=ann_info, rsc_data=rsc_data),
+                                *looks)
     else:
         return utils.take_looks(load_real(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
 

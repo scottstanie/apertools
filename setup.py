@@ -35,6 +35,7 @@ setuptools.setup(
         "sardem",
         "pandas",
         "h5py",
+        "pillow",
     ],
     entry_points={
         "console_scripts": [

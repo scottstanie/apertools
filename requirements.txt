@@ -5,6 +5,7 @@ h5py>=2.9
 matplotlib>=1.5.1
 numpy>=1.14.2
 pandas>=0.24.0
+pillow>=5.0
 python-dateutil>=2.5.1
 requests>=2.20.0
 sardem>=0.1
