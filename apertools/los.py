@@ -5,14 +5,11 @@ import os
 import glob
 import numpy as np
 from numpy import sin, cos
-import datetime
-import pandas as pd
 import subprocess
 # from scipy import interpolate
 import sardem.loading
 
-from apertools import latlon
-import matplotlib.pyplot as plt
+from apertools import latlon, sario
 
 from apertools.log import get_log
 logger = get_log()
@@ -414,8 +411,8 @@ def find_vertical_def(asc_path, desc_path):
     asc_igram_path = os.path.join(asc_path, 'igrams')
     desc_igram_path = os.path.join(desc_path, 'igrams')
 
-    asc_geolist, asc_deform = timeseries.load_deformation(asc_igram_path)
-    desc_geolist, desc_deform = timeseries.load_deformation(desc_igram_path)
+    asc_geolist, asc_deform = sario.load_deformation(asc_igram_path)
+    desc_geolist, desc_deform = sario.load_deformation(desc_igram_path)
 
     print(asc_igram_path, asc_deform.shape)
     print(desc_igram_path, desc_deform.shape)
@@ -441,74 +438,6 @@ def merge_geolists(geolist1, geolist2):
     _, indices1, _ = np.intersect1d(merged_geolist, geolist1, return_indices=True)
     _, indices2, _ = np.intersect1d(merged_geolist, geolist2, return_indices=True)
     return merged_geolist, indices1, indices2
-
-
-def load_gps_enu(stationname, basedir='/data1/scott/pecos/gps_station_data/'):
-    gps_data_file = os.path.join(basedir, '%s.NA12.tenv3' % stationname)
-    df = pd.read_csv(gps_data_file, header=0, sep='\s+')
-    df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
-    df2015 = df[df['dt'] > datetime.datetime(2014, 12, 31)]
-    df_enu = df2015[['dt', '__east(m)', '_north(m)', '____up(m)']]
-    df_enu = df_enu.rename(mapper=lambda s: s.replace('_', '').replace('(m)', ''), axis='columns')
-
-    gps_lonlat = os.path.join(basedir, '%s_lonlat.txt' % stationname)
-    lon, lat = open(gps_lonlat).read().strip('\n').split(',')
-
-    return df_enu, float(lon), float(lat)
-
-
-def gps_to_los():
-    # WRONG DIR
-    insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
-    lla, xyz = read_los_output(os.path.join(insar_dir, 'extra_files/los_vectors.txt'))
-
-    los_vec = np.array(xyz)[0]
-
-    stationname = 'TXKM'
-    df, lon, lat = load_gps_enu(stationname)
-    enu_data = df[['east', 'north', 'up']].T
-    los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
-    return los_gps_data, df['dt']
-
-
-def plot_gps_vs_insar():
-    # WRONG DIR
-    # insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
-    insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
-    los_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7/'
-    enu_coeffs = find_enu_coeffs(-102.894010019, 31.557733084, los_dir)
-
-    lla, xyz = read_los_output(os.path.join(los_dir, 'extra_files/los_vectors.txt'))
-    stationname = 'TXKM'
-    df, lon, lat = load_gps_enu(stationname)
-    enu_data = df[['east', 'north', 'up']].T
-    gps_dts = df['dt']
-    # los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
-    los_gps_data = project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
-    print('Resetting GPS data start to 0, converting to cm:')
-    los_gps_data = 100 * (los_gps_data - np.mean(los_gps_data[0:100]))
-
-    plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % stationname)
-
-    igrams_dir = os.path.join(insar_dir, 'igrams')
-    geolist, deformation = timeseries.load_deformation(igrams_dir)
-    defo_ll = latlon.LatlonImage(data=deformation, dem_rsc_file=os.path.join(igrams_dir, 'dem.rsc'))
-
-    print('lon', lon, 'lat', lat, type(lat))
-    print(latlon.grid_corners(**defo_ll.dem_rsc))
-    # import pdb
-    # pdb.set_trace()
-
-    # insar_row, insar_col = defo_ll.nearest_pixel(lat=lat, lon=lon)
-    # print('insar row')
-    # print(insar_row)
-    # print(insar_col)
-    insar_ts = np.array(defo_ll[:, lat, lon])
-
-    plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
-    plt.legend()
-    # return geolist, insar_ts, gps_dts, los_gps_data, defo_ll
-    return geolist, insar_ts, gps_dts, los_gps_data, defo_ll
 
 
 # def interpolate_coeffs(rsc_data, nrows, ncols, east_up):

@@ -35,12 +35,14 @@ STATION_LLH_FILE = "station_llh_all.csv"
 
 
 @lru_cache()
-def read_station_df(gps_dir=GPS_DIR, header=None, filename=STATION_LLH_FILE):
+def read_station_llas(gps_dir=None, header=None, filename=None):
     """Read in the name, lat, lon, alt list of gps stations
 
     Assumes file is a csv with "name,lat,lon,alt" as columns
     Must give "header" argument if there is a header
     """
+    gps_dir = gps_dir or GPS_DIR
+    filename = filename or STATION_LLH_FILE
     full_filename = os.path.join(GPS_DIR, filename)
     logger.info("Searching %s for gps data" % full_filename)
     df = pd.read_csv(full_filename, header=header)
@@ -49,7 +51,7 @@ def read_station_df(gps_dir=GPS_DIR, header=None, filename=STATION_LLH_FILE):
 
 
 def station_lonlat(station_name, gps_dir=None):
-    df = read_station_df(gps_dir=gps_dir)
+    df = read_station_llas(gps_dir=gps_dir)
     name, lat, lon, alt = df[df['name'] == station_name].iloc[0]
     return lon, lat
 
@@ -61,12 +63,12 @@ def stations_within_image(image_ll, mask_invalid=True, gps_dir=None, gps_filenam
         image_ll (LatlonImage): LatlonImage of area with data
         mask_invalid (bool): Default true. if true, don't return stations
             where the image value is NaN or exactly 0
-        gps_dir (str): custom directory to pass to read_station_df
+        gps_dir (str): directory containing gps station lla csv for read_station_llas
 
     Returns:
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
     """
-    df = read_station_df(gps_dir=gps_dir, filename=gps_filename)
+    df = read_station_llas(gps_dir=gps_dir, filename=gps_filename)
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = image_ll.contains(station_lon_lat_arr)
     candidates = df[contains_bools][['name', 'lon', 'lat']].values
@@ -89,7 +91,7 @@ def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_dir=None, gps_file
             raise ValueError("Need rsc_data or rsc_filename")
         rsc_data = apertools.sario.load(rsc_filename)
 
-    df = read_station_df(gps_dir=gps_dir, filename=gps_filename)
+    df = read_station_llas(gps_dir=gps_dir, filename=gps_filename)
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = [apertools.latlon.grid_contains(s, **rsc_data) for s in station_lon_lat_arr]
     return df[contains_bools][['name', 'lon', 'lat']].values
@@ -125,7 +127,7 @@ def load_gps_station_df(station_name,
                         start_year=2015,
                         end_year=2018,
                         download_if_missing=True):
-    """Loads one gps station file's data of ENU displacement since start_year"""
+    """Loads one gps station's ENU data since start_year until end_year"""
     gps_data_file = os.path.join(gps_dir, '%s.NA12.tenv3' % station_name)
     if not os.path.exists(gps_data_file):
         logger.warning("%s does not exist.", gps_data_file)
@@ -176,6 +178,8 @@ def plot_gps_enu(station=None, station_df=None, days_smooth=12):
     axes[2].plot(dts, moving_average(up_mm, days_smooth), 'r-')
     axes[2].grid(True)
     remove_xticks(axes[2])
+
+    fig.suptitle(station)
 
     return fig, axes
 
@@ -387,13 +391,13 @@ def save_station_points_kml(station_iter):
 
 def find_stations_with_data(gps_dir=None):
     """
-        gps_dir (str): custom directory to pass to read_station_df
+        gps_dir (str): directory containing gps station lla csv for read_station_llas
     """
     # Now also get gps station list
     if not gps_dir:
         gps_dir = GPS_DIR
 
-    all_station_data = read_station_df(gps_dir=gps_dir)
+    all_station_data = read_station_llas(gps_dir=gps_dir)
     station_data_list = find_station_data_files(gps_dir)
     stations_with_data = [
         tup for tup in all_station_data.to_records(index=False) if tup[0] in station_data_list
