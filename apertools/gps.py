@@ -37,7 +37,7 @@ STATION_LLH_FILE = "station_llh_all.csv"
 def load_station_data(station_name,
                       gps_dir=GPS_DIR,
                       start_year=2015,
-                      end_year=2018,
+                      end_year=None,
                       download_if_missing=True):
     """Loads one gps station's ENU data since start_year until end_year
 
@@ -46,7 +46,7 @@ def load_station_data(station_name,
             See http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html for map
         gps_dir (str): directory containing gps station lla csv for read_station_llas
         start_year (int), default 2015, cutoff for beginning of GPS data
-        end_year (int): default 2018, cut off for end of GPS data
+        end_year (int): default None, cut off for end of GPS data
         download_if_missing (bool): default True
     """
     gps_data_file = os.path.join(gps_dir, '%s.NA12.tenv3' % station_name)
@@ -58,6 +58,17 @@ def load_station_data(station_name,
 
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
     return _clean_gps_df(df, start_year, end_year)
+
+
+def _clean_gps_df(df, start_year, end_year=None):
+    df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
+
+    df_ranged = df[df['dt'] >= datetime.datetime(start_year, 1, 1)]
+    if end_year:
+        df_ranged = df_ranged[df_ranged['dt'] <= datetime.datetime(end_year, 1, 1)]
+    df_enu = df_ranged[['dt', '__east(m)', '_north(m)', '____up(m)']]
+    df_enu = df_enu.rename(mapper=lambda s: s.replace('_', '').replace('(m)', ''), axis='columns')
+    return df_enu
 
 
 def stations_within_image(image_ll=None,
@@ -164,17 +175,6 @@ def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_dir=None, gps_file
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = [apertools.latlon.grid_contains(s, **rsc_data) for s in station_lon_lat_arr]
     return df[contains_bools][['name', 'lon', 'lat']].values
-
-
-def _clean_gps_df(df, start_year, end_year=None):
-    df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
-
-    df_ranged = df[df['dt'] >= datetime.datetime(start_year, 1, 1)]
-    if end_year:
-        df_ranged = df_ranged[df_ranged['dt'] <= datetime.datetime(end_year, 1, 1)]
-    df_enu = df_ranged[['dt', '__east(m)', '_north(m)', '____up(m)']]
-    df_enu = df_enu.rename(mapper=lambda s: s.replace('_', '').replace('(m)', ''), axis='columns')
-    return df_enu
 
 
 def download_station_data(station_name, gps_dir=None):
