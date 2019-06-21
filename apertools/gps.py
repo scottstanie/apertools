@@ -10,6 +10,7 @@ from __future__ import division, print_function
 import os
 import glob
 import datetime
+import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,24 +21,29 @@ except ImportError:
     from backports.functools_lru_cache import lru_cache
 
 import apertools
+from apertools.log import get_log
+
+logger = get_log()
+
+# URL for ascii file of 24-hour final GPS solutions in east-north-vertical (NA12)
+GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/NA12/{station}.NA12.tenv3"
 
 GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
-STATION_FILE = "texas_stations.csv"
+
+# STATION_LLH_FILE = "texas_stations.csv"
+STATION_LLH_FILE = "station_llh_all.csv"
 
 
 @lru_cache()
-def read_station_df(gps_dir=None, header=None, filename=None):
+def read_station_df(gps_dir=GPS_DIR, header=None, filename=STATION_LLH_FILE):
     """Read in the name, lat, lon, alt list of gps stations
 
     Assumes file is a csv with "name,lat,lon,alt" as columns
     Must give "header" argument if there is a header
     """
-    gps_dir = gps_dir or GPS_DIR
-    filename = filename or STATION_FILE
     full_filename = os.path.join(GPS_DIR, filename)
-    print("Searching %s for gps data" % full_filename)
+    logger.info("Searching %s for gps data" % full_filename)
     df = pd.read_csv(full_filename, header=header)
-
     df.columns = ['name', 'lat', 'lon', 'alt']
     return df
 
@@ -85,45 +91,8 @@ def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_dir=None, gps_file
 
     df = read_station_df(gps_dir=gps_dir, filename=gps_filename)
     station_lon_lat_arr = df[['lon', 'lat']].values
-    contains_bools = apertools.latlon.grid_contains(station_lon_lat_arr, **rsc_data)
+    contains_bools = [apertools.latlon.grid_contains(s, **rsc_data) for s in station_lon_lat_arr]
     return df[contains_bools][['name', 'lon', 'lat']].values
-
-
-def plot_stations(image_ll, mask_invalid=True):
-    stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
-    # TODO: maybe just plot_image_shifted
-    fig, ax = plt.subplots()
-    axim = ax.imshow(image_ll, extent=image_ll.extent)
-    fig.colorbar(axim)
-
-    for name, lon, lat in stations:
-        ax.plot(lon, lat, 'X', markersize=15, label=name)
-    plt.legend()
-
-
-def find_stations_with_data(gps_dir=None):
-    """
-        gps_dir (str): custom directory to pass to read_station_df
-    """
-    # Now also get gps station list
-    if not gps_dir:
-        gps_dir = GPS_DIR
-
-    all_station_data = read_station_df(gps_dir=gps_dir)
-    station_data_list = find_station_data_files(gps_dir)
-    stations_with_data = [
-        tup for tup in all_station_data.to_records(index=False) if tup[0] in station_data_list
-    ]
-    return stations_with_data
-
-
-def find_station_data_files(gps_dir):
-    station_files = glob.glob(os.path.join(gps_dir, '*.tenv3'))
-    station_list = []
-    for filename in station_files:
-        _, name = os.path.split(filename)
-        station_list.append(name.split('.')[0])
-    return station_list
 
 
 def _clean_gps_df(df, start_year, end_year=None):
@@ -137,9 +106,33 @@ def _clean_gps_df(df, start_year, end_year=None):
     return df_enu
 
 
-def load_gps_station_df(station_name, basedir=GPS_DIR, start_year=2015, end_year=2018):
+def download_station_data(station_name, gps_dir=None):
+    url = GPS_BASE_URL.format(station=station_name)
+    response = requests.get(url)
+    if gps_dir is None:
+        gps_dir = GPS_DIR
+
+    stationfile = url.split("/")[-1]  # Just blah.NA12.tenv3
+    filename = "{}/{}".format(gps_dir, stationfile)
+    logger.info("Saving to {}".format(filename))
+
+    with open(filename, "w") as f:
+        f.write(response.text)
+
+
+def load_gps_station_df(station_name,
+                        gps_dir=GPS_DIR,
+                        start_year=2015,
+                        end_year=2018,
+                        download_if_missing=True):
     """Loads one gps station file's data of ENU displacement since start_year"""
-    gps_data_file = os.path.join(basedir, '%s.NA12.tenv3' % station_name)
+    gps_data_file = os.path.join(gps_dir, '%s.NA12.tenv3' % station_name)
+    if not os.path.exists(gps_data_file):
+        logger.warning("%s does not exist.", gps_data_file)
+        if download_if_missing:
+            logger.info("Downloading %s", station_name)
+            download_station_data(station_name, gps_dir=gps_dir)
+
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
     return _clean_gps_df(df, start_year, end_year)
 
@@ -200,11 +193,11 @@ def load_gps_los_data(insar_dir, station_name=None, to_cm=True, zero_start=True)
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
     if to_cm:
-        print("Converting GPS to cm:")
+        logger.info("Converting GPS to cm:")
         los_gps_data = 100 * los_gps_data
 
     if zero_start:
-        print("Resetting GPS data start to 0")
+        logger.info("Resetting GPS data start to 0")
         los_gps_data = los_gps_data - np.mean(los_gps_data[:100])
     return df['dt'], los_gps_data
 
@@ -303,9 +296,9 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     # # First way: project each ENU to LOS, then subtract
     gps_dts1, los_gps_data1 = load_gps_los_data(insar_dir, stat1, zero_start=False)
     gps_dts2, los_gps_data2 = load_gps_los_data(insar_dir, stat2, zero_start=False)
-    print('first gps entries:')
-    print(los_gps_data1[0])
-    print(los_gps_data2[0])
+    logger.info('first gps entries:')
+    logger.info(los_gps_data1[0])
+    logger.info(los_gps_data2[0])
 
     df1 = gps_dts1.to_frame()
     df1['gps1'] = los_gps_data1
@@ -328,12 +321,12 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     # gps_diff_ts = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
     # gps_dts = diff_df['dt']
 
-    # print("Converting GPS to cm:")
+    # logger.info("Converting GPS to cm:")
     # gps_diff_ts = 100 * gps_diff_ts
 
     start_mean = np.mean(gps_diff_ts[:100])
     # start_mean = np.mean(los_gps_data2[:100])
-    print("Resetting GPS data start to 0 of station 2, subtract %f" % start_mean)
+    logger.info("Resetting GPS data start to 0 of station 2, subtract %f" % start_mean)
     gps_diff_ts = gps_diff_ts - start_mean
 
     plt.figure(fignum)
@@ -369,6 +362,18 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     return los_gps_data1, los_gps_data2, gps_diff_ts, insar_ts1, insar_ts2, insar_diff
 
 
+def plot_stations(image_ll, mask_invalid=True):
+    stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
+    # TODO: maybe just plot_image_shifted
+    fig, ax = plt.subplots()
+    axim = ax.imshow(image_ll, extent=image_ll.extent)
+    fig.colorbar(axim)
+
+    for name, lon, lat in stations:
+        ax.plot(lon, lat, 'X', markersize=15, label=name)
+    plt.legend()
+
+
 def save_station_points_kml(station_iter):
     for name, lat, lon, alt in station_iter:
         apertools.kml.create_kml(
@@ -378,6 +383,31 @@ def save_station_points_kml(station_iter):
             kml_out='%s.kml' % name,
             shape='point',
         )
+
+
+def find_stations_with_data(gps_dir=None):
+    """
+        gps_dir (str): custom directory to pass to read_station_df
+    """
+    # Now also get gps station list
+    if not gps_dir:
+        gps_dir = GPS_DIR
+
+    all_station_data = read_station_df(gps_dir=gps_dir)
+    station_data_list = find_station_data_files(gps_dir)
+    stations_with_data = [
+        tup for tup in all_station_data.to_records(index=False) if tup[0] in station_data_list
+    ]
+    return stations_with_data
+
+
+def find_station_data_files(gps_dir):
+    station_files = glob.glob(os.path.join(gps_dir, '*.tenv3'))
+    station_list = []
+    for filename in station_files:
+        _, name = os.path.split(filename)
+        station_list.append(name.split('.')[0])
+    return station_list
 
 
 # def read_station_dict(filename):
