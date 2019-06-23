@@ -145,8 +145,8 @@ class Sentinel(Base):
 
     def _form_safe_dir(self, filename):
         """Get just the Sentinel product name without extensions, then add .SAFE"""
-        # Strip '/' to start in case they pass "blahblah.SAFE/", or splitext[1] is ''
-        fname = filename.strip('/').replace('.zip', '').replace('.geo', '')
+        # Strip '/' from end to start in case they pass "blahblah.SAFE/", or splitext[1] is ''
+        fname = filename.rstrip('/').replace('.zip', '').replace('.geo', '')
         root, ext = os.path.splitext(fname)
         return root + '.SAFE'
 
