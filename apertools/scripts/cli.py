@@ -273,10 +273,10 @@ def overlaps(sentinel_path, dem_path, geojson_path):
 
     if dem_path:
         logger.info("Searching %s for .rsc file" % dem_path)
-        dem = apertools.sario.load(dem_path)
+        area = apertools.sario.load(dem_path)
     elif geojson_path:
         logger.info("Searching %s for .geojson file" % geojson_path)
-        geojson = apertools.sario.load(geojson_path)
+        area = apertools.sario.load(geojson_path)
     else:
         raise ValueError("Need --dem-path or --geojson-path")
 
@@ -284,10 +284,6 @@ def overlaps(sentinel_path, dem_path, geojson_path):
     sent_parsers = [apertools.parsers.Sentinel(s) for s in sent_files]
     logger.info("%d Sentinel .SAFE files found" % len(sent_parsers))
 
-    if dem_path:
-        overlapping_sents = [s for s in sent_parsers if s.overlaps(dem_rsc_data=dem)]
-    else:
-        overlapping_sents = [s for s in sent_parsers if s.overlaps(geojson=geojson)]
-
+    overlapping_sents = [s for s in sent_parsers if s.overlaps(area)]
     logger.info("%d Sentinel .SAFE files overlap with area" % len(overlapping_sents))
     print("\n".join(s.filename for s in overlapping_sents))
