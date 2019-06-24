@@ -298,6 +298,23 @@ class Sentinel(Base):
         dem_extent = apertools.latlon.grid_extent(**dem_rsc_data)
         return apertools.latlon.intersects(self.swath_extent, dem_extent)
 
+    def overlaps_geojson(self, geojson):
+        """Swath is contained in bounding box for geojson"""
+        if isinstance(geojson, str):
+            geojson = apertools.sario.load(geojson)
+
+        geojson_extent = apertools.geojson.extent(geojson)
+        return apertools.latlon.intersects(self.swath_extent, geojson_extent)
+
+    def overlaps(self, dem_rsc_data=None, geojson=None):
+        """Swath is contained in are of DEM or geojson"""
+        if dem_rsc_data:
+            return self.overlaps_dem(dem_rsc_data)
+        elif geojson:
+            return self.overlaps_geojson(geojson)
+        else:
+            raise ValueError("Need either dem_rsc_data or geojson")
+
 
 class Uavsar(Base):
     """Uavsar reference for Polsar:
