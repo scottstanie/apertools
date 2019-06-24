@@ -5,6 +5,7 @@ import os
 import glob
 import json
 import click
+from collections import Counter
 import apertools
 import sardem
 import numpy as np
@@ -256,7 +257,10 @@ def dem_rate(context, rsc_file):
 @cli.command()
 @click.option("--sentinel-path", default=".", help="Path to directory containing .SAFE folders")
 @click.option("--filename", required=True, help="(full) path to the dem.rsc or .geojson file")
-def overlaps(sentinel_path, filename):
+@click.option("--path-num", type=int, help="Select one orbit path number for overlaps")
+@click.option("--end-date", help="Cut off Sentinel files after this date (format: YYYYMMDD)")
+@click.option("--start-date", help="Cut off Sentinel files before this date (format: YYYYMMDD)")
+def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     """List all Sentinel .SAFEs overlapping with area
 
     --filename can either look at a DEM using .rsc file, or the bounding
@@ -265,7 +269,15 @@ def overlaps(sentinel_path, filename):
     Note that the --sentinel-path must contain .SAFE folders, not .zip,
     since the map overlay kml file must be extracted
 
+    Logging information sent to stderr, find overlap files printed to stdout
+    To save, just redirect stdout to a file:
+
+        aper overlaps --filename box.geojson > overlap_files.txt
     """
+
+    def _parse(date_string):
+        return datetime.strptime(date_string, "%Y%m%d").date()
+
     logger.info("Searching %s for Sentinel .SAFE files" % sentinel_path)
     if not os.path.exists(sentinel_path):
         raise ValueError("%s does not exist" % sentinel_path)
@@ -279,4 +291,23 @@ def overlaps(sentinel_path, filename):
 
     overlapping_sents = [s for s in sent_parsers if s.overlaps(area)]
     logger.info("%d Sentinel .SAFE files overlap with area" % len(overlapping_sents))
+
+    path_counter = Counter([s.path for s in overlapping_sents])
+    logger.info("Number of files per path:")
+    for path, num in path_counter.items():
+        logger.info("Path %d: %d files" % (path, num))
+
+    if path_num:
+        logger.info("Selecting path %s only" % path_num)
+        overlapping_sents = [s for s in overlapping_sents if s.path == path_num]
+
+    if start_date:
+        logger.info("Filtering out files before %s" % start_date)
+        overlapping_sents = [s for s in overlapping_sents if s.date >= _parse(start_date)]
+    if end_date:
+        logger.info("Filtering out files after %s" % end_date)
+        overlapping_sents = [s for s in overlapping_sents if s.date <= _parse(end_date)]
+
+    logger.info("%d Sentinel .SAFE files overlap within specified date range" %
+                len(overlapping_sents))
     print("\n".join(s.filename for s in overlapping_sents))

@@ -314,12 +314,9 @@ class Sentinel(Base):
         # Test for geojson by extracting the coords
         try:
             apertools.geojson.coords(geojson_or_rsc)
-            return self.overlaps_geojson(geojson_or_rsc)
         except ValueError:
-            pass
-
-        # Both conditions fail: neith type is valid
-        raise ValueError("Need either dem_rsc_data or geojson")
+            raise ValueError("Need either valid geojson or dem_rsc_data")
+        return self.overlaps_geojson(geojson_or_rsc)
 
 
 class Uavsar(Base):
