@@ -64,6 +64,26 @@ def corner_coords(top_corner=None, dlon=None, dlat=None, bot_corner=None):
     ]
 
 
+def extent(geojson):
+    """From a geojson object, compute bounding lon/lats
+
+    Made to match the apertools.latlon.extent, which also matches
+    `matplotlib.pyplot.imshow` keyword arg `extent`:
+
+    Valid geojson types: Geometry, Feature (Polygon), Feature Collection
+        (will choose the first Feature in the collection)
+
+    Args:
+        geojson (dict): json pre-loaded into a dict
+
+    Returns:
+        tuple[float]: the boundaries of the bounding box in order:
+        (lon_left, lon_right, lat_bottom, lat_top)
+    """
+    left, bottom, right, top = bounding_box(geojson=geojson)
+    return left, right, bottom, top
+
+
 def corners_to_geojson(corners):
     """Takes in 5 points for the corners, returns geojson
     """

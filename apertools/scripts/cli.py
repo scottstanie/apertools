@@ -2,6 +2,7 @@
 Main command line entry point to manage all other sub commands
 """
 import os
+import glob
 import json
 import click
 import apertools
@@ -9,20 +10,20 @@ import sardem
 import numpy as np
 import h5py
 from datetime import datetime
-import matplotlib.pyplot as plt
 from .plot_insar import plot_image
+
+logger = apertools.log.get_log()
 
 
 # Main entry point `aper`:
 @click.group()
 @click.option('--verbose', is_flag=True)
-@click.option(
-    '--path',
-    type=click.Path(exists=False, file_okay=False, writable=True),
-    default='.',
-    help="Path of interest for command. "
-    "Will search for files path or change directory, "
-    "depending on command.")
+@click.option('--path',
+              type=click.Path(exists=False, file_okay=False, writable=True),
+              default='.',
+              help="Path of interest for command. "
+              "Will search for files path or change directory, "
+              "depending on command.")
 @click.pass_context
 def cli(ctx, verbose, path):
     """Command line tools for processing insar."""
@@ -42,11 +43,10 @@ def cli(ctx, verbose, path):
 @click.option('--row-end', default=-1)
 @click.option('--col-start', default=0)
 @click.option('--col-end', default=-1)
-@click.option(
-    "--rowcol",
-    help="Use row,col for legened entries (instead of default lat,lon)",
-    is_flag=True,
-    default=False)
+@click.option("--rowcol",
+              help="Use row,col for legened entries (instead of default lat,lon)",
+              is_flag=True,
+              default=False)
 @click.pass_obj
 def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
                rowcol):
@@ -94,8 +94,9 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 @click.option("--downsample", default=1, help="Amount to downsample image")
 @click.option("--cmap", default='dismph', help="Colormap for image display.")
 @click.option("--title", help="Title for image plot")
-@click.option(
-    "--alpha", default=0.6, help="Transparency for background magnitude (if plotting insar)")
+@click.option("--alpha",
+              default=0.6,
+              help="Transparency for background magnitude (if plotting insar)")
 @click.option("--colorbar/--no-colorbar", default=True, help="Display colorbar on figure")
 def plot(filename, downsample, cmap, title, alpha, colorbar):
     """Quick plot of a single InSAR file.
@@ -117,10 +118,9 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 # COMMAND: kml
 @cli.command()
 @click.argument("imgfile", required=False)
-@click.option(
-    "--shape",
-    default="box",
-    help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
+@click.option("--shape",
+              default="box",
+              help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
 @click.option("--rsc", help=".rsc file containing lat/lon start and steps")
 @click.option("--geojson", "-g", help="Optional: if making shape from .geojson, file to specify")
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
@@ -172,26 +172,24 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 
 # COMMAND: animate
 @cli.command()
-@click.option(
-    "--pause",
-    '-p',
-    default=200,
-    help="For --animate, time in milliseconds to pause"
-    " between stack layers (default 200).")
-@click.option(
-    "--save", '-s', help="If you want to save the animation as a movie,"
-    " title to save file as.")
-@click.option(
-    "--display/--no-display",
-    help="Pop up matplotlib figure to view (instead of just saving)",
-    default=True)
+@click.option("--pause",
+              '-p',
+              default=200,
+              help="For --animate, time in milliseconds to pause"
+              " between stack layers (default 200).")
+@click.option("--save",
+              '-s',
+              help="If you want to save the animation as a movie,"
+              " title to save file as.")
+@click.option("--display/--no-display",
+              help="Pop up matplotlib figure to view (instead of just saving)",
+              default=True)
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--shifted/--no-shifted", default=True, help="Shift colormap to be 0 centered.")
 @click.option("--file-ext", help="If not loading deformation.npy, the extension of files to load")
-@click.option(
-    "--intlist/--no-intlist",
-    default=False,
-    help="If loading other file type, also load `intlist` file  for titles")
+@click.option("--intlist/--no-intlist",
+              default=False,
+              help="If loading other file type, also load `intlist` file  for titles")
 @click.option("--db/--no-db", help="Use dB scale for images (default false)", default=False)
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
@@ -233,7 +231,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 
 # COMMAND: dem-rate
 @cli.command('dem-rate')
-@click.option("--rsc_file", help="name of .rsc file")
+@click.option("--rsc-file", help="name of .rsc file")
 @click.pass_obj
 def dem_rate(context, rsc_file):
     """Print the upsample rate of a dem
@@ -252,3 +250,44 @@ def dem_rate(context, rsc_file):
 
     default_spacing = 30.0
     click.echo("This is equal to %.2f meter spacing between pixels" % (default_spacing / uprate))
+
+
+# COMMAND: overlaps
+@cli.command()
+@click.option("--sentinel-path", help="Path to directory containing .SAFE folders")
+@click.option("--dem-path", help="(full) path to the dem.rsc file")
+@click.option("--geojson-path", help="(full) path to the .geojson file")
+def overlaps(sentinel_path, dem_path, geojson_path):
+    """List all Sentinel .SAFEs overlapping with area
+
+    Can either look at a DEM using .rsc file, or the bounding
+    box of a .geojson file
+
+    Note that the --sentinel-path must contain .SAFE folders, not .zip,
+    since the map overlay kml file must be extracted
+
+    """
+    logger.info("Searching %s for Sentinel .SAFE files" % sentinel_path)
+    if not os.path.exists(sentinel_path):
+        raise ValueError("%s does not exist" % sentinel_path)
+
+    if dem_path:
+        logger.info("Searching %s for .rsc file" % dem_path)
+        dem = apertools.sario.load(dem_path)
+    elif geojson_path:
+        logger.info("Searching %s for .geojson file" % geojson_path)
+        geojson = apertools.sario.load(geojson_path)
+    else:
+        raise ValueError("Need --dem-path or --geojson-path")
+
+    sent_files = glob.glob(os.path.join(sentinel_path, "*.SAFE"))
+    sent_parsers = [apertools.parsers.Sentinel(s) for s in sent_files]
+    logger.info("%d Sentinel .SAFE files found" % len(sent_parsers))
+
+    if dem_path:
+        overlapping_sents = [s for s in sent_parsers if s.overlaps(dem_rsc_data=dem)]
+    else:
+        overlapping_sents = [s for s in sent_parsers if s.overlaps(geojson=geojson)]
+
+    logger.info("%d Sentinel .SAFE files overlap with area" % len(overlapping_sents))
+    print("\n".join(s.filename for s in overlapping_sents))
