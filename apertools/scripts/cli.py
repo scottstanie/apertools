@@ -254,13 +254,12 @@ def dem_rate(context, rsc_file):
 
 # COMMAND: overlaps
 @cli.command()
-@click.option("--sentinel-path", help="Path to directory containing .SAFE folders")
-@click.option("--dem-path", help="(full) path to the dem.rsc file")
-@click.option("--geojson-path", help="(full) path to the .geojson file")
-def overlaps(sentinel_path, dem_path, geojson_path):
+@click.option("--sentinel-path", default=".", help="Path to directory containing .SAFE folders")
+@click.option("--filename", required=True, help="(full) path to the dem.rsc or .geojson file")
+def overlaps(sentinel_path, filename):
     """List all Sentinel .SAFEs overlapping with area
 
-    Can either look at a DEM using .rsc file, or the bounding
+    --filename can either look at a DEM using .rsc file, or the bounding
     box of a .geojson file
 
     Note that the --sentinel-path must contain .SAFE folders, not .zip,
@@ -271,14 +270,8 @@ def overlaps(sentinel_path, dem_path, geojson_path):
     if not os.path.exists(sentinel_path):
         raise ValueError("%s does not exist" % sentinel_path)
 
-    if dem_path:
-        logger.info("Searching %s for .rsc file" % dem_path)
-        area = apertools.sario.load(dem_path)
-    elif geojson_path:
-        logger.info("Searching %s for .geojson file" % geojson_path)
-        area = apertools.sario.load(geojson_path)
-    else:
-        raise ValueError("Need --dem-path or --geojson-path")
+    logger.info("Searching %s for .rsc or .geojson file" % filename)
+    area = apertools.sario.load(filename)
 
     sent_files = glob.glob(os.path.join(sentinel_path, "*.SAFE"))
     sent_parsers = [apertools.parsers.Sentinel(s) for s in sent_files]
