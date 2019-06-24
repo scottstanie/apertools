@@ -7,6 +7,7 @@ Email: scott.stanie@utexas.edu
 from __future__ import division, print_function
 import glob
 import math
+import json
 import os
 import pprint
 import sys
@@ -43,39 +44,6 @@ ELEVATION_EXTS = ['.dem', '.hgt']
 STACKED_FILES = ['.cc', '.unw', '.unwflat']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
-
-
-def find_files(directory, search_term):
-    """Searches for files in `directory` using globbing on search_term
-
-    Path to file is also included.
-
-    Examples:
-    >>> import shutil, tempfile
-    >>> temp_dir = tempfile.mkdtemp()
-    >>> open(os.path.join(temp_dir, "afakefile.txt"), "w").close()
-    >>> print('afakefile.txt' in find_files(temp_dir, "*.txt")[0])
-    True
-    >>> shutil.rmtree(temp_dir)
-    """
-    return glob.glob(os.path.join(directory, search_term))
-
-
-def find_rsc_file(filename=None, basepath=None, verbose=False):
-    if filename:
-        basepath = os.path.split(os.path.abspath(filename))[0]
-    # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
-    possible_rscs = find_files(basepath, '*.rsc')
-    if verbose:
-        logger.info("Searching %s for rsc files", basepath)
-        logger.info("Possible rsc files:")
-        logger.info(possible_rscs)
-    if len(possible_rscs) < 1:
-        raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
-    elif len(possible_rscs) > 1:
-        raise ValueError("{} has multiple .rsc files in its directory: {}".format(
-            filename, possible_rscs))
-    return utils.fullpath(possible_rscs[0])
 
 
 def load_file(filename,
@@ -119,6 +87,10 @@ def load_file(filename,
     if ext == '.npy':
         return utils.take_looks(np.load(filename), *looks)
 
+    if ext == '.geojson':
+        with open(filename) as f:
+            return json.load(f)
+
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
         return utils.take_looks(sardem.loading.load_elevation(filename), *looks)
@@ -158,6 +130,39 @@ def load_file(filename,
 
 # Make a shorter alias for load_file
 load = load_file
+
+
+def find_files(directory, search_term):
+    """Searches for files in `directory` using globbing on search_term
+
+    Path to file is also included.
+
+    Examples:
+    >>> import shutil, tempfile
+    >>> temp_dir = tempfile.mkdtemp()
+    >>> open(os.path.join(temp_dir, "afakefile.txt"), "w").close()
+    >>> print('afakefile.txt' in find_files(temp_dir, "*.txt")[0])
+    True
+    >>> shutil.rmtree(temp_dir)
+    """
+    return glob.glob(os.path.join(directory, search_term))
+
+
+def find_rsc_file(filename=None, basepath=None, verbose=False):
+    if filename:
+        basepath = os.path.split(os.path.abspath(filename))[0]
+    # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
+    possible_rscs = find_files(basepath, '*.rsc')
+    if verbose:
+        logger.info("Searching %s for rsc files", basepath)
+        logger.info("Possible rsc files:")
+        logger.info(possible_rscs)
+    if len(possible_rscs) < 1:
+        raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
+    elif len(possible_rscs) > 1:
+        raise ValueError("{} has multiple .rsc files in its directory: {}".format(
+            filename, possible_rscs))
+    return utils.fullpath(possible_rscs[0])
 
 
 def _get_file_rows_cols(ann_info=None, rsc_data=None):
