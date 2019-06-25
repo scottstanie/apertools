@@ -78,11 +78,13 @@ def discrete_seismic_colors(n=5):
 
 DISMPH = make_dismph_colormap()
 plt.register_cmap(cmap=DISMPH)
-DISCRETE_SEISMIC5 = matplotlib.colors.LinearSegmentedColormap.from_list(
-    'discrete_seismic5', discrete_seismic_colors(5), N=5)
+DISCRETE_SEISMIC5 = matplotlib.colors.LinearSegmentedColormap.from_list('discrete_seismic5',
+                                                                        discrete_seismic_colors(5),
+                                                                        N=5)
 plt.register_cmap(cmap=DISCRETE_SEISMIC5)
-DISCRETE_SEISMIC7 = matplotlib.colors.LinearSegmentedColormap.from_list(
-    'discrete_seismic7', discrete_seismic_colors(7), N=7)
+DISCRETE_SEISMIC7 = matplotlib.colors.LinearSegmentedColormap.from_list('discrete_seismic7',
+                                                                        discrete_seismic_colors(7),
+                                                                        N=7)
 plt.register_cmap(cmap=DISCRETE_SEISMIC7)
 
 
@@ -205,8 +207,12 @@ def plot_image_shifted(img,
 
     if perform_shift:
         shifted_cmap = make_shifted_cmap(img, cmap_name=cmap, vmin=vmin, vmax=vmax)
-        axes_image = ax.imshow(
-            img, cmap=shifted_cmap, extent=extent, vmin=vmin, vmax=vmax, aspect=aspect)
+        axes_image = ax.imshow(img,
+                               cmap=shifted_cmap,
+                               extent=extent,
+                               vmin=vmin,
+                               vmax=vmax,
+                               aspect=aspect)
     else:
         vmax = _abs_max(img)
         axes_image = ax.imshow(img, cmap=cmap, extent=extent, vmax=vmax, vmin=-vmax, aspect=aspect)
@@ -236,6 +242,7 @@ def view_stack(
         legend_loc="upper left",
         lat_lon=False,
         line_plot_kwargs=None,
+        timeline_callback=None,
 ):
     """Displays an image from a stack, allows you to click for timeseries
 
@@ -256,6 +263,9 @@ def view_stack(
         lat_lon (dict): Optional- Uses latitude and longitude in legend
             instead of row/col
         line_plot_kwargs (dict): matplotlib options for the line plot
+        timeline_callback (func): callback to run on a pixels timeseries
+            Must have signature: func(timeseries, row, col)
+            e.g.: timeline_callback=lambda t: print(t, row, col)
 
     Raises:
         ValueError: if display_img is not an int or the string 'mean'
@@ -276,8 +286,12 @@ def view_stack(
         raise ValueError("display_img must be an int or ndarray-like obj")
 
     title = title or "Deformation Time Series"  # Default title
-    plot_image_shifted(
-        img, fig=imagefig, title=title, cmap=cmap, label=label, perform_shift=perform_shift)
+    plot_image_shifted(img,
+                       fig=imagefig,
+                       title=title,
+                       cmap=cmap,
+                       label=label,
+                       perform_shift=perform_shift)
 
     timefig = plt.figure()
 
@@ -300,6 +314,9 @@ def view_stack(
         if row >= img.shape[0] or col >= img.shape[1]:
             return
         timeline = stack[:, row, col]
+
+        if timeline_callback is not None:
+            timeline_callback(timeline, row, col)
 
         if lat_lon:
             lat, lon = img.rowcol_to_latlon(row, col)
@@ -390,8 +407,12 @@ def animate_stack(stack,
         fig.suptitle(titles[idx])
         return axes_image,
 
-    stack_ani = animation.FuncAnimation(
-        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True)
+    stack_ani = animation.FuncAnimation(fig,
+                                        update_im,
+                                        frames=range(num_images),
+                                        interval=pause_time,
+                                        blit=False,
+                                        repeat=True)
 
     if save_title:
         logger.info("Saving to %s", save_title)
