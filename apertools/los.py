@@ -30,8 +30,7 @@ def find_enu_coeffs(lon, lat, geo_path=None):
         Can be used to project an ENU vector into the line of sight direction
     """
     los_file = os.path.realpath(os.path.join(geo_path, 'los_vector_%s_%s.txt' % (lon, lat)))
-    db_path = os.path.join(geo_path, 'extra_files') if os.path.exists(
-        os.path.join(geo_path, 'extra_files')) else geo_path
+    db_path = _find_db_path(geo_path)
 
     record_xyz_los_vector(lon, lat, db_path=db_path, outfile=los_file, clear=True)
 
@@ -39,6 +38,14 @@ def find_enu_coeffs(lon, lat, geo_path=None):
 
     # Note: vectors are from sat to ground, so uplift is negative
     return enu_coeffs[0]
+
+
+def _find_db_path(geo_path):
+    extra_path = os.path.join(geo_path, 'extra_files')
+    if os.path.exists(extra_path) and len(glob.glob(extra_path + "/*.db")) > 0:
+        return extra_path
+    else:
+        return geo_path
 
 
 def find_east_up_coeffs(geo_path):
@@ -66,8 +73,7 @@ def find_east_up_coeffs(geo_path):
     # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
 
     los_file = os.path.realpath(os.path.join(geo_path, 'los_vectors.txt'))
-    db_path = os.path.join(geo_path, 'extra_files') if os.path.exists(
-        os.path.join(geo_path, 'extra_files')) else geo_path
+    db_path = _find_db_path(geo_path)
 
     max_corner_difference, enu_coeffs = check_corner_differences(rsc_data, db_path, los_file)
     logger.info(
