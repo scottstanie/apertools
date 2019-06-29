@@ -5,10 +5,12 @@ Email: scott.stanie@utexas.edu
 """
 
 from __future__ import division, print_function
+import datetime
 import glob
 import math
 import json
 import os
+import re
 import pprint
 import sys
 import numpy as np
@@ -462,3 +464,66 @@ def create_hdf5_stack(outfile_name=None,
         # vsource = h5py.VirtualSource()
 
     return outfile_name
+
+
+def _parse(datestr):
+    return datetime.datetime.strptime(datestr, "%Y%m%d").date()
+
+
+def _strip_geoname(name):
+    """Leaves just date from format S1A_YYYYmmdd.geo"""
+    return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '')
+
+
+def read_geolist(filepath="./geolist", fnames_only=False):
+    """Reads in the list of .geo files used, in time order
+
+    Args:
+        filepath (str): path to the geolist file or directory
+        fnames_only (bool): default False. if true, return list of filenames
+
+    Returns:
+        list[date]: the parse dates of each .geo used, in date order
+
+    """
+    if os.path.isdir(filepath):
+        filepath = os.path.join(filepath, 'geolist')
+
+    with open(filepath) as f:
+        if fnames_only:
+            return [fname for fname in f.read().splitlines()]
+        else:
+            # Stripped of path for parser
+            geolist = [os.path.split(geoname)[1] for geoname in f.read().splitlines()]
+
+    if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
+        return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
+    else:  # Full sentinel product name
+        return sorted([parsers.Sentinel(geo).start_time.date() for geo in geolist])
+
+
+def read_intlist(filepath="./intlist", parse=True):
+    """Reads the list of igrams to return dates of images as a tuple
+
+    Args:
+        filepath (str): path to the intlist directory, or file
+        parse (bool): output the intlist as parsed datetime tuples
+
+    Returns:
+        tuple(date, date) of master, slave dates for all igrams (if parse=True)
+            if parse=False: returns list[str], filenames of the igrams
+
+    """
+
+    if os.path.isdir(filepath):
+        filepath = os.path.join(filepath, 'intlist')
+
+    with open(filepath) as f:
+        intlist = f.read().splitlines()
+
+    if parse:
+        intlist = [intname.strip('.int').split('_') for intname in intlist]
+        return [(_parse(master), _parse(slave)) for master, slave in intlist]
+    else:
+        dirname = os.path.dirname(filepath)
+        return [os.path.join(dirname, igram) for igram in intlist]
