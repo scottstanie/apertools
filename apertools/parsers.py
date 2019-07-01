@@ -444,6 +444,10 @@ class Uavsar(Base):
         # If this is a block we split up and names .1.int, remove that since
         # all have the same .ann file
         shortname = re.sub('\.\d' + ext, ext, shortname)
+        if ext == ".grd":
+            # .int.grd is full ext
+            full_ext = '.'.join(shortname.split('.')[1:])
+            return shortname.replace(full_ext, 'ann')
 
         return shortname.replace(ext, '.ann')
 

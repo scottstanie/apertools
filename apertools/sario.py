@@ -43,7 +43,7 @@ ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_stacked_img for detail
 # .unwflat are same as .unw, but with a linear ramp removed
-STACKED_FILES = ['.cc', '.unw', '.unwflat']
+STACKED_FILES = ['.cc', '.unw', '.unwflat', '.unw.grd', '.cor.grd', '.cc.grd']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
 
@@ -239,7 +239,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     return combine_real_imag(real_data, imag_data)
 
 
-def load_stacked_img(filename, rsc_data, return_amp=False, **kwargs):
+def load_stacked_img(filename, rsc_data=None, ann_info=None, return_amp=False, **kwargs):
     """Helper function to load .unw and .cor files
 
     Format is two stacked matrices:
@@ -274,7 +274,7 @@ def load_stacked_img(filename, rsc_data, return_amp=False, **kwargs):
     # Output: (8.011558, -2.6779003)
     """
     data = np.fromfile(filename, FLOAT_32_LE)
-    rows, cols = _get_file_rows_cols(rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(rsc_data=rsc_data, ann_info=ann_info)
     _assert_valid_size(data, cols)
 
     first = data.reshape((rows, 2 * cols))[:, :cols]
@@ -345,7 +345,6 @@ def save(filename, array, normalize=True, cmap="gray", preview=False):
             return arr
 
     ext = utils.get_file_ext(filename)
-
     if ext == '.png':  # TODO: or ext == '.jpg':
         # Normalize to be between 0 and 1
         if normalize:
