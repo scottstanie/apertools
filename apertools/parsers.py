@@ -404,6 +404,11 @@ class Uavsar(Base):
         return self._get_field('polarization')
 
     @property
+    def target_site(self):
+        """Target site of acquisition"""
+        return self._get_field('target site')
+
+    @property
     def downsampling(self):
         """Amount of downsampling of product, if any
 
@@ -499,6 +504,7 @@ class Uavsar(Base):
             '.slc': 'slc_mag',
             '.mlc': 'mlc_mag',
             '.int': 'slt',
+            '.unw': 'slt',
             '.cor': 'slt',
             '.amp': 'slt',
             '.grd': 'grd_mag'
@@ -535,3 +541,23 @@ class Uavsar(Base):
             logger.info(pprint.pformat(ann_data))
 
         return ann_data
+
+
+class UavsarInt(Uavsar):
+    """See https://uavsar.jpl.nasa.gov/science/documents/rpi-format.html"""
+    FILE_REGEX = r'([\w\d]{6})_(\d{2})(\d{3})_(\d{2})(\d{3})-(\d{3})_(\d{5})-(\d{3})_(\d{4})d_s01_([\w\d]{6,8})_(\d{2})'
+    _FIELD_MEANINGS = (
+        'target site',
+        'heading',
+        'counter',
+        'track1 year',
+        'track1 flight number',
+        'track1 flight line',
+        # TODO: fill in rest
+        'flight year',
+        'flight number',
+        'flight line',
+    )
+
+    def __str__(self):
+        return "{} from {}".format(self.__class__.__name__, self.target_site)

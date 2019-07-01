@@ -27,7 +27,7 @@ FLOAT_32_LE = np.dtype('<f4')
 COMPLEX_64_LE = np.dtype('<c8')
 
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw', '.unwflat']
-UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor', '.grd']
+UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor', '.grd', '.unw']
 IMAGE_EXTS = ['.png', '.tif', '.tiff', '.jpg']
 
 # Notes: .grd, .mlc can be either real or complex for UAVSAR,
@@ -109,15 +109,24 @@ def load_file(filename,
 
     if ext in SENTINEL_EXTS:
         rsc_file = rsc_file if rsc_file else find_rsc_file(filename, verbose=verbose)
-        rsc_data = sardem.loading.load_dem_rsc(rsc_file)
-        if verbose:
-            logger.info("Loaded rsc_data from %s", rsc_file)
-            logger.info(pprint.pformat(rsc_data))
+        if rsc_file:
+            rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
     # UAVSAR files have an annotation file for metadata
     if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
-        u = parsers.Uavsar(filename, verbose=verbose)
-        ann_info = u.parse_ann_file()
+        try:
+            u = parsers.Uavsar(filename, verbose=verbose)
+            ann_info = u.parse_ann_file()
+        except ValueError:
+            try:
+                u = parsers.UavsarInt(filename, verbose=verbose)
+                ann_info = u.parse_ann_file()
+            except ValueError:
+                print("Failed loading ann_info")
+                pass
+
+    if not ann_info and not rsc_file:
+        raise ValueError("Need .rsc file or .ann file to load")
 
     if ext in STACKED_FILES:
         stacked = load_stacked_img(filename, rsc_data, **kwargs)
@@ -160,7 +169,9 @@ def find_rsc_file(filename=None, basepath=None, verbose=False):
         logger.info("Possible rsc files:")
         logger.info(possible_rscs)
     if len(possible_rscs) < 1:
-        raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
+        logger.info("No .rsc file found in %s", basepath)
+        return None
+        # raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
     elif len(possible_rscs) > 1:
         raise ValueError("{} has multiple .rsc files in its directory: {}".format(
             filename, possible_rscs))
