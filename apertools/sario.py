@@ -27,15 +27,41 @@ FLOAT_32_LE = np.dtype('<f4')
 COMPLEX_64_LE = np.dtype('<c8')
 
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw', '.unwflat']
-UAVSAR_EXTS = ['.int', '.mlc', '.slc', '.amp', '.cor', '.grd', '.unw']
+UAVSAR_EXTS = [
+    '.int',
+    '.mlc',
+    '.slc',
+    '.amp',
+    '.cor',
+    '.grd',
+    '.unw',
+    '.int.grd',
+    '.unw.grd',
+    '.cor.grd',
+]
 IMAGE_EXTS = ['.png', '.tif', '.tiff', '.jpg']
 
 # Notes: .grd, .mlc can be either real or complex for UAVSAR,
 # .amp files are real only for UAVSAR, complex for sentinel processing
 # However, we label them as real here since we can tell .amp files
 # are from sentinel if there exists .rsc files in the same dir
-COMPLEX_EXTS = ['.int', '.slc', '.geo', '.cc', '.unw', '.unwflat', '.mlc', '.grd']
-REAL_EXTS = ['.amp', '.cor', '.mlc', '.grd']  # NOTE: .cor might only be real for UAVSAR
+COMPLEX_EXTS = [
+    '.int',
+    '.slc',
+    '.geo',
+    '.cc',
+    '.unw',
+    '.unwflat',
+    '.mlc',
+    '.int.grd',
+]
+REAL_EXTS = [
+    '.amp',
+    '.cor',
+    '.mlc',
+    '.grd',
+    '.cor.grd',
+]  # NOTE: .cor might only be real for UAVSAR
 # Note about UAVSAR Multi-look products:
 # Will end with `_ML5X5.grd`, e.g., for 5x5 downsampled
 
@@ -43,7 +69,7 @@ ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_stacked_img for detail
 # .unwflat are same as .unw, but with a linear ramp removed
-STACKED_FILES = ['.cc', '.unw', '.unwflat', '.unw.grd', '.cor.grd', '.cc.grd']
+STACKED_FILES = ['.cc', '.unw', '.unwflat', '.unw.grd', '.cc.grd']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
 
@@ -112,6 +138,9 @@ def load_file(filename,
         if rsc_file:
             rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
+    if ext == '.grd':
+        ext = _get_full_grd_ext(filename)
+
     # UAVSAR files have an annotation file for metadata
     if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
         try:
@@ -129,10 +158,10 @@ def load_file(filename,
         raise ValueError("Need .rsc file or .ann file to load")
 
     if ext in STACKED_FILES:
-        stacked = load_stacked_img(filename, rsc_data, **kwargs)
+        stacked = load_stacked_img(filename, rsc_data=rsc_data, ann_info=ann_info, **kwargs)
         return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
-    elif rsc_data or is_complex(filename):
+    elif rsc_data or is_complex(filename=filename, ext=ext):
         return utils.take_looks(load_complex(filename, ann_info=ann_info, rsc_data=rsc_data),
                                 *looks)
     else:
@@ -141,6 +170,15 @@ def load_file(filename,
 
 # Make a shorter alias for load_file
 load = load_file
+
+
+def _get_full_grd_ext(filename):
+    if any(e in filename for e in ('.int', '.unw', '.cor', 'cc')):
+        ext = '.' + '.'.join(filename.split('.')[-2:])
+        logger.info("Using %s for full grd extension" % ext)
+        return ext
+    else:
+        return '.grd'
 
 
 def find_files(directory, search_term):
@@ -285,13 +323,15 @@ def load_stacked_img(filename, rsc_data=None, ann_info=None, return_amp=False, *
         return second
 
 
-def is_complex(filename):
+def is_complex(filename=None, ext=None):
     """Helper to determine if file data is real or complex
 
     Uses https://uavsar.jpl.nasa.gov/science/documents/polsar-format.html for UAVSAR
     Note: differences between 3 polarizations for .mlc files: half real, half complex
     """
-    ext = utils.get_file_ext(filename)
+    if ext is None:
+        ext = utils.get_file_ext(filename)
+
     if ext not in COMPLEX_EXTS and ext not in REAL_EXTS:
         raise ValueError('Invalid filetype for load_file: %s\n '
                          'Allowed types: %s' % (ext, ' '.join(COMPLEX_EXTS + REAL_EXTS)))
@@ -345,6 +385,8 @@ def save(filename, array, normalize=True, cmap="gray", preview=False):
             return arr
 
     ext = utils.get_file_ext(filename)
+    if ext == '.grd':
+        ext = _get_full_grd_ext(filename)
     if ext == '.png':  # TODO: or ext == '.jpg':
         # Normalize to be between 0 and 1
         if normalize:
