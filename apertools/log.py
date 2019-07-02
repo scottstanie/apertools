@@ -112,8 +112,11 @@ def log_runtime(f):
 
         t2 = time.time()
         elapsed_time = t2 - t1
-        time_string = 'Total elapsed time for {} (minutes): {}'.format(
-            f.__name__, "{0:.2f}".format(elapsed_time / 60.0))
+        time_string = 'Total elapsed time for {} : {} minutes ({} seconds)'.format(
+            f.__name__,
+            "{0:.2f}".format(elapsed_time / 60.0),
+            "{0:.2f}".format(elapsed_time),
+        )
 
         logger.info(time_string)
         return result
