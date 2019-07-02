@@ -66,6 +66,9 @@ def take_looks(arr, row_looks, col_looks):
 
     Cuts off values if the size isn't divisible by num looks
 
+    NOTE: For complex data, looks on the magnitude are done separately
+    from looks on the phase
+
     Args:
         arr (ndarray) 2D array of an image
         row_looks (int) the reduction rate in row direction
@@ -76,6 +79,11 @@ def take_looks(arr, row_looks, col_looks):
     """
     if row_looks == 1 and col_looks == 1:
         return arr
+    if np.iscomplexobj(arr):
+        mag_looked = take_looks(np.abs(arr), row_looks, col_looks)
+        phase_looked = take_looks(np.angle(arr), row_looks, col_looks)
+        return mag_looked * np.exp(1j * phase_looked)
+
     nrows, ncols = arr.shape
     row_cutoff = nrows % row_looks
     col_cutoff = ncols % col_looks
