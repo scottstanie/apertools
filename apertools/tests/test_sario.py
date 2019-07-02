@@ -39,7 +39,7 @@ class TestLoading(unittest.TestCase):
                 # Test later, must have a real polarization in name
                 continue
             fname = 'test' + ext
-            self.assertTrue(sario.is_complex(fname))
+            self.assertTrue(sario.is_complex(filename=fname, ext=ext))
 
         for ext in sario.REAL_EXTS:
             self.assertFalse(sario.is_complex('test' + ext))
