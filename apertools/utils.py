@@ -61,7 +61,7 @@ def which(program):
     return None
 
 
-def take_looks(arr, row_looks, col_looks):
+def take_looks(arr, row_looks, col_looks, separate_complex=False):
     """Downsample a numpy matrix by summing blocks of (row_looks, col_looks)
 
     Cuts off values if the size isn't divisible by num looks
@@ -73,13 +73,15 @@ def take_looks(arr, row_looks, col_looks):
         arr (ndarray) 2D array of an image
         row_looks (int) the reduction rate in row direction
         col_looks (int) the reduction rate in col direction
+        separate_complex (bool): take looks on magnitude and phase separately
+            Better to preserve the look of the magnitude
 
     Returns:
         ndarray, size = ceil(rows / row_looks, cols / col_looks)
     """
     if row_looks == 1 and col_looks == 1:
         return arr
-    if np.iscomplexobj(arr):
+    if np.iscomplexobj(arr) and separate_complex:
         mag_looked = take_looks(np.abs(arr), row_looks, col_looks)
         phase_looked = take_looks(np.angle(arr), row_looks, col_looks)
         return mag_looked * np.exp(1j * phase_looked)
