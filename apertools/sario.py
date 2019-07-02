@@ -384,6 +384,10 @@ def save_hgt(filename, amp_data, height_data):
     save(filename, np.stack((amp_data, height_data), axis=0))
 
 
+def _load_stack_files(directory, file_ext):
+    return sorted(find_files(directory, "*" + file_ext))
+
+
 def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
     """Reads a set of images into a 3D ndarray
 
@@ -402,7 +406,7 @@ def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
         if file_ext is None:
             raise ValueError("need file_ext if using `directory`")
         else:
-            file_list = sorted(find_files(directory, "*" + file_ext))
+            file_list = _load_stack_files(directory, file_ext)
 
     # Test load to get shape
     test = load(file_list[0], **kwargs)
@@ -459,17 +463,25 @@ def create_hdf5_stack(outfile_name=None,
         if not file_ext:
             file_ext = utils.get_file_ext(file_list[0])
         outfile_name = "{fext}_stack.h5".format(fext=file_ext.strip("."))
+        logger.info("Creating stack file %s" % outfile_name)
 
     if utils.get_file_ext(outfile_name) not in (".h5", ".hdf5"):
         raise ValueError("outfile_name must end in .h5 or .hdf5")
 
     # TODO: do we want to replace the .unw files with .h5 files, then make a Virtual dataset?
     # layout = h5py.VirtualLayout(shape=(len(file_list), nrows, ncols), dtype=dtype)
+    if file_list is None:
+        file_list = _load_stack_files(directory, file_ext)
 
-    with h5py.File(outfile_name, "w") as hf:
+    stack = load_stack(file_list=file_list, **kwargs)
+    with h5py.File(outfile_name, "a") as hf:
         hf.create_dataset(
             "stack",
-            data=load_stack(file_list=file_list, directory=directory, file_ext=file_ext, **kwargs),
+            data=stack,
+        )
+        hf.create_dataset(
+            "mean_stack",
+            data=np.mean(stack, axis=0),
         )
         # vsource = h5py.VirtualSource()
 
