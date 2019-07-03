@@ -151,7 +151,7 @@ def read_station_llas(gps_dir=None, header=None, filename=None):
     """
     gps_dir = gps_dir or GPS_DIR
     filename = filename or STATION_LLH_FILE
-    full_filename = os.path.join(GPS_DIR, filename)
+    full_filename = os.path.join(gps_dir, filename)
     logger.info("Searching %s for gps data" % full_filename)
     df = pd.read_csv(full_filename, header=header)
     df.columns = ['name', 'lat', 'lon', 'alt']
