@@ -244,7 +244,7 @@ def dem_rate(context, rsc_file):
     """
     # full_file = os.path.join(context['path'], rsc_file)
     if rsc_file is None:
-        rsc_file = apertools.sario.find_rsc_file(basepath=context['path'])
+        rsc_file = apertools.sario.find_rsc_file(directory=context['path'])
     uprate = sardem.utils.calc_upsample_rate(rsc_filename=rsc_file)
 
     click.echo("%s has %.2f times the default spacing" % (rsc_file, uprate))

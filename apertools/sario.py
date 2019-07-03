@@ -197,17 +197,17 @@ def find_files(directory, search_term):
     return sorted(glob.glob(os.path.join(directory, search_term)))
 
 
-def find_rsc_file(filename=None, basepath=None, verbose=False):
+def find_rsc_file(filename=None, directory=None, verbose=False):
     if filename:
-        basepath = os.path.split(os.path.abspath(filename))[0]
+        directory = os.path.split(os.path.abspath(filename))[0]
     # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
-    possible_rscs = find_files(basepath, '*.rsc')
+    possible_rscs = find_files(directory, '*.rsc')
     if verbose:
-        logger.info("Searching %s for rsc files", basepath)
+        logger.info("Searching %s for rsc files", directory)
         logger.info("Possible rsc files:")
         logger.info(possible_rscs)
     if len(possible_rscs) < 1:
-        logger.info("No .rsc file found in %s", basepath)
+        logger.info("No .rsc file found in %s", directory)
         return None
         # raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
     elif len(possible_rscs) > 1:
