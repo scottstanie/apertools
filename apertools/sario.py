@@ -550,6 +550,9 @@ def create_hdf5_stack(outfile_name=None,
         )
         # vsource = h5py.VirtualSource()
 
+    with h5py.File(outfile_name, "a") as hf:
+        hf["stack"].attrs["filenames"] = file_list
+
     return outfile_name
 
 
