@@ -153,11 +153,17 @@ def atleast_2d(*arys):
         return res
 
 
-def find_looks_taken(igram_path):
+def find_looks_taken(igram_path,
+                     geo_path=None,
+                     igram_dem_file="dem.rsc",
+                     geo_dem_file="elevation.dem.rsc"):
     """Calculates how many looks from .geo files to .int files"""
-    igram_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(igram_path, 'dem.rsc'))
-    geo_path = os.path.dirname(os.path.abspath(igram_path))
-    geo_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'elevation.dem.rsc'))
+    if geo_path is None:
+        geo_path = os.path.dirname(os.path.abspath(igram_path))
+
+    geo_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(geo_path, geo_dem_file))
+
+    igram_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(igram_path, igram_dem_file))
 
     row_looks = geo_dem_rsc['file_length'] // igram_dem_rsc['file_length']
     col_looks = geo_dem_rsc['width'] // igram_dem_rsc['width']
@@ -366,3 +372,29 @@ def rm_if_exists(filename):
     except OSError as e:
         if e.errno != errno.ENOENT:  # errno.ENOENT = no such file or directory
             raise  # re-raise if different error
+
+
+def get_parent_dir(filepath):
+    """Shortcut to get the parent directory
+
+    Works on directories or files, so
+    "/home/scott/" -> "/home"
+    "/home/scott/file.txt" -> "/home"
+
+    Used, e.g. for when .geos should be 1 directory up from igrams
+
+    Examples:
+        >>> import tempfile
+        >>> temp_dir = tempfile.TemporaryDirectory()
+        >>> nested = os.path.join(temp_dir.name, 'dir2')
+        >>> os.mkdir(nested)
+        >>> get_parent_dir(nested) == temp_dir.name
+        True
+        >>> open(os.path.join(nested, "emptyfile"), "a").close()
+        >>> get_parent_dir(os.path.join(nested, "emptyfile")) == temp_dir.name
+        True
+    """
+    if os.path.isdir(filepath):
+        return os.path.dirname(os.path.abspath(os.path.normpath(filepath)))
+    else:
+        return os.path.dirname(os.path.split(os.path.abspath(filepath))[0])

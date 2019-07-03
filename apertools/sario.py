@@ -506,7 +506,7 @@ def _load_deformation_npy(igram_path, filename):
     return geolist, deformation
 
 
-def read_geolist(directory=".", parse=True):
+def find_geos(directory=".", parse=True):
     """Reads in the list of .geo files used, in time order
 
     Args:
