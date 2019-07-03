@@ -486,7 +486,7 @@ def _load_deformation_h5(igram_path, filename):
             deformation = f["deformation_stack"]
             # geolist attr will be is a list of strings: need them as datetimes
             geo_str_list = deformation.attrs["geolist"]
-            geolist = [_parse(g) for g in geo_str_list]
+            geolist = parse_geolist_str(geo_str_list)
     except (IOError, OSError):
         logger.error("Can't load %s in path %s", filename, igram_path)
         return None, None
@@ -549,13 +549,21 @@ def find_igrams(directory=".", parse=True):
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
         date_pairs = [intname.strip('.int').split('_') for intname in igram_fnames]
-        return [(_parse(early), _parse(late)) for early, late in date_pairs]
+        return parse_intlist_str_pairs(date_pairs)
     else:
         return igram_file_list
 
 
 def _parse(datestr):
     return datetime.datetime.strptime(datestr, "%Y%m%d").date()
+
+
+def parse_geolist_str(geolist_str):
+    return [_parse(g) for g in geolist_str]
+
+
+def parse_intlist_str_pairs(date_pairs):
+    return [(_parse(early), _parse(late)) for early, late in date_pairs]
 
 
 def _strip_geoname(name):
