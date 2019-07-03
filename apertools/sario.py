@@ -184,6 +184,7 @@ def find_files(directory, search_term):
     """Searches for files in `directory` using globbing on search_term
 
     Path to file is also included.
+    Returns in names sorted order.
 
     Examples:
     >>> import shutil, tempfile
@@ -193,7 +194,7 @@ def find_files(directory, search_term):
     True
     >>> shutil.rmtree(temp_dir)
     """
-    return glob.glob(os.path.join(directory, search_term))
+    return sorted(glob.glob(os.path.join(directory, search_term)))
 
 
 def find_rsc_file(filename=None, basepath=None, verbose=False):
@@ -426,7 +427,7 @@ def save_hgt(filename, amp_data, height_data):
 
 
 def _load_stack_files(directory, file_ext):
-    return sorted(find_files(directory, "*" + file_ext))
+    return find_files(directory, "*" + file_ext)
 
 
 def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
