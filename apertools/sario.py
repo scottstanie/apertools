@@ -72,6 +72,9 @@ STACKED_FILES = ['.cc', '.unw', '.unwflat', '.unw.grd', '.cc.grd']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
 
+GEOLIST_DSET = "geo_dates"
+INTLIST_DSET = "int_dates"
+
 
 def load_file(filename,
               downsample=None,
@@ -472,23 +475,25 @@ def load_deformation(igram_path, filename='deformation.npy'):
     Returns:
         tuple[ndarray, ndarray]: geolist 1D array, deformation 3D array
     """
-    if utils.get_file_ext == ".npy":
-        _load_deformation_npy(igram_path, filename)
-    elif utils.get_file_ext in (".h5", "hdf5"):
-        _load_deformation_h5(igram_path, filename)
+    if utils.get_file_ext(filename) == ".npy":
+        return _load_deformation_npy(igram_path, filename)
+    elif utils.get_file_ext(filename) in (".h5", "hdf5"):
+        return _load_deformation_h5(igram_path, filename)
     else:
         raise ValueError("load_deformation only supported for .h5 or .npy")
 
 
 def _load_deformation_h5(igram_path, filename):
+    full_file = os.path.join(igram_path, filename)
     try:
-        with h5py.File(os.path.join(igram_path, filename), "r") as f:
-            deformation = f["deformation_stack"]
+        with h5py.File(full_file, "r") as f:
+            # TODO: get rid of these strings not as constants
+            deformation = f["stack"]
             # geolist attr will be is a list of strings: need them as datetimes
-            geo_str_list = deformation.attrs["geolist"]
-            geolist = parse_geolist_str(geo_str_list)
-    except (IOError, OSError):
-        logger.error("Can't load %s in path %s", filename, igram_path)
+
+        geolist = load_geolist_from_h5(full_file)
+    except (IOError, OSError) as e:
+        logger.error("Can't load %s in path %s: %s", filename, igram_path, e)
         return None, None
 
     return geolist, deformation
@@ -504,6 +509,32 @@ def _load_deformation_npy(igram_path, filename):
         return None, None
 
     return geolist, deformation
+
+
+def load_geolist_from_h5(h5file):
+    with h5py.File(h5file, "r") as f:
+        geolist_str = f[GEOLIST_DSET][()].astype(str)
+
+    return parse_geolist_strings(geolist_str)
+
+
+def load_intlist_from_h5(h5file):
+    with h5py.File(h5file, "r") as f:
+        date_pair_strs = f[INTLIST_DSET][:].astype(str)
+
+    return parse_intlist_strings(date_pair_strs)
+
+
+def parse_geolist_strings(geolist_str):
+    return [_parse(g) for g in geolist_str]
+
+
+def parse_intlist_strings(date_pairs):
+    return [(_parse(early), _parse(late)) for early, late in date_pairs]
+
+
+def _parse(datestr):
+    return datetime.datetime.strptime(datestr, "%Y%m%d").date()
 
 
 def find_geos(directory=".", parse=True):
@@ -549,21 +580,9 @@ def find_igrams(directory=".", parse=True):
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
         date_pairs = [intname.strip('.int').split('_') for intname in igram_fnames]
-        return parse_intlist_str_pairs(date_pairs)
+        return parse_intlist_strings(date_pairs)
     else:
         return igram_file_list
-
-
-def _parse(datestr):
-    return datetime.datetime.strptime(datestr, "%Y%m%d").date()
-
-
-def parse_geolist_str(geolist_str):
-    return [_parse(g) for g in geolist_str]
-
-
-def parse_intlist_str_pairs(date_pairs):
-    return [(_parse(early), _parse(late)) for early, late in date_pairs]
 
 
 def _strip_geoname(name):
