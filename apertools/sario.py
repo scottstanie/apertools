@@ -488,7 +488,7 @@ def _load_deformation_h5(igram_path, filename):
     try:
         with h5py.File(full_file, "r") as f:
             # TODO: get rid of these strings not as constants
-            deformation = f["stack"]
+            deformation = f["stack"][:]
             # geolist attr will be is a list of strings: need them as datetimes
 
         geolist = load_geolist_from_h5(full_file)
@@ -537,18 +537,26 @@ def _parse(datestr):
     return datetime.datetime.strptime(datestr, "%Y%m%d").date()
 
 
-def find_geos(directory=".", parse=True):
+def find_geos(directory=".", parse=True, filename=None):
     """Reads in the list of .geo files used, in time order
+
+    Can also pass a filename containing .geo files as lines.
 
     Args:
         directory (str): path to the geolist file or directory
         parse (bool): output as parsed datetime tuples. False returns the filenames
+        filename (string): name of a file with .geo filenames
 
     Returns:
         list[date]: the parse dates of each .geo used, in date order
 
     """
-    geo_file_list = find_files(directory, "*.geo")
+    if filename is not None:
+        with open(filename) as f:
+            geo_file_list = f.read().splitlines()
+    else:
+        geo_file_list = find_files(directory, "*.geo")
+
     if not parse:
         return geo_file_list
 
@@ -563,19 +571,29 @@ def find_geos(directory=".", parse=True):
         return sorted([parsers.Sentinel(geo).start_time.date() for geo in geolist])
 
 
-def find_igrams(directory=".", parse=True):
+def _strip_geoname(name):
+    """Leaves just date from format S1A_YYYYmmdd.geo"""
+    return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '')
+
+
+def find_igrams(directory=".", parse=True, filename=None):
     """Reads the list of igrams to return dates of images as a tuple
 
     Args:
         directory (str): path to the igram directory
         parse (bool): output as parsed datetime tuples. False returns the filenames
+        filename (string): name of a file with .geo filenames
 
     Returns:
         tuple(date, date) of (early, late) dates for all igrams (if parse=True)
             if parse=False: returns list[str], filenames of the igrams
 
     """
-    igram_file_list = find_files(directory, "*.int")
+    if filename is not None:
+        with open(filename) as f:
+            igram_file_list = f.read().splitlines()
+    else:
+        igram_file_list = find_files(directory, "*.int")
 
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
@@ -583,8 +601,3 @@ def find_igrams(directory=".", parse=True):
         return parse_intlist_strings(date_pairs)
     else:
         return igram_file_list
-
-
-def _strip_geoname(name):
-    """Leaves just date from format S1A_YYYYmmdd.geo"""
-    return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '')
