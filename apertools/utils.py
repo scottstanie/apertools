@@ -384,7 +384,8 @@ def get_parent_dir(filepath):
     Used, e.g. for when .geos should be 1 directory up from igrams
 
     Examples:
-        >>> import tempfile
+        >>> import tempfile, sys
+        >>> if sys.version_info[0] == 2: from backports import tempfile
         >>> temp_dir = tempfile.TemporaryDirectory()
         >>> nested = os.path.join(temp_dir.name, 'dir2')
         >>> os.mkdir(nested)
