@@ -567,6 +567,8 @@ def find_geos(directory=".", parse=True, filename=None):
 
     if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
         return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
+    elif re.match(r'\d{8}', geolist[0]):  # YYYYmmdd , just a date string
+        return sorted([_parse(geo) for geo in geolist])
     else:  # Full sentinel product name
         return sorted([parsers.Sentinel(geo).start_time.date() for geo in geolist])
 
