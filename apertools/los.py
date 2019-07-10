@@ -30,6 +30,8 @@ def find_enu_coeffs(lon, lat, geo_path=None):
         Can be used to project an ENU vector into the line of sight direction
     """
     los_file = os.path.realpath(os.path.join(geo_path, 'los_vector_%s_%s.txt' % (lon, lat)))
+    # import ipdb
+    # ipdb.set_trace()
     db_path = _find_db_path(geo_path)
 
     record_xyz_los_vector(lon, lat, db_path=db_path, outfile=los_file, clear=True)
@@ -42,7 +44,7 @@ def find_enu_coeffs(lon, lat, geo_path=None):
 
 def _find_db_path(geo_path):
     extra_path = os.path.join(geo_path, 'extra_files')
-    if os.path.exists(extra_path) and len(glob.glob(extra_path + "/*.db")) > 0:
+    if os.path.exists(extra_path) and len(glob.glob(extra_path + "/*.db*")) > 0:
         return extra_path
     else:
         return geo_path

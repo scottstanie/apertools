@@ -459,12 +459,25 @@ class LatlonImage(np.ndarray):
         return self.pixel_to_km(1)**2
 
 
-def load_deformation_img(igram_path=".", n=3, filename='deformation.npy', rsc_filename='dem.rsc'):
+def load_deformation_img(igram_path=".",
+                         n=3,
+                         filename='deformation.npy',
+                         full_path=None,
+                         rsc_filename='dem.rsc'):
     """Loads mean of last n images of a deformation stack in LatlonImage
+    Specify either a directory `igram_path` and `filename`, or `full_path` to file
     """
-    _, defo_stack = sario.load_deformation(igram_path, filename=filename)
+    if full_path:
+        igram_path, filename = os.path.split(full_path)
+    else:
+        full_path = os.path.join(igram_path, filename)
+
+    _, defo_stack = sario.load_deformation(igram_path=igram_path,
+                                           filename=filename,
+                                           full_path=full_path,
+                                           n=n)
     rsc_filename = os.path.join(igram_path, rsc_filename)
-    img = LatlonImage(data=np.mean(defo_stack[-n:], axis=0), dem_rsc_file=rsc_filename)
+    img = LatlonImage(data=np.mean(defo_stack, axis=0), dem_rsc_file=rsc_filename)
     return img
 
 

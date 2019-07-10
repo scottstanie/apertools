@@ -110,16 +110,26 @@ def stations_within_image(image_ll=None,
     return good_stations
 
 
-def plot_stations(image_ll=None, image_filename=None, mask_invalid=True):
-    """Plot an GPS station points contained within an image"""
+def plot_stations(image_ll=None,
+                  image_filename=None,
+                  full_path=None,
+                  mask_invalid=True,
+                  station_name_list=None):
+    """Plot an GPS station points contained within an image
+
+    To only plot subset of stations, pass an iterable of strings to station_name_list
+    """
     if image_ll is None:
         try:
             # First check if we want to load the 3D stack "deformation.npy"
-            image_ll = apertools.latlon.load_deformation_img(filename=image_filename)
+            image_ll = apertools.latlon.load_deformation_img(filename=image_filename,
+                                                             full_path=full_path)
         except ValueError:
             image_ll = apertools.latlon.LatlonImage(filename=image_filename)
 
     stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
+    if station_name_list:
+        stations = [s for s in stations if s[0] in station_name_list]
     # TODO: maybe just plot_image_shifted
     fig, ax = plt.subplots()
     axim = ax.imshow(image_ll, extent=image_ll.extent)
@@ -224,7 +234,7 @@ def plot_gps_enu(station=None, days_smooth=12):
     axes[2].set_ylabel('up (cm)')
     axes[2].plot(dts, _moving_average(up_mm, days_smooth), 'r-')
     axes[2].grid(True)
-    remove_xticks(axes[2])
+    # remove_xticks(axes[2])
 
     fig.suptitle(station)
 
@@ -290,8 +300,8 @@ def find_insar_ts(insar_dir, station_name, defo_name='deformation.npy'):
     return geolist, insar_ts
 
 
-def plot_gps_vs_insar():
-    insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
+def plot_gps_vs_insar(insar_dir, defo_name="deformation.npy", station_name_list=None):
+    # insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
 
     # station_name = 'TXKM'
     # los_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7/'
@@ -304,10 +314,15 @@ def plot_gps_vs_insar():
     # los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
     # los_gps_data = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
-    defo_name = 'deformation.npy'
+    # defo_name = 'deformation.npy'
+
     igrams_dir = os.path.join(insar_dir, 'igrams')
     defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_name)
     station_list = stations_within_image(defo_img)
+    if station_name_list is not None:
+        station_list = [s for s in station_list if s[0] in station_name_list]
+
+    print(station_list)
     for station_name, lon, lat in station_list:
         plt.figure()
 
@@ -336,6 +351,7 @@ def plot_gps_vs_insar():
                  linewidth=3)
 
         plt.legend()
+    plt.show()
     # return geolist, insar_ts, gps_dts, los_gps_data, defo_img
 
 

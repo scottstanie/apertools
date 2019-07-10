@@ -463,7 +463,7 @@ def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
     return out
 
 
-def load_deformation(igram_path, filename='deformation.npy'):
+def load_deformation(igram_path=None, filename='deformation.npy', full_path=None, n=None):
     """Loads a stack of deformation images from igram_path
 
     igram_path must also contain the "geolist.npy" file if using the .npy option
@@ -471,27 +471,45 @@ def load_deformation(igram_path, filename='deformation.npy'):
     Args:
         igram_path (str): directory of .npy file
         filename (str): default='deformation.npy', a .npy file of a 3D ndarray
+        n (int): only load the last `n` layers of the stack
 
     Returns:
         tuple[ndarray, ndarray]: geolist 1D array, deformation 3D array
     """
+    if full_path:
+        igram_path, filename = os.path.split(full_path)
+    else:
+        full_path = os.path.join(igram_path, filename)
+
     if utils.get_file_ext(filename) == ".npy":
-        return _load_deformation_npy(igram_path, filename)
+        return _load_deformation_npy(igram_path=igram_path,
+                                     filename=filename,
+                                     full_path=full_path,
+                                     n=n)
     elif utils.get_file_ext(filename) in (".h5", "hdf5"):
-        return _load_deformation_h5(igram_path, filename)
+        return _load_deformation_h5(igram_path=igram_path,
+                                    filename=filename,
+                                    full_path=full_path,
+                                    n=n)
     else:
         raise ValueError("load_deformation only supported for .h5 or .npy")
 
 
-def _load_deformation_h5(igram_path, filename):
-    full_file = os.path.join(igram_path, filename)
+def _load_deformation_h5(igram_path=None, filename=None, full_path=None, n=None):
+    if full_path:
+        igram_path, filename = os.path.split(full_path)
+    else:
+        full_path = os.path.join(igram_path, filename)
     try:
-        with h5py.File(full_file, "r") as f:
+        with h5py.File(full_path, "r") as f:
             # TODO: get rid of these strings not as constants
-            deformation = f["stack"][:]
+            if n is not None:
+                deformation = f["stack"][-n:]
+            else:
+                deformation = f["stack"][:]
             # geolist attr will be is a list of strings: need them as datetimes
 
-        geolist = load_geolist_from_h5(full_file)
+        geolist = load_geolist_from_h5(full_path)
     except (IOError, OSError) as e:
         logger.error("Can't load %s in path %s: %s", filename, igram_path, e)
         return None, None
@@ -499,9 +517,16 @@ def _load_deformation_h5(igram_path, filename):
     return geolist, deformation
 
 
-def _load_deformation_npy(igram_path, filename):
+def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None):
+    if full_path:
+        igram_path, filename = os.path.split(full_path)
+    else:
+        full_path = os.path.join(igram_path, filename)
+
     try:
         deformation = np.load(os.path.join(igram_path, filename))
+        if n is not None:
+            deformation = deformation[-n:]
         # geolist is a list of datetimes: encoding must be bytes
         geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
     except (IOError, OSError):

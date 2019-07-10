@@ -145,6 +145,7 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
         if image.ndim > 2:
             # For 3D stack, assume we just want the final image
             image = image[-1]
+            logger.info("Saving final image of stack")
         apertools.sario.save(new_filename, image, cmap=cmap, normalize=normalize, preview=True)
 
     if geojson:
@@ -155,9 +156,12 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
 
     rsc_data = apertools.sario.load(rsc) if rsc else None
     # Check if imgfile is a .npy saved matrix
-    if imgfile.endswith(".npy"):
-        new_filename = imgfile.replace(".npy", ".png")
+    file_ext = apertools.utils.get_file_ext(imgfile)
+    if file_ext in (".npy", ".h5"):
+        new_filename = imgfile.replace(file_ext, ".png")
         _save_npy_file(imgfile, new_filename)
+    else:
+        new_filename = imgfile
 
     kml_string = apertools.kml.create_kml(
         rsc_data=rsc_data,
