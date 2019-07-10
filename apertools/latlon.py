@@ -462,7 +462,7 @@ class LatlonImage(np.ndarray):
 def load_deformation_img(igram_path=".", n=3, filename='deformation.npy', rsc_filename='dem.rsc'):
     """Loads mean of last n images of a deformation stack in LatlonImage
     """
-    defo_stack = sario.load(os.path.join(igram_path, filename))
+    _, defo_stack = sario.load_deformation(igram_path, filename=filename)
     rsc_filename = os.path.join(igram_path, rsc_filename)
     img = LatlonImage(data=np.mean(defo_stack[-n:], axis=0), dem_rsc_file=rsc_filename)
     return img

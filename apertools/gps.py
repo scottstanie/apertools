@@ -8,7 +8,6 @@ Map of stations: http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html
 """
 from __future__ import division, print_function
 import os
-import glob
 import datetime
 import requests
 import pandas as pd
@@ -418,42 +417,6 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     plt.legend()
     return los_gps_data1, los_gps_data2, gps_diff_ts, insar_ts1, insar_ts2, insar_diff
 
-
-def find_stations_with_data(gps_dir=None):
-    """
-        gps_dir (str): directory containing gps station lla csv for read_station_llas
-    """
-    # Now also get gps station list
-    if not gps_dir:
-        gps_dir = GPS_DIR
-
-    all_station_data = read_station_llas(gps_dir=gps_dir)
-    station_data_list = find_station_data_files(gps_dir)
-    stations_with_data = [
-        tup for tup in all_station_data.to_records(index=False) if tup[0] in station_data_list
-    ]
-    return stations_with_data
-
-
-def find_station_data_files(gps_dir):
-    station_files = glob.glob(os.path.join(gps_dir, '*.tenv3'))
-    station_list = []
-    for filename in station_files:
-        _, name = os.path.split(filename)
-        station_list.append(name.split('.')[0])
-    return station_list
-
-
-# def read_station_dict(filename):
-#     """Reads in GPS station data"""
-#     with open(filename) as f:
-#         station_strings = [row for row in f.read().splitlines()]
-#
-#     all_station_data = []
-#     for row in station_strings:
-#         name, lat, lon, _ = row.split(',')  # Ignore altitude
-#         all_station_data.append((name, float(lon), float(lat)))
-#     return all_station_data
 
 # def gps_to_los():
 #     insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
