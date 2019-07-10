@@ -37,7 +37,7 @@ STATION_LLH_FILE = "station_llh_all.csv"
 
 def load_station_data(station_name,
                       gps_dir=GPS_DIR,
-                      start_year=2015,
+                      start_year=2014,
                       end_year=None,
                       download_if_missing=True):
     """Loads one gps station's ENU data since start_year until end_year
@@ -46,7 +46,7 @@ def load_station_data(station_name,
         station_name (str): 4 Letter name of GPS station
             See http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html for map
         gps_dir (str): directory containing gps station lla csv for read_station_llas
-        start_year (int), default 2015, cutoff for beginning of GPS data
+        start_year (int), default 2014, cutoff for beginning of GPS data
         end_year (int): default None, cut off for end of GPS data
         download_if_missing (bool): default True
     """
@@ -374,7 +374,8 @@ def plot_gps_vs_insar_diff(insar_dir,
                            defo_name='deformation.h5',
                            station_name_list=None):
 
-    station_list = list(reversed(_load_station_list(insar_dir, defo_name, station_name_list)))
+    # station_list = list(reversed(_load_station_list(insar_dir, defo_name, station_name_list)))
+    station_list = _load_station_list(insar_dir, defo_name, station_name_list)
 
     stat1, lon1, lat1 = station_list[0]
     stat2, lon2, lat2 = station_list[1]
