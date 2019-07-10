@@ -463,7 +463,15 @@ def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
     return out
 
 
-def load_deformation(igram_path=None, filename='deformation.npy', full_path=None, n=None):
+def get_full_path(directory=None, filename=None, full_path=None):
+    if full_path:
+        directory, filename = os.path.split(full_path)
+    else:
+        full_path = os.path.join(directory, filename)
+    return directory, filename, full_path
+
+
+def load_deformation(igram_path=".", filename='deformation.npy', full_path=None, n=None):
     """Loads a stack of deformation images from igram_path
 
     igram_path must also contain the "geolist.npy" file if using the .npy option
@@ -476,10 +484,7 @@ def load_deformation(igram_path=None, filename='deformation.npy', full_path=None
     Returns:
         tuple[ndarray, ndarray]: geolist 1D array, deformation 3D array
     """
-    if full_path:
-        igram_path, filename = os.path.split(full_path)
-    else:
-        full_path = os.path.join(igram_path, filename)
+    igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
 
     if utils.get_file_ext(filename) == ".npy":
         return _load_deformation_npy(igram_path=igram_path,
@@ -496,10 +501,7 @@ def load_deformation(igram_path=None, filename='deformation.npy', full_path=None
 
 
 def _load_deformation_h5(igram_path=None, filename=None, full_path=None, n=None):
-    if full_path:
-        igram_path, filename = os.path.split(full_path)
-    else:
-        full_path = os.path.join(igram_path, filename)
+    igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
     try:
         with h5py.File(full_path, "r") as f:
             # TODO: get rid of these strings not as constants
@@ -518,10 +520,7 @@ def _load_deformation_h5(igram_path=None, filename=None, full_path=None, n=None)
 
 
 def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None):
-    if full_path:
-        igram_path, filename = os.path.split(full_path)
-    else:
-        full_path = os.path.join(igram_path, filename)
+    igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
 
     try:
         deformation = np.load(os.path.join(igram_path, filename))
@@ -628,3 +627,40 @@ def find_igrams(directory=".", parse=True, filename=None):
         return parse_intlist_strings(date_pairs)
     else:
         return igram_file_list
+
+
+def load_mask(geo_date_list=None,
+              perform_mask=True,
+              deformation_filename=None,
+              mask_filename="masks.h5",
+              directory=None):
+    # TODO: Dedupe this from the insar one
+    if not perform_mask:
+        return np.ma.nomask
+
+    if directory is not None:
+        _, _, mask_full_path = get_full_path(directory=directory, filename=mask_filename)
+    else:
+        mask_full_path = mask_filename
+
+    # If they pass a deformation .h5 stack, get only the dates actually used
+    # instead of all possible dates stored in the mask stack
+    if deformation_filename is not None:
+        if directory is not None:
+            deformation_filename = os.path.join(directory, deformation_filename)
+            geo_date_list = load_geolist_from_h5(deformation_filename)
+
+    # Get the indices of the mask layers that were used in the deformation stack
+    all_geo_dates = load_geolist_from_h5(mask_full_path)
+    if geo_date_list is None:
+        used_bool_arr = np.full(len(all_geo_dates), True)
+    else:
+        used_bool_arr = np.array([g in geo_date_list for g in all_geo_dates])
+
+    with h5py.File(mask_full_path) as f:
+        # Maks a single mask image for any pixel that has a mask
+        # Note: not using GEO_MASK_SUM_DSET since we may be sub selecting layers
+        geo_mask_dset = "geo"
+        stack_mask = np.sum(f[geo_mask_dset][used_bool_arr, :, :], axis=0)
+        stack_mask = stack_mask > 0
+        return stack_mask

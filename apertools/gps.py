@@ -13,6 +13,8 @@ import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm
+
 from scipy.ndimage.filters import uniform_filter1d
 try:
     from functools import lru_cache
@@ -71,18 +73,18 @@ def _clean_gps_df(df, start_year, end_year=None):
 
 
 def stations_within_image(image_ll=None,
-                          image_filename=None,
+                          filename=None,
                           mask_invalid=True,
                           gps_dir=None,
                           gps_filename=None):
     """Given an image, find gps stations contained in area
 
     Must have an associated .rsc file, either from being a LatlonImage (passed
-    by image_ll), or have the file in same directory as `image_filename`
+    by image_ll), or have the file in same directory as `filename`
 
     Args:
         image_ll (LatlonImage): LatlonImage of area with data
-        image_filename (str): filename to load into a LatlonImage
+        filename (str): filename to load into a LatlonImage
         mask_invalid (bool): Default true. if true, don't return stations
             where the image value is NaN or exactly 0
         gps_dir (str): directory containing gps station lla csv for read_station_llas
@@ -91,7 +93,7 @@ def stations_within_image(image_ll=None,
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
     """
     if image_ll is None:
-        image_ll = apertools.latlon.LatlonImage(filename=image_filename)
+        image_ll = apertools.latlon.LatlonImage(filename=filename)
 
     df = read_station_llas(gps_dir=gps_dir, filename=gps_filename)
     station_lon_lat_arr = df[['lon', 'lat']].values
@@ -111,7 +113,8 @@ def stations_within_image(image_ll=None,
 
 
 def plot_stations(image_ll=None,
-                  image_filename=None,
+                  filename=None,
+                  directory=None,
                   full_path=None,
                   mask_invalid=True,
                   station_name_list=None):
@@ -119,24 +122,40 @@ def plot_stations(image_ll=None,
 
     To only plot subset of stations, pass an iterable of strings to station_name_list
     """
+    directory, filename, full_path = apertools.sario.get_full_path(directory, filename, full_path)
+
     if image_ll is None:
         try:
             # First check if we want to load the 3D stack "deformation.npy"
-            image_ll = apertools.latlon.load_deformation_img(filename=image_filename,
-                                                             full_path=full_path)
+            image_ll = apertools.latlon.load_deformation_img(filename=filename, full_path=full_path)
         except ValueError:
-            image_ll = apertools.latlon.LatlonImage(filename=image_filename)
+            image_ll = apertools.latlon.LatlonImage(filename=filename)
 
-    stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
-    if station_name_list:
-        stations = [s for s in stations if s[0] in station_name_list]
+    print("full", full_path, 'dir', directory)
+    if mask_invalid:
+        try:
+            stack_mask = apertools.sario.load_mask(directory=directory,
+                                                   deformation_filename=full_path)
+            image_ll[stack_mask] = np.nan
+        except Exception as e:
+            logger.warning("error in load_mask", exc_info=True)
+
     # TODO: maybe just plot_image_shifted
     fig, ax = plt.subplots()
     axim = ax.imshow(image_ll, extent=image_ll.extent)
     fig.colorbar(axim)
 
-    for name, lon, lat in stations:
-        ax.plot(lon, lat, 'X', markersize=15, label=name)
+    stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
+    if station_name_list:
+        stations = [s for s in stations if s[0] in station_name_list]
+
+    colors = matplotlib.cm.rainbow(np.linspace(0, 1, len(stations)))
+    # names, lons, lats = stations.T
+    # ax.scatter(lons.astype(float), lats.astype(float), marker='X', label=names, c=color)
+    size = 25
+    for idx, (name, lon, lat) in enumerate(stations):
+        # ax.plot(lon, lat, 'X', markersize=15, label=name)
+        ax.scatter(lon, lat, marker='X', label=name, color=colors[idx], s=size)
     plt.legend()
 
 
@@ -300,29 +319,23 @@ def find_insar_ts(insar_dir, station_name, defo_name='deformation.npy'):
     return geolist, insar_ts
 
 
-def plot_gps_vs_insar(insar_dir, defo_name="deformation.npy", station_name_list=None):
-    # insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
-
-    # station_name = 'TXKM'
-    # los_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7/'
-    # lla, xyz = los.read_los_output(os.path.join(los_dir, 'extra_files/los_vectors.txt'))
-    # enu_coeffs = los.find_enu_coeffs(-102.894010019, 31.557733084, insar_dir)
-
-    # lon, lat = station_lonlat(station_name)
-    # df = load_station_data(station_name)
-    # enu_data = df[['east', 'north', 'up']].T
-    # los_gps_data = project_enu_to_los(enu_data, los_vec, lat, lon)
-    # los_gps_data = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
-
-    # defo_name = 'deformation.npy'
-
+def _load_station_list(insar_dir, defo_name, station_name_list):
     igrams_dir = os.path.join(insar_dir, 'igrams')
     defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_name)
     station_list = stations_within_image(defo_img)
     if station_name_list is not None:
         station_list = [s for s in station_list if s[0] in station_name_list]
+    return station_list
 
+
+def plot_gps_vs_insar(insar_dir, defo_name="deformation.npy", station_name_list=None):
+    """Make a single plot of GPS vs InSAR
+    Note that without the `align` option, the two might differ by an angle
+    due to differences in reference points for the InSAR
+    """
+    station_list = _load_station_list(insar_dir, defo_name, station_name_list)
     print(station_list)
+
     for station_name, lon, lat in station_list:
         plt.figure()
 
@@ -355,15 +368,17 @@ def plot_gps_vs_insar(insar_dir, defo_name="deformation.npy", station_name_list=
     # return geolist, insar_ts, gps_dts, los_gps_data, defo_img
 
 
-def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
-    insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
+# insar_dir = '/data1/scott/pecos/path85/N31.4W103.7'
+def plot_gps_vs_insar_diff(insar_dir,
+                           fignum=None,
+                           defo_name='deformation.h5',
+                           station_name_list=None):
 
-    igrams_dir = os.path.join(insar_dir, 'igrams')
-    defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_name)
-    station_list = stations_within_image(defo_img)
+    station_list = list(reversed(_load_station_list(insar_dir, defo_name, station_name_list)))
 
     stat1, lon1, lat1 = station_list[0]
     stat2, lon2, lat2 = station_list[1]
+    logger.info("Using stations: %s" % station_list[:2])
 
     # # First way: project each ENU to LOS, then subtract
     gps_dts1, los_gps_data1 = load_gps_los_data(insar_dir, stat1, zero_start=False)
@@ -381,20 +396,6 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
     gps_diff_ts = diff_df['gps1'] - diff_df['gps2']
     gps_diff_ts = gps_diff_ts - np.mean(gps_diff_ts[:100])
     gps_dts = diff_df['dt']
-
-    # # Other way: subtracting ENU components, then project diffs to LOS
-    # enu_coeffs = los.find_enu_coeffs(lon1, lat1, insar_dir)
-    # # Check how different they are
-    # enu_coeffs2 = los.find_enu_coeffs(lon2, lat2, insar_dir)
-    # import pdb
-    # pdb.set_trace()
-    # diff_df = difference_gps_stations(stat1, stat2)
-    # enu_data = diff_df[['d_east', 'd_north', 'd_up']].T
-    # gps_diff_ts = los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
-    # gps_dts = diff_df['dt']
-
-    # logger.info("Converting GPS to cm:")
-    # gps_diff_ts = 100 * gps_diff_ts
 
     start_mean = np.mean(gps_diff_ts[:100])
     # start_mean = np.mean(los_gps_data2[:100])
@@ -422,27 +423,14 @@ def plot_gps_vs_insar_diff(fignum=None, defo_name='deformation.npy'):
 
     days_smooth = 5
     insar_diff_smooth = _moving_average(insar_diff, days_smooth)
+    insar_diff_smooth -= insar_diff_smooth[0]
     plt.plot(geolist,
              insar_diff_smooth,
              'r',
              label='linear %s day smoothed insar' % days_smooth,
              linewidth=3)
 
-    plt.ylim([-2, 2])
+    # plt.ylim([-2, 2])
     plt.ylabel('cm of cumulative LOS displacement')
     plt.legend()
     return los_gps_data1, los_gps_data2, gps_diff_ts, insar_ts1, insar_ts2, insar_diff
-
-
-# def gps_to_los():
-#     insar_dir = '/data4/scott/delaware-basin/test2/N31.4W103.7'
-#     lla, xyz = los.read_los_output(os.path.join(insar_dir, 'extra_files/los_vectors.txt'))
-#
-#     los_vec = np.array(xyz)[0]
-#
-#     station_name = 'TXKM'
-#     df = load_station_data(station_name)
-#     lon, lat = station_lonlat(station_name)
-#     enu_data = df[['east', 'north', 'up']].T
-#     los_gps_data = los.project_enu_to_los(enu_data, los_vec, lat, lon)
-#     return los_gps_data, df['dt']

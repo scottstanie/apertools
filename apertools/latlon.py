@@ -467,10 +467,7 @@ def load_deformation_img(igram_path=".",
     """Loads mean of last n images of a deformation stack in LatlonImage
     Specify either a directory `igram_path` and `filename`, or `full_path` to file
     """
-    if full_path:
-        igram_path, filename = os.path.split(full_path)
-    else:
-        full_path = os.path.join(igram_path, filename)
+    igram_path, filename, full_path = sario.get_full_path(igram_path, filename, full_path)
 
     _, defo_stack = sario.load_deformation(igram_path=igram_path,
                                            filename=filename,
