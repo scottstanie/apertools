@@ -303,11 +303,34 @@ class LatlonImage(np.ndarray):
         rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * row_start
 
         rsc_copy['width'] = ncols
+        rsc_copy['cols'] = ncols  # Also include the uavsar versions
         rsc_copy['file_length'] = nrows
+        rsc_copy['rows'] = nrows
         # After moving start, now adjust step sizes
         rsc_copy['x_step'] *= col_step
         rsc_copy['y_step'] *= row_step
         return rsc_copy
+
+    def take_looks(self, row_looks, col_looks):
+        """Average array, and adjust rsc steps accordingly"""
+
+        downlooked = utils.take_looks(self, row_looks, col_looks)
+
+        row_start, col_start = None, None
+        row_step, col_step = row_looks, col_looks
+        nrows, ncols = downlooked.shape
+        new_rsc_data = self.crop_rsc_data(
+            self.dem_rsc,
+            row_start,
+            col_start,
+            nrows,
+            ncols,
+            row_step,
+            col_step,
+        )
+
+        downlooked.dem_rsc = new_rsc_data
+        return downlooked
 
     @property
     def nrows(self):
