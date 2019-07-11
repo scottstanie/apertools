@@ -55,7 +55,9 @@ class TestUavsar(unittest.TestCase):
         int_ann_info = self.parser_int.parse_ann_file()
         expected_ann_info = {
             'cols': 3300,
+            'width': 3300,
             'rows': 22826,
+            'file_length': 22826,
             'x_first': 13450.19161366,
             'x_step': 4.99654098,
             'y_first': -84242.1,
@@ -67,7 +69,9 @@ class TestUavsar(unittest.TestCase):
         # Different data for the .slc for same ann
         expected_ann_info = {
             'cols': 9900,
+            'width': 9900,
             'rows': 273921,
+            'file_length': 273921,
             'x_first': 13448.5261,
             'x_step': 1.66551366,
             'y_first': -84245.4,
@@ -79,7 +83,9 @@ class TestUavsar(unittest.TestCase):
 
         expected_ann_info = {
             'cols': 19322,
+            'width': 19322,
             'rows': 25751,
+            'file_length': 25751,
             'x_first': -96.2685342,
             'x_step': 5.556e-05,
             'y_first': 30.279311040000003,

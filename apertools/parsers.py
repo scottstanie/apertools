@@ -466,85 +466,7 @@ class Uavsar(Base):
         return self.parse_ann_file()
 
     def parse_ann_file(self):
-        """Returns the requested data from the UAVSAR annotation in ann_filename
-
-        Args:
-            ann_data (dict): key-values of requested data from .ann file
-
-        Returns:
-            dict: the annotation file parsed into a dict. If no annotation file
-                can be found, None is returned
-        """
-
-        def _parse_line(line):
-            wordlist = line.split()
-            # Pick the entry after the equal sign when splitting the line
-            return wordlist[wordlist.index('=') + 1]
-
-        def _parse_int(line):
-            return int(_parse_line(line))
-
-        def _parse_float(line):
-            return float(_parse_line(line))
-
-        def _make_line_regex(ext, field):
-            return r'{}.{}'.format(line_keywords.get(ext), field)
-
-        ext = apertools.utils.get_file_ext(self.filename)
-        if self.verbose:
-            logger.info("Trying to load ann_data from %s", self.ann_filename)
-        if not os.path.exists(self.ann_filename):
-            if self.verbose:
-                logger.info("No file found: returning None")
-            return None
-
-        # Taken from a .ann file: (need to check if this is always true?)
-        # SLC Data Units = linear amplitude
-        # MLC Data Units = linear power
-        # GRD Data Units = linear power
-        ann_data = {}
-        line_keywords = {
-            # ext: line start term
-            '.slc': 'slc_mag',
-            '.mlc': 'mlc_mag',
-            '.int': 'slt',
-            '.unw': 'slt',
-            '.cor': 'slt',
-            '.amp': 'slt',
-            '.grd': 'grd_mag'
-        }
-        row_key = line_keywords.get(ext) + '.set_rows'
-        col_key = line_keywords.get(ext) + '.set_cols'
-
-        # Peg position the nadir position of aircraft at middle of datatake
-        with open(self.ann_filename, 'r') as f:
-            for line in f.readlines():
-                if line.startswith(row_key):
-                    ann_data['rows'] = _parse_int(line)
-                elif line.startswith(col_key):
-                    ann_data['cols'] = _parse_int(line)
-                # Center Latitude of Upper Left Pixel of GRD image, or
-                # range Offset(R0) from Peg in meters
-                # Note: using convention of .rsc files for consitency
-                # I.E. x_first, x_step, y_first, y_step
-                elif re.match(_make_line_regex(ext, 'row_addr'), line):
-                    ann_data['y_first'] = _parse_float(line)
-                # Center Longitude of Upper Left Pixel
-                elif re.match(_make_line_regex(ext, 'col_addr'), line):
-                    ann_data['x_first'] = _parse_float(line)
-                # GRD Latitude Pixel Spacing
-                # the step is negative in the y (row) direction
-                elif re.match(_make_line_regex(ext, 'row_mult'), line):
-                    ann_data['y_step'] = _parse_float(line)
-                # GRD Longitude Pixel Spacing or SLC R (range) Slant Post Spacing
-                elif re.match(_make_line_regex(ext, 'col_mult'), line):
-                    ann_data['x_step'] = _parse_float(line)
-                # TODO: Add more parsing! whatever is useful from .ann file
-
-        if self.verbose:
-            logger.info(pprint.pformat(ann_data))
-
-        return ann_data
+        return parse_ann_file(self.ann_filename, filename=self.filename, verbose=self.verbose)
 
 
 class UavsarInt(Uavsar):
@@ -565,3 +487,92 @@ class UavsarInt(Uavsar):
 
     def __str__(self):
         return "{} from {}".format(self.__class__.__name__, self.target_site)
+
+
+def parse_ann_file(ann_filename, filename=None, ext=None, verbose=False):
+    """Returns the requested data from the UAVSAR annotation in ann_filename
+
+    Args:
+        ann_data (dict): key-values of requested data from .ann file
+
+    Returns:
+        dict: the annotation file parsed into a dict. If no annotation file
+            can be found, None is returned
+    """
+
+    def _parse_line(line):
+        wordlist = line.split()
+        # Pick the entry after the equal sign when splitting the line
+        return wordlist[wordlist.index('=') + 1]
+
+    def _parse_int(line):
+        return int(_parse_line(line))
+
+    def _parse_float(line):
+        return float(_parse_line(line))
+
+    def _make_line_regex(ext, field):
+        return r'{}.{}'.format(line_keywords.get(ext), field)
+
+    if not ext:
+        if not filename:
+            raise ValueError("Need either filename or ext")
+        ext = apertools.utils.get_file_ext(filename)
+
+    if verbose:
+        logger.info("Trying to load ann_data from %s", ann_filename)
+    if not os.path.exists(ann_filename):
+        if verbose:
+            logger.info("No file found: returning None")
+        return None
+
+    # Taken from a .ann file: (need to check if this is always true?)
+    # SLC Data Units = linear amplitude
+    # MLC Data Units = linear power
+    # GRD Data Units = linear power
+    ann_data = {}
+    line_keywords = {
+        # ext: line start term
+        '.slc': 'slc_mag',
+        '.mlc': 'mlc_mag',
+        '.int': 'slt',
+        '.unw': 'slt',
+        '.cor': 'slt',
+        '.amp': 'slt',
+        '.grd': 'grd_mag'
+    }
+    row_key = line_keywords.get(ext) + '.set_rows'
+    col_key = line_keywords.get(ext) + '.set_cols'
+
+    # Peg position the nadir position of aircraft at middle of datatake
+    with open(ann_filename, 'r') as f:
+        for line in f.readlines():
+            if line.startswith(row_key):
+                ann_data['rows'] = _parse_int(line)
+                # Also add .rsc equivalent for compatibility
+                ann_data['file_length'] = ann_data['rows']
+            elif line.startswith(col_key):
+                ann_data['cols'] = _parse_int(line)
+                ann_data['width'] = ann_data['cols']
+            # Center Latitude of Upper Left Pixel of GRD image, or
+            # range Offset(R0) from Peg in meters
+            # Note: using convention of .rsc files for consitency
+            # I.E. x_first, x_step, y_first, y_step
+            elif re.match(_make_line_regex(ext, 'row_addr'), line):
+                ann_data['y_first'] = _parse_float(line)
+            # Center Longitude of Upper Left Pixel
+            elif re.match(_make_line_regex(ext, 'col_addr'), line):
+                ann_data['x_first'] = _parse_float(line)
+            # GRD Latitude Pixel Spacing
+            # the step is negative in the y (row) direction
+            elif re.match(_make_line_regex(ext, 'row_mult'), line):
+                ann_data['y_step'] = _parse_float(line)
+            # GRD Longitude Pixel Spacing or SLC R (range) Slant Post Spacing
+            elif re.match(_make_line_regex(ext, 'col_mult'), line):
+                ann_data['x_step'] = _parse_float(line)
+            # TODO: Add more parsing! whatever is useful from .ann file
+
+    if verbose:
+        logger.info(pprint.pformat(ann_data))
+
+    return ann_data
