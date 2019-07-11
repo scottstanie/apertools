@@ -129,8 +129,10 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 @click.option("--output", "-o", help="File to save kml output to")
 @click.option("--cmap", default="seismic", help="Colormap (if saving .npy image)")
 @click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
+@click.option("--vmax", type=float, help="Maximum value for imshow")
+@click.option("--vmin", type=float, help="Minimum value for imshow")
 @click.pass_obj
-def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize):
+def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize, vmax, vmin):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
@@ -146,7 +148,13 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
             # For 3D stack, assume we just want the final image
             image = image[-1]
             logger.info("Saving final image of stack")
-        apertools.sario.save(new_filename, image, cmap=cmap, normalize=normalize, preview=True)
+        apertools.sario.save(new_filename,
+                             image,
+                             cmap=cmap,
+                             normalize=normalize,
+                             preview=True,
+                             vmax=vmax,
+                             vmin=vmin)
 
     if geojson:
         with open(geojson) as f:

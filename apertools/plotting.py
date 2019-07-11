@@ -44,11 +44,12 @@ def discrete_seismic_colors(n=5):
     if n == 5:
         return list(
             np.array([
-                (5, 113, 176),
-                (146, 197, 222),
-                (247, 247, 247),
-                (244, 165, 130),
-                (202, 0, 32),
+                (5, 113, 176, 256),
+                (146, 197, 222, 256),
+                # (247, 247, 247, 245),  # To make red-white-blue
+                (247, 247, 191, 245),  # To make red-yellow-blue
+                (244, 165, 130, 256),
+                (202, 0, 32, 256),
             ]) / 256)
     elif n == 7:
         # Really this is red-yellow-blue

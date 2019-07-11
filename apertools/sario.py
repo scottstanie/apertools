@@ -359,7 +359,7 @@ def combine_real_imag(real_data, imag_data):
     return real_data + 1j * imag_data
 
 
-def save(filename, array, normalize=True, cmap="gray", preview=False):
+def save(filename, array, normalize=True, cmap="gray", preview=False, vmax=None, vmin=None):
     """Save the numpy array in one of known formats
 
     Args:
@@ -395,8 +395,7 @@ def save(filename, array, normalize=True, cmap="gray", preview=False):
         if normalize:
             array = array / np.max(np.abs(array))
             vmin, vmax = -1, 1
-        else:
-            vmin, vmax = None, None
+        logger.info("previewing with (vmin, vmax) = (%s, %s)" % (vmin, vmax))
         # from PIL import Image
         # im = Image.fromarray(array)
         # im.save(filename)
