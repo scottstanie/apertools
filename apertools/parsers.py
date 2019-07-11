@@ -539,8 +539,12 @@ def parse_ann_file(ann_filename, filename=None, ext=None, verbose=False):
         '.unw': 'slt',
         '.cor': 'slt',
         '.amp': 'slt',
-        '.grd': 'grd_mag'
+        '.grd': 'grd_mag',
     }
+    # Add extra .grd extensions
+    for e in ('.int', '.unw', '.cc', '.cor', '.amp1', '.amp2'):
+        line_keywords[e + '.grd'] = line_keywords['.grd']
+
     row_key = line_keywords.get(ext) + '.set_rows'
     col_key = line_keywords.get(ext) + '.set_cols'
 
