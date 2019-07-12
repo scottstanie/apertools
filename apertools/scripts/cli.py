@@ -268,10 +268,13 @@ def dem_rate(context, rsc_file):
 # COMMAND: overlaps
 @cli.command()
 @click.option("--sentinel-path", default=".", help="Path to directory containing .SAFE folders")
-@click.option("--filename", required=True, help="(full) path to the dem.rsc or .geojson file")
-@click.option("--path-num", type=int, help="Select one orbit path number for overlaps")
-@click.option("--end-date", help="Cut off Sentinel files after this date (format: YYYYMMDD)")
-@click.option("--start-date", help="Cut off Sentinel files before this date (format: YYYYMMDD)")
+@click.option("--filename",
+              "-f",
+              help="(full) path to the dem.rsc or .geojson file. If not "
+              "included, will output all files matching the path/date criteria")
+@click.option("--path-num", "-p", type=int, help="Select one orbit path number for overlaps")
+@click.option("--end-date", "-e", help="Cut off Sentinel files after this date (format: YYYYMMDD)")
+@click.option("--start-date", "-s", help="Cut off Sentinel files before this date")
 def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     """List all Sentinel .SAFEs overlapping with area
 
@@ -290,36 +293,42 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     def _parse(date_string):
         return datetime.strptime(date_string, "%Y%m%d").date()
 
+    def _log_paths(sent_list):
+        path_counter = Counter([s.path for s in sent_list])
+        logger.info("Number of files per path:")
+        for path, num in path_counter.items():
+            logger.info("Path %d: %d files" % (path, num))
+
     logger.info("Searching %s for Sentinel .SAFE files" % sentinel_path)
     if not os.path.exists(sentinel_path):
         raise ValueError("%s does not exist" % sentinel_path)
 
-    logger.info("Searching %s for .rsc or .geojson file" % filename)
-    area = apertools.sario.load(filename)
-
     sent_files = glob.glob(os.path.join(sentinel_path, "*.SAFE"))
-    sent_parsers = [apertools.parsers.Sentinel(s) for s in sent_files]
-    logger.info("%d Sentinel .SAFE files found" % len(sent_parsers))
+    sent_list = [apertools.parsers.Sentinel(s) for s in sent_files]
+    logger.info("%d Sentinel .SAFE files found" % len(sent_list))
 
-    overlapping_sents = [s for s in sent_parsers if s.overlaps(area)]
-    logger.info("%d Sentinel .SAFE files overlap with area" % len(overlapping_sents))
-
-    path_counter = Counter([s.path for s in overlapping_sents])
-    logger.info("Number of files per path:")
-    for path, num in path_counter.items():
-        logger.info("Path %d: %d files" % (path, num))
+    _log_paths(sent_list)
 
     if path_num:
         logger.info("Selecting path %s only" % path_num)
-        overlapping_sents = [s for s in overlapping_sents if s.path == path_num]
+        sent_list = [s for s in sent_list if s.path == path_num]
 
     if start_date:
         logger.info("Filtering out files before %s" % start_date)
-        overlapping_sents = [s for s in overlapping_sents if s.date >= _parse(start_date)]
+        sent_list = [s for s in sent_list if s.date >= _parse(start_date)]
     if end_date:
         logger.info("Filtering out files after %s" % end_date)
-        overlapping_sents = [s for s in overlapping_sents if s.date <= _parse(end_date)]
+        sent_list = [s for s in sent_list if s.date <= _parse(end_date)]
 
-    logger.info("%d Sentinel .SAFE files overlap within specified date range" %
-                len(overlapping_sents))
-    print("\n".join(s.filename for s in overlapping_sents))
+    logger.info("%d Sentinel .SAFE files overlap within specified date range" % len(sent_list))
+
+    if filename:
+        logger.info("Searching %s for .rsc or .geojson file" % filename)
+        area = apertools.sario.load(filename)
+        sent_list = [s for s in sent_list if s.overlaps(area)]
+        logger.info("%d Sentinel .SAFE files overlap with area" % len(sent_list))
+
+    logger.info("Final path count:")
+    _log_paths(sent_list)
+
+    print("\n".join(s.filename for s in sent_list))

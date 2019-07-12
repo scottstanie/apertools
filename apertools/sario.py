@@ -37,6 +37,10 @@ UAVSAR_EXTS = [
     '.int.grd',
     '.unw.grd',
     '.cor.grd',
+    '.cc.grd',
+    '.amp1.grd',
+    '.amp2.grd',
+    '.amp.grd',
 ]
 IMAGE_EXTS = ['.png', '.tif', '.tiff', '.jpg']
 
@@ -53,6 +57,7 @@ COMPLEX_EXTS = [
     '.unwflat',
     '.mlc',
     '.int.grd',
+    '.unw.grd',
 ]
 REAL_EXTS = [
     '.amp',
@@ -60,6 +65,8 @@ REAL_EXTS = [
     '.mlc',
     '.grd',
     '.cor.grd',
+    '.amp1.grd',
+    '.amp2.grd',
 ]  # NOTE: .cor might only be real for UAVSAR
 # Note about UAVSAR Multi-look products:
 # Will end with `_ML5X5.grd`, e.g., for 5x5 downsampled
@@ -80,6 +87,7 @@ def load_file(filename,
               downsample=None,
               looks=None,
               rsc_file=None,
+              rsc_data=None,
               ann_info=None,
               verbose=False,
               **kwargs):
@@ -88,6 +96,7 @@ def load_file(filename,
     Args:
         filename (str): path to the file to open
         rsc_file (str): path to a dem.rsc file (if Sentinel)
+        rsc_data (str): preloaded dem.rsc file as a dict
         ann_info (dict): data parsed from annotation file (UAVSAR)
         downsample (int): rate at which to downsample the file
             None is equivalent to 1, no downsampling.
@@ -128,8 +137,7 @@ def load_file(filename,
         return sardem.loading.load_dem_rsc(filename, **kwargs)
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
-    rsc_data = None
-    if rsc_file:
+    if rsc_data is None and rsc_file:
         rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
     if ext in IMAGE_EXTS:
@@ -156,7 +164,7 @@ def load_file(filename,
                 print("Failed loading ann_info")
                 pass
 
-    if not ann_info and not rsc_file:
+    if not ann_info and not rsc_data:
         raise ValueError("Need .rsc file or .ann file to load")
 
     if ext in STACKED_FILES:
@@ -175,7 +183,7 @@ load = load_file
 
 
 def _get_full_grd_ext(filename):
-    if any(e in filename for e in ('.int', '.unw', '.cor', 'cc')):
+    if any(e in filename for e in ('.int', '.unw', '.cor', '.cc', '.amp1', '.amp2', '.amp')):
         ext = '.' + '.'.join(filename.split('.')[-2:])
         logger.info("Using %s for full grd extension" % ext)
         return ext

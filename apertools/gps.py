@@ -193,6 +193,12 @@ def station_lonlat(station_name, gps_dir=None):
     return lon, lat
 
 
+def station_distance(station_name1, station_name2):
+    lonlat1 = station_lonlat(station_name1)
+    lonlat2 = station_lonlat(station_name2)
+    return apertools.latlon.latlon_to_dist(lonlat1[::-1], lonlat2[::-1])
+
+
 def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_dir=None, gps_filename=None):
     if rsc_data is None:
         if rsc_filename is None:
