@@ -6,11 +6,12 @@ import collections
 import itertools
 import glob
 import os
+import numpy as np
 
 from apertools import parsers, sario, utils
 
 
-def stitch_same_dates(geo_path=".", output_path=".", reverse=True):
+def stitch_same_dates(geo_path=".", output_path=".", reverse=True, verbose=True):
     """Combines .geo files of the same date in one directory
 
     The reverse argument is to specify which order the geos get sorted.
@@ -45,25 +46,60 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True):
     double_geo_files = sorted((g for g in geos if g.date in dates_duped),
                               key=lambda g: g.start_time,
                               reverse=reverse)
-    grouped_geos = _group_geos_by_date(double_geo_files)
-    for date, geolist in grouped_geos:
-        print("Stitching geos for %s" % date)
-        # TODO: Make combine handle more than 2!
-        g1, g2 = geolist[:2]
 
-        print('reverse=', reverse)
-        print('image 1:', g1.filename, g1.start_time)
-        print('image 2:', g2.filename, g2.start_time)
-        stitched_img = utils.combine_complex(
-            sario.load(g1.filename),
-            sario.load(g2.filename),
-        )
-        new_name = "{}_{}.geo".format(g1.mission, g1.date.strftime("%Y%m%d"))
-        new_name = os.path.join(output_path, new_name)
-        print("Saving stitched to %s" % new_name)
-        # Remove any file with same name before saving
-        # This prevents symlink overwriting old files
-        utils.rm_if_exists(new_name)
-        sario.save(new_name, stitched_img)
+    grouped_geos = _group_geos_by_date(double_geo_files)
+
+    for date, geolist in grouped_geos:
+        stitch_geos(date, geolist, reverse, output_path, verbose)
 
     return grouped_geos
+
+
+def stitch_geos(date, geolist, reverse, output_path, verbose=True):
+    """Combines multiple .geo files of the same date into one image"""
+    if verbose:
+        print("Stitching geos for %s" % date)
+        print('reverse=', reverse)
+        for g in geolist:
+            print('image:', g.filename, g.start_time)
+
+    # TODO: load in parallel
+    # TODO: stitch in paralle;
+    stitched_img = combine_complex([sario.load(g.filename) for g in geolist])
+
+    g = geolist[0]
+    new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
+    new_name = os.path.join(output_path, new_name)
+    print("Saving stitched to %s" % new_name)
+    # Remove any file with same name before saving
+    # This prevents symlink overwriting old files
+    utils.rm_if_exists(new_name)
+    sario.save(new_name, stitched_img)
+
+
+def combine_complex(img_list):
+    """Combine multiple complex images which partially overlap
+
+    Used for SLCs/.geos of adjacent Sentinel frames
+
+    Args:
+        img_list (ndarray): list of complex images (.geo files)
+    Returns:
+        ndarray: Same size as each, with pixels combined
+    """
+    if len(img_list) < 2:
+        raise ValueError("Must pass more than 1 image to combine")
+    img_shapes = set([img.shape for img in img_list])
+    if len(img_shapes) > 1:
+        raise ValueError("All images must have same size. Sizes: %s" % ','.join(img_shapes))
+    # Start with each one where the other is nonzero
+    img1 = img_list[0]
+
+    img_out = np.copy(img1)
+    for next_img in img_list[1:]:
+        img_out += next_img
+        # Now only on overlap, take the previous's pixels
+        overlap_idxs = (img_out != 0) & (next_img != 0)
+        img_out[overlap_idxs] = img_out[overlap_idxs]
+
+    return img_out

@@ -328,29 +328,6 @@ def show_titles(products):
     return [p['title'] for p in products.values()]
 
 
-def combine_complex(img1, img2):
-    """Combine two complex images which partially overlap
-
-    Used for SLCs/.geos of adjacent Sentinel frames
-
-    Args:
-        img1 (ndarray): complex image of first .geo
-        img2 (ndarray): complex image of second .geo
-    Returns:
-        ndarray: Same size as both, with pixels combined
-    """
-    if img1.shape != img2.shape:
-        raise ValueError("img1 and img2 must be same shape to combine.")
-    # Start with each one where the other is nonzero
-    new_img = np.copy(img1)
-    new_img += img2
-    # Now only on overlap, take the first's pixels
-    overlap_idxs = (img1 != 0) & (img2 != 0)
-    new_img[overlap_idxs] = img1[overlap_idxs]
-
-    return new_img
-
-
 def fullpath(path):
     """Expands ~ and returns an absolute path"""
     return os.path.abspath(os.path.expanduser(path))
