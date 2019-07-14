@@ -273,7 +273,8 @@ class LatlonImage(np.ndarray):
 
         Example:
         >>> im_test = np.arange(30).reshape((6, 5))
-        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1, 'y_step': -0.2, 'file_length': 6,'width': 5}
+        >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1,\
+'y_step': -0.2, 'file_length': 6,'width': 5}
         >>> im = LatlonImage(data=im_test, dem_rsc=rsc_info)
         >>> out = im.crop_rsc_data(rsc_info, None, None, 2, 2)
         >>> print(out['width'], out['file_length'])
@@ -657,7 +658,8 @@ def grid(rows=None,
         tuple[ndarray, ndarray]: the XX, YY grids of longitudes and lats
 
     Examples:
-    >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
+    >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01,\
+'y_first': 19.5, 'y_step': -0.2}
     >>> lons, lats = grid(**test_grid_data)
     >>> np.set_printoptions(legacy="1.13")
     >>> print(lons)
@@ -707,7 +709,8 @@ def grid_extent(rows=None,
         (lon_left,lon_right,lat_bottom,lat_top)
 
     Examples:
-    >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01, 'y_first': 19.5, 'y_step': -0.2}
+    >>> test_grid_data = {'cols': 2, 'rows': 3, 'x_first': -155.0, 'x_step': 0.01,\
+'y_first': 19.5, 'y_step': -0.2}
     >>> print(grid_extent(**test_grid_data))
     (-155.0, -154.99, 19.1, 19.5)
     """
@@ -949,13 +952,6 @@ def map_overlay_coords(kml_file=None, etree=None):
     return [(float(lon), float(lat)) for lon, lat in [p.split(',') for p in point_str.split()]]
 
 
-def stitch_images(image_list):
-    total_rows, total_cols = find_total_pixels(image_list)
-    # out = np.zero((total_rows, total_cols))
-    # img1 = image_list[0]
-    # out[:rows, :cols] = img1
-
-
 def _is_float(a):
     return isinstance(a, float)
 
@@ -972,3 +968,27 @@ def contains_floats(slice_items):
                 if _is_float(item.start) or _is_float(item.stop):
                     return True
     return False
+
+
+def load_cropped_masked_deformation(path=".",
+                                    filename="deformation.h5",
+                                    rsc_name="dem.rsc",
+                                    row_start=0,
+                                    row_end=None,
+                                    col_start=0,
+                                    col_end=None,
+                                    perform_mask=True):
+    """Returns stack_ll, 3D LatlonImage, and stack_mask, used to mask the data"""
+    geo_date_list, deformation = sario.load_deformation(path, filename=filename)
+
+    if geo_date_list is None or deformation is None:
+        return
+
+    rsc_data = sario.load(os.path.join(path, rsc_name))
+    stack_mask = sario.load_composite_mask(geo_date_list=geo_date_list, perform_mask=perform_mask)
+
+    stack_ll = LatlonImage(data=deformation, dem_rsc=rsc_data)
+    stack_ll[:, stack_mask] = np.nan
+
+    stack_ll = stack_ll[:, row_start:row_end, col_start:col_end]
+    return stack_ll, stack_mask
