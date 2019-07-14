@@ -18,8 +18,16 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True, verbose=True)
     If reverse=True, then the later geo is used in the overlapping strip.
     This seems to work better for some descending path examples.
     """
+    grouped_geos = group_geos_by_date(geo_path, reverse=reverse)
 
-    def _group_geos_by_date(geolist):
+    for date, geolist in grouped_geos:
+        stitch_geos(date, geolist, reverse, output_path, verbose)
+
+    return grouped_geos
+
+
+def group_geos_by_date(geo_path, reverse=True):
+    def _make_groupby(geolist):
         """Groups into sub-lists sharing dates
         example input:
         [Sentinel S1B, path 78 from 2017-10-13,
@@ -47,11 +55,7 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True, verbose=True)
                               key=lambda g: g.start_time,
                               reverse=reverse)
 
-    grouped_geos = _group_geos_by_date(double_geo_files)
-
-    for date, geolist in grouped_geos:
-        stitch_geos(date, geolist, reverse, output_path, verbose)
-
+    grouped_geos = _make_groupby(double_geo_files)
     return grouped_geos
 
 
