@@ -79,6 +79,28 @@ STACKED_FILES = ['.cc', '.unw', '.unwflat', '.unw.grd', '.cc.grd']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
 
+DATE_FMT = "%Y%m%d"
+
+# Constants for dataset keys saved in .h5 files
+MASK_FILENAME = "masks.h5"
+INT_FILENAME = "int_stack.h5"
+UNW_FILENAME = "unw_stack.h5"
+CC_FILENAME = "cc_stack.h5"
+
+# dataset names for general 3D stacks
+STACK_DSET = "stack"
+STACK_MEAN_DSET = "mean_stack"
+STACK_FLAT_DSET = "deramped_stack"
+STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
+
+# Mask file datasets
+GEO_MASK_DSET = "geo"
+GEO_MASK_SUM_DSET = "geo_sum"
+IGRAM_MASK_DSET = "igram"
+IGRAM_MASK_SUM_DSET = "igram_sum"
+
+DEM_RSC_DSET = "dem_rsc"
+
 GEOLIST_DSET = "geo_dates"
 INTLIST_DSET = "int_dates"
 
@@ -478,10 +500,11 @@ def get_full_path(directory=None, filename=None, full_path=None):
     return directory, filename, full_path
 
 
-def load_deformation(igram_path=".", filename='deformation.npy', full_path=None, n=None):
+def load_deformation(igram_path=".", filename='deformation.h5', full_path=None, n=None):
     """Loads a stack of deformation images from igram_path
 
-    igram_path must also contain the "geolist.npy" file if using the .npy option
+    if using the "deformation.npy" version, igram_path must also contain
+    the "geolist.npy" file
 
     Args:
         igram_path (str): directory of .npy file
@@ -565,7 +588,7 @@ def parse_intlist_strings(date_pairs):
 
 
 def _parse(datestr):
-    return datetime.datetime.strptime(datestr, "%Y%m%d").date()
+    return datetime.datetime.strptime(datestr, DATE_FMT).date()
 
 
 def find_geos(directory=".", parse=True, filename=None):
@@ -671,3 +694,63 @@ def load_mask(geo_date_list=None,
         stack_mask = np.sum(f[geo_mask_dset][used_bool_arr, :, :], axis=0)
         stack_mask = stack_mask > 0
         return stack_mask
+
+
+def load_dem_from_h5(h5file=None, dset="dem_rsc"):
+    with h5py.File(h5file, "r") as f:
+        return json.loads(f[dset][()])
+
+
+def load_composite_mask(geo_date_list=None,
+                        perform_mask=True,
+                        deformation_filename=None,
+                        mask_filename=MASK_FILENAME,
+                        directory=None):
+    if not perform_mask:
+        return np.ma.nomask
+
+    if directory is not None:
+        mask_filename = os.path.join(directory, mask_filename)
+
+    # If they pass a deformation .h5 stack, get only the dates actually used
+    # instead of all possible dates stored in the mask stack
+    if deformation_filename is not None:
+        if directory is not None:
+            deformation_filename = os.path.join(directory, deformation_filename)
+            geo_date_list = load_geolist_from_h5(deformation_filename)
+
+    # Get the indices of the mask layers that were used in the deformation stack
+    all_geo_dates = load_geolist_from_h5(mask_filename)
+    if geo_date_list is None:
+        used_bool_arr = np.full(len(all_geo_dates), True)
+    else:
+        used_bool_arr = np.array([g in geo_date_list for g in all_geo_dates])
+
+    with h5py.File(mask_filename) as f:
+        # Maks a single mask image for any pixel that has a mask
+        # Note: not using GEO_MASK_SUM_DSET since we may be sub selecting layers
+        stack_mask = np.sum(f[GEO_MASK_DSET][used_bool_arr, :, :], axis=0)
+        stack_mask = stack_mask > 0
+        return stack_mask
+
+
+def load_single_mask(int_date_string=None,
+                     date_pair=None,
+                     mask_filename=MASK_FILENAME,
+                     int_date_list=None):
+    """Load one mask from the `mask_filename`
+
+    Can either pass a tuple of Datetimes in date_pair, or a string like
+    `20170101_20170104.int` or `20170101_20170303` to int_date_string
+    """
+    if int_date_list is None:
+        int_date_list = load_intlist_from_h5(mask_filename)
+
+    if int_date_string is not None:
+        # If the pass string with ., only take first part
+        date_str_pair = int_date_string.split('.')[0].split('_')
+        date_pair = parse_intlist_strings([date_str_pair])[0]
+
+    with h5py.File(mask_filename, "r") as f:
+        idx = int_date_list.index(date_pair)
+        return f[IGRAM_MASK_DSET][idx]
