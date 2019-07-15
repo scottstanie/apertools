@@ -188,8 +188,8 @@ def create_geotiff(rsc_data=None, kml_file=None, img_filename=None, shape='box',
         lon_lat (tuple[float]): if shape == 'point', the lon and lat of the point
     """
 
-    gdal_translate_box = "gdal_translate -of GTiff -a_srs EPSG:4326 -a_ullr {ullr} {input} {out}"
-    gdal_translate_quad = "gdal_translate -of GTiff -a_srs EPSG:4326 -gcp 1 1 {ul} -gcp 1 {nrows} {ll} -gcp {ncols} 1 {ur} {input} {out}"
+    gdal_translate_box = "gdal_translate -of GTiff -a_nodata 0 -a_srs EPSG:4326 -a_ullr {ullr} {input} {out}"
+    gdal_translate_quad = "gdal_translate -of GTiff -a_nodata 0 -a_srs EPSG:4326 -gcp 1 1 {ul} -gcp 1 {nrows} {ll} -gcp {ncols} 1 {ur} {input} {out}"
     # gdalwarp -s_srs EPSG:4326 -t_srs EPSG:3857 out1.tif out2.tif
     if shape == 'box':
         # ullr means upper left, lower right (lon, lat) points
