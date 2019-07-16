@@ -240,6 +240,8 @@ def view_stack(
         cmap='seismic',
         perform_shift=False,
         title='',
+        vmin=None,
+        vmax=None,
         legend_loc="upper left",
         lat_lon=False,
         line_plot_kwargs=None,
@@ -292,6 +294,8 @@ def view_stack(
                        title=title,
                        cmap=cmap,
                        label=label,
+                       vmin=vmin,
+                       vmax=vmax,
                        perform_shift=perform_shift)
 
     timefig = plt.figure()
@@ -451,3 +455,20 @@ def save_paper_figure(fig, fname, axis_off=True):
         plt.axis('off')
     print('Saving %s' % fname)
     fig.savefig(fname, bbox_inches='tight', transparent=True, dpi=300)
+
+
+def plot_shapefile(filename, fig=None, ax=None):
+    # Credit: https://gis.stackexchange.com/a/152331
+    import shapefile
+    if not ax:
+        if not fig:
+            fig, ax = plt.subplots()
+        else:
+            ax = fig.gca()
+
+    with shapefile.Reader(filename) as sf:
+        for shape in sf.shapeRecords():
+            x = [i[0] for i in shape.shape.points[:]]
+            y = [i[1] for i in shape.shape.points[:]]
+            ax.plot(x, y)
+        plt.show()
