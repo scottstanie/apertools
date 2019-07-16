@@ -208,15 +208,27 @@ def plot_image_shifted(img,
 
     if perform_shift:
         shifted_cmap = make_shifted_cmap(img, cmap_name=cmap, vmin=vmin, vmax=vmax)
-        axes_image = ax.imshow(img,
-                               cmap=shifted_cmap,
-                               extent=extent,
-                               vmin=vmin,
-                               vmax=vmax,
-                               aspect=aspect)
+        axes_image = ax.imshow(
+            img,
+            cmap=shifted_cmap,
+            extent=extent,
+            vmin=vmin,
+            vmax=vmax,
+            aspect=aspect,
+        )
     else:
-        vmax = _abs_max(img)
-        axes_image = ax.imshow(img, cmap=cmap, extent=extent, vmax=vmax, vmin=-vmax, aspect=aspect)
+        if vmin is None:
+            vmin = -_abs_max(img)
+        if vmax is None:
+            vmax = _abs_max(img)
+        axes_image = ax.imshow(
+            img,
+            cmap=cmap,
+            extent=extent,
+            vmax=vmax,
+            vmin=vmin,
+            aspect=aspect,
+        )
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
