@@ -43,8 +43,25 @@ def _get_gps_dir():
 GPS_DIR = _get_gps_dir()
 
 
-def load_station_data(station_name, start_year=2014, end_year=None, download_if_missing=True):
+def load_station_enu(station, start_year=2014, end_year=None, to_cm=True):
     """Loads one gps station's ENU data since start_year until end_year
+    as separate Series items
+
+    Will scale to cm by default, and center the first data point
+    to 0
+    """
+    station_df = load_station_data(station)
+    scale = 100 if to_cm else 1
+
+    east = scale * (station_df['east'] - station_df['east'].iloc[0])
+    north = scale * (station_df['north'] - station_df['north'].iloc[0])
+    up = scale * (station_df['up'] - station_df['up'].iloc[0])
+    dts = station_df['dt']
+    return dts, east, north, up
+
+
+def load_station_data(station_name, start_year=2014, end_year=None, download_if_missing=True):
+    """Loads one gps station's ENU data since start_year until end_year as a dataframe
 
     Args:
         station_name (str): 4 Letter name of GPS station
@@ -61,7 +78,9 @@ def load_station_data(station_name, start_year=2014, end_year=None, download_if_
             download_station_data(station_name)
 
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
-    return _clean_gps_df(df, start_year, end_year)
+    clean_df = _clean_gps_df(df, start_year, end_year)
+    # clean_df.reset_index(inplace=True)
+    return clean_df
 
 
 def _clean_gps_df(df, start_year, end_year=None):
@@ -72,6 +91,7 @@ def _clean_gps_df(df, start_year, end_year=None):
         df_ranged = df_ranged[df_ranged['dt'] <= datetime.datetime(end_year, 1, 1)]
     df_enu = df_ranged[['dt', '__east(m)', '_north(m)', '____up(m)']]
     df_enu = df_enu.rename(mapper=lambda s: s.replace('_', '').replace('(m)', ''), axis='columns')
+    df_enu.reset_index(inplace=True, drop=True)
     return df_enu
 
 
@@ -135,7 +155,7 @@ def plot_stations(image_ll=None,
             stack_mask = apertools.sario.load_mask(directory=directory,
                                                    deformation_filename=full_path)
             image_ll[stack_mask] = np.nan
-        except Exception as e:
+        except Exception:
             logger.warning("error in load_mask", exc_info=True)
 
     # TODO: maybe just plot_image_shifted
@@ -220,20 +240,11 @@ def download_station_data(station_name):
         f.write(response.text)
 
 
-def load_station_enu(station, to_cm=True):
-    station_df = load_station_data(station)
-    scale = 100 if to_cm else 1
-
-    east = scale * (station_df['east'] - station_df['east'].iloc[0])
-    north = scale * (station_df['north'] - station_df['north'].iloc[0])
-    up = scale * (station_df['up'] - station_df['up'].iloc[0])
-    dts = station_df['dt']
-    return dts, east, north, up
-
-
 def station_variance(station):
+    """Calculates the vertical variance of gps timeseries"""
     dts, east, north, up = load_station_enu(station, to_cm=True)
     up_variance = np.var(up)
+    return up_variance
 
 
 def plot_gps_enu(station=None, days_smooth=12):
