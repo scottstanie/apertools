@@ -5,6 +5,7 @@ Email: scott.stanie@utexas.edu
 """
 from __future__ import division, print_function
 import errno
+import sys
 import os
 import numpy as np
 
@@ -376,3 +377,40 @@ def get_parent_dir(filepath):
         return os.path.dirname(os.path.abspath(os.path.normpath(filepath)))
     else:
         return os.path.dirname(os.path.split(os.path.abspath(filepath))[0])
+
+
+def get_cache_dir(force_posix=False, app_name="apertools"):
+    """Returns the config folder for the application.  The default behavior
+    is to return whatever is most appropriate for the operating system.
+
+    This is used to store gps timeseries data
+
+    the following folders could be returned:
+    Mac OS X:
+      ``~/Library/Application Support/apertools``
+    Mac OS X (POSIX):
+      ``~/.apertools``
+    Unix:
+      ``~/.cache/apertools``
+    Unix (POSIX):
+      ``~/.apertools``
+
+    Args:
+        force_posix: if this is set to `True` then on any POSIX system the
+            folder will be stored in the home folder with a leading
+            dot instead of the XDG config home or darwin's
+            application support folder.
+
+    Source: https://github.com/pallets/click/blob/master/click/utils.py#L368
+    """
+    if force_posix:
+        path = os.path.join(os.path.expanduser('~/.' + app_name))
+    if sys.platform == 'darwin':
+        path = os.path.join(os.path.expanduser('~/Library/Application Support'), app_name)
+    path = os.path.join(
+        os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.cache')),
+        app_name,
+    )
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path

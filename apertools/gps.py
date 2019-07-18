@@ -29,33 +29,36 @@ logger = get_log()
 # URL for ascii file of 24-hour final GPS solutions in east-north-vertical (NA12)
 GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/NA12/{station}.NA12.tenv3"
 
-GPS_DIR = os.environ.get('GPS_DIR', '/data1/scott/pecos/gps_station_data')
-
-# STATION_LLH_FILE = "texas_stations.csv"
-STATION_LLH_FILE = "station_llh_all.csv"
+# Assuming the master station list is in the
+STATION_LLH_FILE = os.environ.get('STATION_LIST', 'data/station_llh_all.csv')
 
 
-def load_station_data(station_name,
-                      gps_dir=GPS_DIR,
-                      start_year=2014,
-                      end_year=None,
-                      download_if_missing=True):
+def _get_gps_dir():
+    path = apertools.utils.get_cache_dir(force_posix=True)
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path
+
+
+GPS_DIR = _get_gps_dir()
+
+
+def load_station_data(station_name, start_year=2014, end_year=None, download_if_missing=True):
     """Loads one gps station's ENU data since start_year until end_year
 
     Args:
         station_name (str): 4 Letter name of GPS station
             See http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html for map
-        gps_dir (str): directory containing gps station lla csv for read_station_llas
         start_year (int), default 2014, cutoff for beginning of GPS data
         end_year (int): default None, cut off for end of GPS data
         download_if_missing (bool): default True
     """
-    gps_data_file = os.path.join(gps_dir, '%s.NA12.tenv3' % station_name)
+    gps_data_file = os.path.join(GPS_DIR, '%s.NA12.tenv3' % station_name)
     if not os.path.exists(gps_data_file):
         logger.warning("%s does not exist.", gps_data_file)
         if download_if_missing:
             logger.info("Downloading %s", station_name)
-            download_station_data(station_name, gps_dir=gps_dir)
+            download_station_data(station_name)
 
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
     return _clean_gps_df(df, start_year, end_year)
@@ -72,11 +75,7 @@ def _clean_gps_df(df, start_year, end_year=None):
     return df_enu
 
 
-def stations_within_image(image_ll=None,
-                          filename=None,
-                          mask_invalid=True,
-                          gps_dir=None,
-                          gps_filename=None):
+def stations_within_image(image_ll=None, filename=None, mask_invalid=True, gps_filename=None):
     """Given an image, find gps stations contained in area
 
     Must have an associated .rsc file, either from being a LatlonImage (passed
@@ -87,7 +86,6 @@ def stations_within_image(image_ll=None,
         filename (str): filename to load into a LatlonImage
         mask_invalid (bool): Default true. if true, don't return stations
             where the image value is NaN or exactly 0
-        gps_dir (str): directory containing gps station lla csv for read_station_llas
 
     Returns:
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
@@ -95,7 +93,7 @@ def stations_within_image(image_ll=None,
     if image_ll is None:
         image_ll = apertools.latlon.LatlonImage(filename=filename)
 
-    df = read_station_llas(gps_dir=gps_dir, filename=gps_filename)
+    df = read_station_llas(filename=gps_filename)
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = image_ll.contains(station_lon_lat_arr)
     candidates = df[contains_bools][['name', 'lon', 'lat']].values
@@ -171,24 +169,23 @@ def save_station_points_kml(station_iter):
 
 
 @lru_cache()
-def read_station_llas(gps_dir=None, header=None, filename=None):
+def read_station_llas(header=None, filename=None):
     """Read in the name, lat, lon, alt list of gps stations
 
     Assumes file is a csv with "name,lat,lon,alt" as columns
     Must give "header" argument if there is a header
     """
-    gps_dir = gps_dir or GPS_DIR
     filename = filename or STATION_LLH_FILE
-    full_filename = os.path.join(gps_dir, filename)
+    full_filename = os.path.join(GPS_DIR, filename)
     logger.info("Searching %s for gps data" % full_filename)
     df = pd.read_csv(full_filename, header=header)
     df.columns = ['name', 'lat', 'lon', 'alt']
     return df
 
 
-def station_lonlat(station_name, gps_dir=None):
+def station_lonlat(station_name):
     """Return the (lon, lat) of a `station_name`"""
-    df = read_station_llas(gps_dir=gps_dir)
+    df = read_station_llas()
     name, lat, lon, alt = df[df['name'] == station_name].iloc[0]
     return lon, lat
 
@@ -199,30 +196,44 @@ def station_distance(station_name1, station_name2):
     return apertools.latlon.latlon_to_dist(lonlat1[::-1], lonlat2[::-1])
 
 
-def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_dir=None, gps_filename=None):
+def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_filename=None):
     if rsc_data is None:
         if rsc_filename is None:
             raise ValueError("Need rsc_data or rsc_filename")
         rsc_data = apertools.sario.load(rsc_filename)
 
-    df = read_station_llas(gps_dir=gps_dir, filename=gps_filename)
+    df = read_station_llas(filename=gps_filename)
     station_lon_lat_arr = df[['lon', 'lat']].values
     contains_bools = [apertools.latlon.grid_contains(s, **rsc_data) for s in station_lon_lat_arr]
     return df[contains_bools][['name', 'lon', 'lat']].values
 
 
-def download_station_data(station_name, gps_dir=None):
+def download_station_data(station_name):
     url = GPS_BASE_URL.format(station=station_name)
     response = requests.get(url)
-    if gps_dir is None:
-        gps_dir = GPS_DIR
 
     stationfile = url.split("/")[-1]  # Just blah.NA12.tenv3
-    filename = "{}/{}".format(gps_dir, stationfile)
+    filename = "{}/{}".format(GPS_DIR, stationfile)
     logger.info("Saving to {}".format(filename))
 
     with open(filename, "w") as f:
         f.write(response.text)
+
+
+def load_station_enu(station, to_cm=True):
+    station_df = load_station_data(station)
+    scale = 100 if to_cm else 1
+
+    east = scale * (station_df['east'] - station_df['east'].iloc[0])
+    north = scale * (station_df['north'] - station_df['north'].iloc[0])
+    up = scale * (station_df['up'] - station_df['up'].iloc[0])
+    dts = station_df['dt']
+    return dts, east, north, up
+
+
+def station_variance(station):
+    dts, east, north, up = load_station_enu(station, to_cm=True)
+    up_variance = np.var(up)
 
 
 def plot_gps_enu(station=None, days_smooth=12):
@@ -236,28 +247,24 @@ def plot_gps_enu(station=None, days_smooth=12):
             top=False,  # ticks along the top edge are off
             labelbottom=False)
 
-    station_df = load_station_data(station)
+    dts, east_cm, north_cm, up_cm = load_station_enu(station, to_cm=True)
 
     fig, axes = plt.subplots(3, 1)
-    east_mm = 100 * (station_df['east'] - station_df['east'].iloc[0])
-    north_mm = 100 * (station_df['north'] - station_df['north'].iloc[0])
-    up_mm = 100 * (station_df['up'] - station_df['up'].iloc[0])
-    dts = station_df['dt']
-    axes[0].plot(dts, east_mm, 'b.')
+    axes[0].plot(dts, east_cm, 'b.')
     axes[0].set_ylabel('east (cm)')
-    axes[0].plot(dts, _moving_average(east_mm, days_smooth), 'r-')
+    axes[0].plot(dts, _moving_average(east_cm, days_smooth), 'r-')
     axes[0].grid(True)
     remove_xticks(axes[0])
 
-    axes[1].plot(dts, north_mm, 'b.')
+    axes[1].plot(dts, north_cm, 'b.')
     axes[1].set_ylabel('north (cm)')
-    axes[1].plot(dts, _moving_average(north_mm, days_smooth), 'r-')
+    axes[1].plot(dts, _moving_average(north_cm, days_smooth), 'r-')
     axes[1].grid(True)
     remove_xticks(axes[1])
 
-    axes[2].plot(dts, up_mm, 'b.')
+    axes[2].plot(dts, up_cm, 'b.')
     axes[2].set_ylabel('up (cm)')
-    axes[2].plot(dts, _moving_average(up_mm, days_smooth), 'r-')
+    axes[2].plot(dts, _moving_average(up_cm, days_smooth), 'r-')
     axes[2].grid(True)
     # remove_xticks(axes[2])
 
@@ -440,4 +447,5 @@ def plot_gps_vs_insar_diff(insar_dir,
     # plt.ylim([-2, 2])
     plt.ylabel('cm of cumulative LOS displacement')
     plt.legend()
+
     return los_gps_data1, los_gps_data2, gps_diff_ts, insar_ts1, insar_ts2, insar_diff
