@@ -678,6 +678,37 @@ def grid(rows=None,
     return np.meshgrid(x, y, sparse=sparse)
 
 
+def grid_to_rsc(lons, lats):
+    """Reverses the `grid` function to get an rsc dict
+
+    Takes the meshgrid output `lons` and `lats` and calculates the rsc data
+    """
+    assert lons.shape == lats.shape
+    rows, cols = lons.shape
+    file_length, width = rows, cols
+
+    # Check that the northern most latitude is on the top row for lats
+    if lats[0][0] < lats[-1][0]:
+        raise ValueError("Need top row of lats to be the northern most lats")
+
+    y_first = lats[0][0]
+    y_step = lats[1][0] - lats[0][0]
+
+    x_first = lons[0][0]
+    x_step = lons[0][1] - lons[0][0]
+
+    return dict(
+        x_first=x_first,
+        y_first=y_first,
+        rows=rows,
+        cols=cols,
+        width=width,
+        file_length=file_length,
+        x_step=x_step,
+        y_step=y_step,
+    )
+
+
 def grid_extent(rows=None,
                 cols=None,
                 y_step=None,
@@ -687,7 +718,7 @@ def grid_extent(rows=None,
                 file_length=None,
                 width=None,
                 **kwargs):
-    """Takes sizes and spacing info, finds boundaries
+    """Takes sizes and spacing from .rsc info, finds boundaries
 
     Used for `matplotlib.pyplot.imshow` keyword arg `extent`:
     extent : scalars (left, right, bottom, top)
@@ -720,7 +751,7 @@ def grid_extent(rows=None,
 
 
 def grid_corners(**kwargs):
-    """Takes sizes and spacing info, finds corner points in (x, y) form
+    """Takes sizes and spacing from .rsc info, finds corner points in (x, y) form
 
     Returns:
         list[tuple[float]]: the corners of the latlon grid in order:
@@ -731,7 +762,7 @@ def grid_corners(**kwargs):
 
 
 def grid_midpoint(**kwargs):
-    """Takes sizes and spacing info, finds midpoint in (x, y) form
+    """Takes sizes and spacing from .rsc info, finds midpoint in (x, y) form
 
     Returns:
         tuple[float]: midpoint of the latlon grid
@@ -753,19 +784,19 @@ def grid_size(**kwargs):
 
 
 def grid_bounds(**kwargs):
-    """Same to grid_extent, but in the order (left, bottom, right, top)"""
+    """Same to grid_extent (takes .rsc info) , but in the order (left, bottom, right, top)"""
     left, right, bot, top = grid_extent(**kwargs)
     return left, bot, right, top
 
 
 def grid_width_height(**kwargs):
-    """Finds the width and height in deg of the latlon grid"""
+    """Finds the width and height in deg of the latlon grid from .rsc info"""
     left, right, bot, top = grid_extent(**kwargs)
     return (right - left, top - bot)
 
 
 def grid_contains(point, **kwargs):
-    """Returns true if point (x, y) or (lon, lat) is within the grid"""
+    """Returns true if point (x, y) or (lon, lat) is within the grid. Takes .rsc info"""
     point_x, point_y = point
     left, right, bot, top = grid_extent(**kwargs)
     return (left < point_x < right) and (bot < point_y < top)
