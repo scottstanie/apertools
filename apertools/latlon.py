@@ -497,8 +497,11 @@ def load_deformation_img(igram_path=".",
                                            filename=filename,
                                            full_path=full_path,
                                            n=n)
-    rsc_filename = os.path.join(igram_path, rsc_filename)
-    img = LatlonImage(data=np.mean(defo_stack, axis=0), dem_rsc_file=rsc_filename)
+    if filename.endswith(".h5"):
+        rsc_data = sario.load_dem_from_h5(h5file=full_path)
+    else:
+        rsc_data = sario.load(os.path.join(igram_path, rsc_filename))
+    img = LatlonImage(data=np.mean(defo_stack, axis=0), dem_rsc=rsc_data)
     return img
 
 

@@ -701,6 +701,33 @@ def load_dem_from_h5(h5file=None, dset="dem_rsc"):
         return json.loads(f[dset][()])
 
 
+def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
+    if not check_dset(h5file, dset_name, overwrite):
+        return
+
+    with h5py.File(h5file, "a") as f:
+        f[dset_name] = json.dumps(dem_rsc)
+
+
+def check_dset(h5file, dset_name, overwrite):
+    """Returns false if the dataset exists and overwrite is False
+
+    If overwrite is set to true, will delete the dataset to make
+    sure a new one can be created
+    """
+    with h5py.File(h5file, "a") as f:
+        if dset_name in f:
+            logger.info("{dset} already exists in {file},".format(dset=dset_name, file=h5file))
+            if overwrite:
+                logger.info("Overwrite true: Deleting.")
+                del f[dset_name]
+            else:
+                logger.info("Skipping.")
+                return False
+
+        return True
+
+
 def load_composite_mask(geo_date_list=None,
                         perform_mask=True,
                         deformation_filename=None,
