@@ -40,6 +40,7 @@ STATION_LLH_FILE = os.environ.get(
     'STATION_LIST',
     os.path.join(DIRNAME, 'data/station_llh_all.csv'),
 )
+START_YEAR = 2014  # So far I don't care about older data
 
 
 def _get_gps_dir():
@@ -52,7 +53,7 @@ def _get_gps_dir():
 GPS_DIR = _get_gps_dir()
 
 
-def load_station_enu(station, start_year=2014, end_year=None, to_cm=True):
+def load_station_enu(station, start_year=START_YEAR, end_year=None, to_cm=True):
     """Loads one gps station's ENU data since start_year until end_year
     as separate Series items
 
@@ -67,7 +68,7 @@ def load_station_enu(station, start_year=2014, end_year=None, to_cm=True):
 
 
 def load_station_data(station_name,
-                      start_year=2014,
+                      start_year=START_YEAR,
                       end_year=None,
                       download_if_missing=True,
                       to_cm=True):
@@ -250,13 +251,20 @@ def download_station_data(station_name):
         f.write(response.text)
 
 
-def station_std(station, to_cm=True):
+def station_std(station, to_cm=True, start_year=START_YEAR, end_year=None):
     """Calculates the sum of east, north, and vertical stds of gps"""
-    dts, enu_df = load_station_enu(station, to_cm=to_cm)
+    dts, enu_df = load_station_enu(station, start_year=start_year, end_year=end_year, to_cm=to_cm)
+    if enu_df.empty:
+        logger.warning("%s gps data returned an empty dataframe")
+        return np.nan
     return np.sum(enu_df.std())
 
 
-def plot_gps_enu(station=None, days_smooth=12):
+# Alias for when we don't really care about the sqrt
+station_variance = station_std
+
+
+def plot_gps_enu(station=None, days_smooth=12, start_year=START_YEAR, end_year=None):
     """Plot the east,north,up components of `station`"""
 
     def remove_xticks(ax):
@@ -267,7 +275,10 @@ def plot_gps_enu(station=None, days_smooth=12):
             top=False,  # ticks along the top edge are off
             labelbottom=False)
 
-    dts, (east_cm, north_cm, up_cm) = load_station_enu(station, to_cm=True)
+    dts, (east_cm, north_cm, up_cm) = load_station_enu(station,
+                                                       start_year=start_year,
+                                                       end_year=end_year,
+                                                       to_cm=True)
 
     fig, axes = plt.subplots(3, 1)
     axes[0].plot(dts, east_cm, 'b.')
@@ -293,7 +304,14 @@ def plot_gps_enu(station=None, days_smooth=12):
     return fig, axes
 
 
-def load_gps_los_data(insar_dir, station_name=None, to_cm=True, zero_start=True):
+def load_gps_los_data(
+        insar_dir,
+        station_name=None,
+        to_cm=True,
+        zero_start=True,
+        start_year=START_YEAR,
+        end_year=None,
+):
     """Load the GPS timeseries of a station name
 
     Returns the timeseries, and the datetimes of the points
@@ -327,12 +345,13 @@ def _moving_average(arr, window_size=7):
     return uniform_filter1d(arr, size=window_size, mode='nearest')
 
 
-def find_insar_ts(insar_dir, station_name, defo_name='deformation.npy'):
+def find_insar_ts(insar_dir, station_name, defo_name='deformation.npy', igrams_dir=None):
     """Get the insar timeseries closest to a GPS station
 
     Returns the timeseries, and the datetimes of points for plotting
     """
-    igrams_dir = os.path.join(insar_dir, 'igrams')
+    if igrams_dir is None:
+        igrams_dir = os.path.join(insar_dir, 'igrams')
     geolist, deformation_stack = apertools.sario.load_deformation(igrams_dir, filename=defo_name)
     defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_name)
 

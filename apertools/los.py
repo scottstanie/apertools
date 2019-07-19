@@ -12,10 +12,11 @@ import sardem.loading
 from apertools import latlon, sario
 
 from apertools.log import get_log
+import matplotlib.pyplot as plt
 logger = get_log()
 
 
-def find_enu_coeffs(lon, lat, geo_path=None):
+def find_enu_coeffs(lon, lat, geo_path=None, verbose=False):
     """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
 
     Args:
@@ -30,11 +31,14 @@ def find_enu_coeffs(lon, lat, geo_path=None):
         Can be used to project an ENU vector into the line of sight direction
     """
     los_file = os.path.realpath(os.path.join(geo_path, 'los_vector_%s_%s.txt' % (lon, lat)))
-    # import ipdb
-    # ipdb.set_trace()
-    db_path = _find_db_path(geo_path)
-
-    record_xyz_los_vector(lon, lat, db_path=db_path, outfile=los_file, clear=True)
+    if not os.path.exists(los_file):
+        db_path = _find_db_path(geo_path)
+        record_xyz_los_vector(lon,
+                              lat,
+                              db_path=db_path,
+                              outfile=los_file,
+                              clear=True,
+                              verbose=verbose)
 
     enu_coeffs = los_to_enu(los_file)
 
@@ -50,6 +54,7 @@ def _find_db_path(geo_path):
         return geo_path
 
 
+# TODO: why is thi different?? do i need -1 or not
 def find_east_up_coeffs(geo_path):
     """Find the coefficients for east and up components for LOS vector at midpoint of scene
 
@@ -97,7 +102,12 @@ def find_east_up_coeffs(geo_path):
     return -1 * east_up_coeffs
 
 
-def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", clear=False):
+def record_xyz_los_vector(lon,
+                          lat,
+                          db_path=".",
+                          outfile="./los_vectors.txt",
+                          clear=False,
+                          verbose=False):
     """Given one (lon, lat) point, find the LOS from Sat to ground
 
     Function will run through all possible .db files until non-zero vector is computed
@@ -110,7 +120,8 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
     """
     if clear:
         open(outfile, 'w').close()
-    print("Recording xyz los vectors for %s, %s" % (lat, lon))
+    if verbose:
+        logger.info("Recording xyz los vectors for %s, %s" % (lat, lon))
 
     exec_path = os.path.expanduser("~/sentinel/look_angle/losvec/losvec_yj")
     stationname = "'{} {}'".format(lat, lon)  # Record where vec is from
@@ -133,7 +144,8 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
         cmd = "{} {} {} {} {} {}".format(exec_path, db_file, lat, lon, stationname, outfile)
         # print("Running command:")
         # print(cmd)
-        print("Checking db file: %s" % db_file)
+        if verbose:
+            logger.info("Checking db file: %s" % db_file)
         subprocess.check_output(cmd, shell=True)
         _, xyz_list = read_los_output(outfile)
         # if not all((any(vector) for vector in xyz_list)):  # Some corner produced 0s
@@ -141,7 +153,7 @@ def record_xyz_los_vector(lon, lat, db_path=".", outfile="./los_vectors.txt", cl
             try:
                 db_file = next(db_files)
             except StopIteration:
-                print('Ran out of db files!')
+                logger.warning('Ran out of db files!')
                 break
         else:
             break
@@ -448,20 +460,19 @@ def merge_geolists(geolist1, geolist2):
     return merged_geolist, indices1, indices2
 
 
-def create_los_map(geo_path, downsample=10):
+def create_los_map(geo_path, downsample=100, verbose=False, savename="los_enu_map"):
     """Find LOS coeffs at every point in a LatlonImage
 
     Args:
         geo_path (str): path to the directory with the sentinel
             timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
             and has .db files one directory higher)
+        downsample (int): amount to downsample the .geo dem rsc grid to find points
+        verbose (bool): print each point during calculation
+        savename (str): base name to save the .npy matrix and a _dem.rsc of the grid data
 
     Returns:
-        ndarray: east_up_coeffs, a 1x2 array [[east_def, up_def]]
-        Combined with another path, used for solving east-up deformation.:
-            [east_asc,  up_asc;
-             east_desc, up_desc]
-        Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]
+        ndarray: east_north_up coeffs, a (3, m, n) array
     """
     # TODO: make something to adjust 'params' file in case we moved it
     geo_path = os.path.realpath(geo_path)
@@ -480,33 +491,43 @@ def create_los_map(geo_path, downsample=10):
         row_step=downsample,
         col_step=downsample,
     )
-    up_img = np.empty((nrows_small, ncols_small))
-    up_ll = latlon.LatlonImage(data=up_img, rsc_data=down_rsc)
 
-    midpoint = latlon.grid_midpoint(**rsc_data)
-    # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
+    up_img = np.empty((3, nrows_small, ncols_small))
+    lons, lats = latlon.grid(sparse=True, **down_rsc)
+    lons = lons.reshape(-1)
+    lats = lats.reshape(-1)
+    logger.info("Finding LOS vector for %s points total" % (len(lats) * len(lons)))
+    for rowidx, lat in enumerate(lats.reshape(-1)):
+        for colidx, lon in enumerate(lons.reshape(-1)):
+            up_img[:, rowidx, colidx] = find_enu_coeffs(lon,
+                                                        lat,
+                                                        geo_path=geo_path,
+                                                        verbose=verbose)
 
-    los_file = os.path.realpath(os.path.join(geo_path, 'los_vectors.txt'))
-    db_path = _find_db_path(geo_path)
+    enu_ll = latlon.LatlonImage(data=up_img, dem_rsc=down_rsc)
+    if savename:
+        logger.info("Saving data to %s" % savename)
+        np.save(savename, enu_ll)
+        dem_rsc_file = savename + "_dem.rsc"
+        logger.info("Saving dem_rsc to %s" % dem_rsc_file)
+        with open(dem_rsc_file, "w") as f:
+            f.write(sardem.loading.format_dem_rsc(enu_ll.dem_rsc))
 
-    max_corner_difference, enu_coeffs = check_corner_differences(rsc_data, db_path, los_file)
-    logger.info(
-        "Max difference in ENU LOS vectors for area corners: {:2f}".format(max_corner_difference))
-    if max_corner_difference > 0.05:
-        logger.warning("Area is not small, actual LOS vector differs over area.")
-        logger.info('Corner ENU coeffs:')
-        logger.info(enu_coeffs)
-    logger.info("Using midpoint of area for line of sight vectors")
+    return enu_ll
 
-    print("Finding LOS vector for midpoint", midpoint)
-    record_xyz_los_vector(*midpoint, db_path=db_path, outfile=los_file, clear=True)
 
-    enu_coeffs = los_to_enu(los_file)
+def plot_enu_maps(enu_ll, title=None, cmap='jet'):
+    fig, axes = plt.subplots(1, 3)
 
-    # Get only East and Up out of ENU
-    east_up_coeffs = enu_coeffs[:, ::2]
-    # -1 multiplied since vectors are from sat to ground, so vert is negative
-    return -1 * east_up_coeffs
+    titles = ['east', 'north', 'up']
+    for idx in range(3):
+        axim = axes[idx].imshow(np.abs(enu_ll[idx]), vmin=0, vmax=1, cmap=cmap)
+        axes[idx].set_title(titles[idx])
+
+    fig.subplots_adjust(right=0.8)
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+    fig.colorbar(axim, cax=cbar_ax)
+    fig.suptitle(title)
 
 
 # def interpolate_coeffs(rsc_data, nrows, ncols, east_up):
