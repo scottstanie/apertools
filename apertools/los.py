@@ -448,6 +448,67 @@ def merge_geolists(geolist1, geolist2):
     return merged_geolist, indices1, indices2
 
 
+def create_los_map(geo_path, downsample=10):
+    """Find LOS coeffs at every point in a LatlonImage
+
+    Args:
+        geo_path (str): path to the directory with the sentinel
+            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
+            and has .db files one directory higher)
+
+    Returns:
+        ndarray: east_up_coeffs, a 1x2 array [[east_def, up_def]]
+        Combined with another path, used for solving east-up deformation.:
+            [east_asc,  up_asc;
+             east_desc, up_desc]
+        Used as the "A" matrix for solving Ax = b, where x is [east_def; up_def]
+    """
+    # TODO: make something to adjust 'params' file in case we moved it
+    geo_path = os.path.realpath(geo_path)
+
+    # should we doing this in the .geo folder, or the igram folder?
+    rsc_data = sario.load(os.path.join(geo_path, 'elevation.dem.rsc'))
+    nrows, ncols = rsc_data['file_length'], rsc_data['width']
+    nrows_small = nrows // downsample
+    ncols_small = ncols // downsample
+    down_rsc = latlon.LatlonImage.crop_rsc_data(
+        rsc_data,
+        row_start=None,
+        col_start=None,
+        nrows=nrows_small,
+        ncols=ncols_small,
+        row_step=downsample,
+        col_step=downsample,
+    )
+    up_img = np.empty((nrows_small, ncols_small))
+    up_ll = latlon.LatlonImage(data=up_img, rsc_data=down_rsc)
+
+    midpoint = latlon.grid_midpoint(**rsc_data)
+    # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
+
+    los_file = os.path.realpath(os.path.join(geo_path, 'los_vectors.txt'))
+    db_path = _find_db_path(geo_path)
+
+    max_corner_difference, enu_coeffs = check_corner_differences(rsc_data, db_path, los_file)
+    logger.info(
+        "Max difference in ENU LOS vectors for area corners: {:2f}".format(max_corner_difference))
+    if max_corner_difference > 0.05:
+        logger.warning("Area is not small, actual LOS vector differs over area.")
+        logger.info('Corner ENU coeffs:')
+        logger.info(enu_coeffs)
+    logger.info("Using midpoint of area for line of sight vectors")
+
+    print("Finding LOS vector for midpoint", midpoint)
+    record_xyz_los_vector(*midpoint, db_path=db_path, outfile=los_file, clear=True)
+
+    enu_coeffs = los_to_enu(los_file)
+
+    # Get only East and Up out of ENU
+    east_up_coeffs = enu_coeffs[:, ::2]
+    # -1 multiplied since vectors are from sat to ground, so vert is negative
+    return -1 * east_up_coeffs
+
+
 # def interpolate_coeffs(rsc_data, nrows, ncols, east_up):
 #     # This will be if we want to solve the exact coefficients
 #     # Make grid to interpolate one
