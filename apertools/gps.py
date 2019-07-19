@@ -2,9 +2,13 @@
 Utilities for integrating GPS with InSAR maps
 
 Links:
-list of LLH for all gps stations: ftp://gneiss.nbmg.unr.edu/rapids/llh
-Clickable names to explore: http://geodesy.unr.edu/NGLStationPages/GlobalStationList
-Map of stations: http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html
+
+1. list of LLH for all gps stations: ftp://gneiss.nbmg.unr.edu/rapids/llh
+Note: ^^ This file is stored in the `STATION_LLH_FILE`
+
+2. Clickable names to explore: http://geodesy.unr.edu/NGLStationPages/GlobalStationList
+3. Map of stations: http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html
+
 """
 from __future__ import division, print_function
 import os
@@ -22,6 +26,7 @@ except ImportError:
     from backports.functools_lru_cache import lru_cache
 
 import apertools
+import apertools.utils
 from apertools.log import get_log
 
 logger = get_log()
@@ -30,7 +35,11 @@ logger = get_log()
 GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/NA12/{station}.NA12.tenv3"
 
 # Assuming the master station list is in the
-STATION_LLH_FILE = os.environ.get('STATION_LIST', 'data/station_llh_all.csv')
+DIRNAME = os.path.dirname(os.path.abspath(__file__))
+STATION_LLH_FILE = os.environ.get(
+    'STATION_LIST',
+    os.path.join(DIRNAME, 'data/station_llh_all.csv'),
+)
 
 
 def _get_gps_dir():
@@ -50,17 +59,18 @@ def load_station_enu(station, start_year=2014, end_year=None, to_cm=True):
     Will scale to cm by default, and center the first data point
     to 0
     """
-    station_df = load_station_data(station)
-    scale = 100 if to_cm else 1
+    station_df = load_station_data(station, to_cm=to_cm)
 
-    east = scale * (station_df['east'] - station_df['east'].iloc[0])
-    north = scale * (station_df['north'] - station_df['north'].iloc[0])
-    up = scale * (station_df['up'] - station_df['up'].iloc[0])
+    enu_zeroed = station_df[['east', 'north', 'up']] - station_df[['east', 'north', 'up']].iloc[0]
     dts = station_df['dt']
-    return dts, east, north, up
+    return dts, enu_zeroed
 
 
-def load_station_data(station_name, start_year=2014, end_year=None, download_if_missing=True):
+def load_station_data(station_name,
+                      start_year=2014,
+                      end_year=None,
+                      download_if_missing=True,
+                      to_cm=True):
     """Loads one gps station's ENU data since start_year until end_year as a dataframe
 
     Args:
@@ -79,7 +89,9 @@ def load_station_data(station_name, start_year=2014, end_year=None, download_if_
 
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
     clean_df = _clean_gps_df(df, start_year, end_year)
-    # clean_df.reset_index(inplace=True)
+    if to_cm:
+        logger.info("Converting %s GPS to cm" % station_name)
+        clean_df[['east', 'north', 'up']] = 100 * clean_df[['east', 'north', 'up']]
     return clean_df
 
 
@@ -149,7 +161,6 @@ def plot_stations(image_ll=None,
         except ValueError:
             image_ll = apertools.latlon.LatlonImage(filename=filename)
 
-    print("full", full_path, 'dir', directory)
     if mask_invalid:
         try:
             stack_mask = apertools.sario.load_mask(directory=directory,
@@ -196,9 +207,8 @@ def read_station_llas(header=None, filename=None):
     Must give "header" argument if there is a header
     """
     filename = filename or STATION_LLH_FILE
-    full_filename = os.path.join(GPS_DIR, filename)
-    logger.info("Searching %s for gps data" % full_filename)
-    df = pd.read_csv(full_filename, header=header)
+    logger.info("Searching %s for gps data" % filename)
+    df = pd.read_csv(filename, header=header)
     df.columns = ['name', 'lat', 'lon', 'alt']
     return df
 
@@ -240,11 +250,10 @@ def download_station_data(station_name):
         f.write(response.text)
 
 
-def station_variance(station):
-    """Calculates the vertical variance of gps timeseries"""
-    dts, east, north, up = load_station_enu(station, to_cm=True)
-    up_variance = np.var(up)
-    return up_variance
+def station_std(station, to_cm=True):
+    """Calculates the sum of east, north, and vertical stds of gps"""
+    dts, enu_df = load_station_enu(station, to_cm=to_cm)
+    return np.sum(enu_df.std())
 
 
 def plot_gps_enu(station=None, days_smooth=12):
@@ -258,7 +267,7 @@ def plot_gps_enu(station=None, days_smooth=12):
             top=False,  # ticks along the top edge are off
             labelbottom=False)
 
-    dts, east_cm, north_cm, up_cm = load_station_enu(station, to_cm=True)
+    dts, (east_cm, north_cm, up_cm) = load_station_enu(station, to_cm=True)
 
     fig, axes = plt.subplots(3, 1)
     axes[0].plot(dts, east_cm, 'b.')
@@ -292,13 +301,9 @@ def load_gps_los_data(insar_dir, station_name=None, to_cm=True, zero_start=True)
     lon, lat = station_lonlat(station_name)
     enu_coeffs = apertools.los.find_enu_coeffs(lon, lat, insar_dir)
 
-    df = load_station_data(station_name)
+    df = load_station_data(station_name, to_cm=to_cm)
     enu_data = df[['east', 'north', 'up']].T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
-
-    if to_cm:
-        logger.info("Converting GPS to cm:")
-        los_gps_data = 100 * los_gps_data
 
     if zero_start:
         logger.info("Resetting GPS data start to 0")
