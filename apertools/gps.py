@@ -171,15 +171,14 @@ def plot_stations(image_ll=None,
         except Exception:
             logger.warning("error in load_mask", exc_info=True)
 
-    # TODO: maybe just plot_image_shifted
-    fig, ax = plt.subplots()
-    axim = ax.imshow(image_ll, extent=image_ll.extent)
-    fig.colorbar(axim)
-
     stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
     if station_name_list:
         stations = [s for s in stations if s[0] in station_name_list]
 
+    # TODO: maybe just plot_image_shifted
+    fig, ax = plt.subplots()
+    axim = ax.imshow(image_ll, extent=image_ll.extent)
+    fig.colorbar(axim)
     colors = matplotlib.cm.rainbow(np.linspace(0, 1, len(stations)))
     # names, lons, lats = stations.T
     # ax.scatter(lons.astype(float), lats.astype(float), marker='X', label=names, c=color)
