@@ -28,6 +28,7 @@ except ImportError:
 
 import apertools
 import apertools.utils
+import apertools.sario
 from apertools.log import get_log
 
 logger = get_log()
