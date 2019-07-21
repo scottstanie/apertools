@@ -390,7 +390,6 @@ def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_li
     """
     igrams_dir = os.path.join(geo_path, 'igrams')
     station_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
-    print(station_list)
 
     for station_name, lon, lat in station_list:
         plt.figure()
@@ -407,7 +406,7 @@ def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_li
                  linewidth='4',
                  label='%d day smoothed gps data: %s' % (days_smooth, station_name))
 
-        geolist, insar_ts = find_insar_ts(geo_path, station_name, defo_filename=defo_filename)
+        geolist, insar_ts = find_insar_ts(defo_filename=defo_filename, station_list=[station_name])
 
         plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
 
@@ -471,8 +470,7 @@ def plot_gps_vs_insar_diff(geo_path,
         # label='%d day smoothed gps data: %s' % (days_smooth, station_name))
         label='%d day smoothed gps data: %s-%s' % (days_smooth, stat1, stat2))
 
-    geolist, (insar_ts1, insar_ts2) = find_insar_ts(geo_path,
-                                                    defo_filename=defo_filename,
+    geolist, (insar_ts1, insar_ts2) = find_insar_ts(defo_filename=defo_filename,
                                                     station_list=[stat1, stat1])
     insar_diff = insar_ts1 - insar_ts2
 
@@ -543,8 +541,7 @@ def plot_all_gps_insar(geo_path,
         # label='%d day smoothed gps data: %s' % (days_smooth, station_name))
         label='%d day smoothed gps data: %s-%s' % (days_smooth, stat1, stat2))
 
-    geolist, (insar_ts1, insar_ts2) = find_insar_ts(geo_path,
-                                                    defo_filename=defo_filename,
+    geolist, (insar_ts1, insar_ts2) = find_insar_ts(defo_filename=defo_filename,
                                                     station_list=[stat1, stat1])
     insar_diff = insar_ts1 - insar_ts2
 
