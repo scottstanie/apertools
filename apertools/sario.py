@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import sardem
 
-from apertools import parsers, utils
+from apertools import utils
+import apertools.parsers
 from apertools.log import get_log
 logger = get_log()
 
@@ -176,11 +177,11 @@ def load_file(filename,
     # UAVSAR files have an annotation file for metadata
     if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
         try:
-            u = parsers.Uavsar(filename, verbose=verbose)
+            u = apertools.parsers.Uavsar(filename, verbose=verbose)
             ann_info = u.parse_ann_file()
         except ValueError:
             try:
-                u = parsers.UavsarInt(filename, verbose=verbose)
+                u = apertools.parsers.UavsarInt(filename, verbose=verbose)
                 ann_info = u.parse_ann_file()
             except ValueError:
                 print("Failed loading ann_info")
@@ -371,7 +372,7 @@ def is_complex(filename=None, ext=None):
 
     if ext in UAVSAR_POL_DEPENDENT:
         # Check if filename has one of the complex polarizations
-        return any(pol in filename for pol in parsers.Uavsar.COMPLEX_POLS)
+        return any(pol in filename for pol in apertools.parsers.Uavsar.COMPLEX_POLS)
     else:
         return ext in COMPLEX_EXTS
 
@@ -617,14 +618,15 @@ def find_geos(directory=".", parse=True, filename=None):
     # Stripped of path for parser
     geolist = [os.path.split(fname)[1] for fname in geo_file_list]
     if not geolist:
-        raise ValueError("No .geo files found in %s" % directory)
+        return []
+        # raise ValueError("No .geo files found in %s" % directory)
 
     if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
         return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
     elif re.match(r'\d{8}', geolist[0]):  # YYYYmmdd , just a date string
         return sorted([_parse(geo) for geo in geolist])
     else:  # Full sentinel product name
-        return sorted([parsers.Sentinel(geo).start_time.date() for geo in geolist])
+        return sorted([apertools.parsers.Sentinel(geo).start_time.date() for geo in geolist])
 
 
 def _strip_geoname(name):

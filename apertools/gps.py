@@ -222,6 +222,11 @@ def station_lonlat(station_name):
     return lon, lat
 
 
+def station_rowcol(station_name=None, rsc_data=None):
+    lon, lat = station_lonlat(station_name)
+    return apertools.latlon.latlon_to_rowcol(lat, lon, rsc_data)
+
+
 def station_distance(station_name1, station_name2):
     lonlat1 = station_lonlat(station_name1)
     lonlat2 = station_lonlat(station_name2)
@@ -276,10 +281,8 @@ def plot_gps_enu(station=None, days_smooth=12, start_year=START_YEAR, end_year=N
             top=False,  # ticks along the top edge are off
             labelbottom=False)
 
-    dts, (east_cm, north_cm, up_cm) = load_station_enu(station,
-                                                       start_year=start_year,
-                                                       end_year=end_year,
-                                                       to_cm=True)
+    dts, enu_df = load_station_enu(station, start_year=start_year, end_year=end_year, to_cm=True)
+    (east_cm, north_cm, up_cm) = enu_df[['east', 'north', 'up']].T.values
 
     fig, axes = plt.subplots(3, 1)
     axes[0].plot(dts, east_cm, 'b.')
@@ -357,22 +360,38 @@ def find_insar_ts(defo_filename='deformation.h5', station_list=[], window_size=1
         window_size (int): number of pixels in sqaure to average for insar timeseries
     """
     # geolist, deformation_stack = apertools.sario.load_deformation(full_path=defo_filename)
-    defo_img = apertools.latlon.load_deformation_img(full_path=defo_filename)
+    # defo_img = apertools.latlon.load_deformation_img(full_path=defo_filename)
 
     insar_ts_list = []
     for station_name in station_list:
         lon, lat = station_lonlat(station_name)
-        row, col = defo_img.nearest_pixel(lat=lat, lon=lon)
+        # row, col = defo_img.nearest_pixel(lat=lat, lon=lon)
+        dem_rsc = apertools.sario.load_dem_from_h5(defo_filename)
+        row, col = apertools.latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat)
         insar_ts_list.append(get_stack_timeseries(defo_filename, row, col, window_size=window_size))
 
     geolist = apertools.sario.load_geolist_from_h5(defo_filename)
     return geolist, insar_ts_list
 
 
-def get_stack_timeseries(filename, row, col, dset_name=apertools.sario.STACK_DSET, window_size=1):
+def get_stack_timeseries(filename,
+                         row,
+                         col,
+                         stack_dset_name=apertools.sario.STACK_DSET,
+                         station=None,
+                         window_size=1):
     with h5py.File(filename) as f:
-        dset = f[dset_name]
-        return apertools.utils.window_stack(dset, row, col, window_size)
+        try:
+            return f[station][:]
+        except KeyError:
+            pass
+
+    with h5py.File(filename, "a") as f:
+        dset = f[stack_dset_name]
+        ts = apertools.utils.window_stack(dset, row, col, window_size)
+        if station is not None:
+            f[station] = ts
+        return ts
 
 
 def _load_station_list(igrams_dir, defo_filename, station_name_list):
