@@ -5,7 +5,8 @@ from numpy import sin, cos, sqrt, arctan2, radians
 from xml.etree import ElementTree
 import os
 import numpy as np
-from apertools import sario, utils
+import apertools.sario
+import apertools.utils
 from apertools.log import get_log
 
 logger = get_log()
@@ -65,20 +66,20 @@ class LatlonImage(np.ndarray):
         if data is None and filename is None:
             raise ValueError("Need data or filename")
         elif data is None and filename is not None:
-            data = sario.load(filename)
+            data = apertools.sario.load(filename)
 
         obj = np.asarray(data).view(cls)
         obj.filename = filename
 
         if dem_rsc_file:
-            obj.dem_rsc_file = utils.fullpath(dem_rsc_file)
+            obj.dem_rsc_file = apertools.utils.fullpath(dem_rsc_file)
         else:
-            obj.dem_rsc_file = sario.find_rsc_file(filename) if filename else None
+            obj.dem_rsc_file = apertools.sario.find_rsc_file(filename) if filename else None
 
         if dem_rsc:
             obj.dem_rsc = dem_rsc
         elif obj.dem_rsc_file:
-            obj.dem_rsc = sario.load(obj.dem_rsc_file)
+            obj.dem_rsc = apertools.sario.load(obj.dem_rsc_file)
         else:
             obj.dem_rsc = None
 
@@ -315,7 +316,7 @@ class LatlonImage(np.ndarray):
     def take_looks(self, row_looks, col_looks):
         """Average array, and adjust rsc steps accordingly"""
 
-        downlooked = utils.take_looks(self, row_looks, col_looks)
+        downlooked = apertools.utils.take_looks(self, row_looks, col_looks)
 
         row_start, col_start = None, None
         row_step, col_step = row_looks, col_looks
@@ -491,16 +492,16 @@ def load_deformation_img(igram_path=".",
     """Loads mean of last n images of a deformation stack in LatlonImage
     Specify either a directory `igram_path` and `filename`, or `full_path` to file
     """
-    igram_path, filename, full_path = sario.get_full_path(igram_path, filename, full_path)
+    igram_path, filename, full_path = apertools.sario.get_full_path(igram_path, filename, full_path)
 
-    _, defo_stack = sario.load_deformation(igram_path=igram_path,
-                                           filename=filename,
-                                           full_path=full_path,
-                                           n=n)
+    _, defo_stack = apertools.sario.load_deformation(igram_path=igram_path,
+                                                     filename=filename,
+                                                     full_path=full_path,
+                                                     n=n)
     if filename.endswith(".h5"):
-        rsc_data = sario.load_dem_from_h5(h5file=full_path)
+        rsc_data = apertools.sario.load_dem_from_h5(h5file=full_path)
     else:
-        rsc_data = sario.load(os.path.join(igram_path, rsc_filename))
+        rsc_data = apertools.sario.load(os.path.join(igram_path, rsc_filename))
     img = LatlonImage(data=np.mean(defo_stack, axis=0), dem_rsc=rsc_data)
     return img
 
@@ -1013,16 +1014,65 @@ def load_cropped_masked_deformation(path=".",
                                     col_end=None,
                                     perform_mask=True):
     """Returns stack_ll, 3D LatlonImage, and stack_mask, used to mask the data"""
-    geo_date_list, deformation = sario.load_deformation(path, filename=filename)
+    geo_date_list, deformation = apertools.sario.load_deformation(path, filename=filename)
 
     if geo_date_list is None or deformation is None:
         return
 
-    rsc_data = sario.load(os.path.join(path, rsc_name))
-    stack_mask = sario.load_composite_mask(geo_date_list=geo_date_list, perform_mask=perform_mask)
+    rsc_data = apertools.sario.load(os.path.join(path, rsc_name))
+    stack_mask = apertools.sario.load_composite_mask(geo_date_list=geo_date_list,
+                                                     perform_mask=perform_mask)
 
     stack_ll = LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
 
     stack_ll = stack_ll[:, row_start:row_end, col_start:col_end]
     return stack_ll, stack_mask
+
+
+# TODO: should this just roll into latlon_to_rowcol?
+def nearest_pixel(dem_rsc, lon=None, lat=None, ncols=np.inf, nrows=np.inf):
+    """Find the nearest row, col to a given lat and/or lon within dem_rsc
+
+    Args:
+        lon (ndarray[float]): single or array of lons
+        lat (ndarray[float]): single or array of lat
+
+    Returns:
+        tuple[int, int]: If both given, a pixel (row, col) is returned
+        If array passed for either lon or lat, array is returned
+        Otherwise if only one, it is (None, col) or (row, None)
+    """
+
+    def _check_bounds(idx_arr, bound):
+        int_idxs = idx_arr.round().astype(int)
+        bad_idxs = np.logical_or(int_idxs < 0, int_idxs >= bound)
+        if np.any(bad_idxs):
+            # Need to check for single numbers, shape ()
+            if int_idxs.shape:
+                # Replaces locations of bad_idxs with none
+                int_idxs = np.where(bad_idxs, None, int_idxs)
+            else:
+                int_idxs = None
+        return int_idxs
+
+    out_row_col = [None, None]
+
+    if lon is not None:
+        out_row_col[1] = _check_bounds(nearest_col(dem_rsc, lat), ncols)
+    if lat is not None:
+        out_row_col[0] = _check_bounds(nearest_row(dem_rsc, lon), nrows)
+
+    return tuple(out_row_col)
+
+
+def nearest_row(dem_rsc, lat):
+    """Find the nearest row to a given lat within dem_rsc (no OOB checking)"""
+    y_first, y_step = dem_rsc['y_first'], dem_rsc['y_step']
+    return ((np.array(lat) - y_first) / y_step).round().astype(int)
+
+
+def nearest_col(dem_rsc, lon):
+    """Find the nearest col to a given lon within dem_rsc (no OOB checking)"""
+    x_first, x_step = dem_rsc['x_first'], dem_rsc['x_step']
+    return ((np.arrax(lon) - x_first) / x_step).round().astype(int)
