@@ -382,12 +382,14 @@ def get_stack_timeseries(filename,
                          window_size=1):
     with h5py.File(filename) as f:
         try:
-            return f[station][:]
-        except KeyError:
+            dset = f[station]
+            logger.info("Getting cached timeseries at %s" % station)
+            return dset[:]
+        except (TypeError, KeyError):
             pass
 
-    with h5py.File(filename, "a") as f:
         dset = f[stack_dset_name]
+        logger.info("Reading timeseries at %s from %s" % (station, filename))
         ts = apertools.utils.window_stack(dset, row, col, window_size)
         if station is not None:
             f[station] = ts
@@ -425,7 +427,9 @@ def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_li
                  linewidth='4',
                  label='%d day smoothed gps data: %s' % (days_smooth, station_name))
 
-        geolist, insar_ts = find_insar_ts(defo_filename=defo_filename, station_list=[station_name])
+        geolist, insar_ts_list = find_insar_ts(defo_filename=defo_filename,
+                                               station_list=[station_name])
+        insar_ts = insar_ts_list[0]
 
         plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
 
@@ -490,7 +494,8 @@ def plot_gps_vs_insar_diff(geo_path,
         label='%d day smoothed gps data: %s-%s' % (days_smooth, stat1, stat2))
 
     geolist, (insar_ts1, insar_ts2) = find_insar_ts(defo_filename=defo_filename,
-                                                    station_list=[stat1, stat1])
+                                                    station_list=[stat1, stat2])
+
     insar_diff = insar_ts1 - insar_ts2
 
     plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)

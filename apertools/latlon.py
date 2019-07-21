@@ -1059,9 +1059,9 @@ def nearest_pixel(dem_rsc, lon=None, lat=None, ncols=np.inf, nrows=np.inf):
     out_row_col = [None, None]
 
     if lon is not None:
-        out_row_col[1] = _check_bounds(nearest_col(dem_rsc, lat), ncols)
+        out_row_col[1] = _check_bounds(nearest_col(dem_rsc, lon), ncols)
     if lat is not None:
-        out_row_col[0] = _check_bounds(nearest_row(dem_rsc, lon), nrows)
+        out_row_col[0] = _check_bounds(nearest_row(dem_rsc, lat), nrows)
 
     return tuple(out_row_col)
 
@@ -1075,4 +1075,4 @@ def nearest_row(dem_rsc, lat):
 def nearest_col(dem_rsc, lon):
     """Find the nearest col to a given lon within dem_rsc (no OOB checking)"""
     x_first, x_step = dem_rsc['x_first'], dem_rsc['x_step']
-    return ((np.arrax(lon) - x_first) / x_step).round().astype(int)
+    return ((np.array(lon) - x_first) / x_step).round().astype(int)
