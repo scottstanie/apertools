@@ -346,29 +346,36 @@ def difference_gps_stations(station1, station2):
 
 def _moving_average(arr, window_size=7):
     """Takes a 1D array and returns the running average of same size"""
+    if not window_size:
+        return arr
     return uniform_filter1d(arr, size=window_size, mode='nearest')
 
 
-def find_insar_ts(defo_filename='deformation.h5', station_list=[], window_size=1):
+def find_insar_ts(defo_filename='deformation.h5', station_name_list=[], window_size=1):
     """Get the insar timeseries closest to a list of GPS stations
 
     Returns the timeseries, and the datetimes of points for plotting
 
     Args:
         defo_filename
-        station_list
+        station_name_list
         window_size (int): number of pixels in sqaure to average for insar timeseries
     """
     # geolist, deformation_stack = apertools.sario.load_deformation(full_path=defo_filename)
     # defo_img = apertools.latlon.load_deformation_img(full_path=defo_filename)
 
     insar_ts_list = []
-    for station_name in station_list:
+    for station_name in station_name_list:
         lon, lat = station_lonlat(station_name)
         # row, col = defo_img.nearest_pixel(lat=lat, lon=lon)
         dem_rsc = apertools.sario.load_dem_from_h5(defo_filename)
         row, col = apertools.latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat)
-        insar_ts_list.append(get_stack_timeseries(defo_filename, row, col, window_size=window_size))
+        insar_ts_list.append(
+            get_stack_timeseries(defo_filename,
+                                 row,
+                                 col,
+                                 station=station_name,
+                                 window_size=window_size))
 
     geolist = apertools.sario.load_geolist_from_h5(defo_filename)
     return geolist, insar_ts_list
@@ -380,7 +387,7 @@ def get_stack_timeseries(filename,
                          stack_dset_name=apertools.sario.STACK_DSET,
                          station=None,
                          window_size=1):
-    with h5py.File(filename) as f:
+    with h5py.File(filename, 'a') as f:
         try:
             dset = f[station]
             logger.info("Getting cached timeseries at %s" % station)
@@ -396,12 +403,104 @@ def get_stack_timeseries(filename,
         return ts
 
 
+def _series_to_date(series):
+    return pd.to_datetime(series).apply(lambda row: row.date())
+
+
+def create_insar_gps_df(geo_path,
+                        defo_filename='deformation.h5',
+                        station_name_list=[],
+                        window_size=1,
+                        insar_days_smooth=5,
+                        gps_days_smooth=30):
+    """Set days_smooth to None or 0 to avoid any data smoothing"""
+    insar_df = create_insar_df(defo_filename, station_name_list, window_size, insar_days_smooth)
+    gps_df = create_gps_los_df(geo_path, station_name_list, gps_days_smooth)
+    return combine_gps_insar_dfs(insar_df, gps_df)
+
+
+def create_insar_df(defo_filename='deformation.h5',
+                    station_name_list=[],
+                    window_size=1,
+                    days_smooth=5):
+    """Set days_smooth to None or 0 to avoid any data smoothing"""
+    geolist, insar_ts_list = find_insar_ts(
+        defo_filename=defo_filename,
+        station_name_list=station_name_list,
+        window_size=window_size,
+    )
+    insar_df = pd.DataFrame({'dts': _series_to_date(pd.Series(geolist))})
+    for stat, ts in zip(station_name_list, insar_ts_list):
+        insar_df[stat + "_insar"] = _moving_average(ts, days_smooth)
+        # insar_df[stat + "_smooth_insar"] = _moving_average(ts, days_smooth)
+    return insar_df
+
+
+def create_gps_los_df(geo_path, station_name_list=[], days_smooth=30):
+    df_list = []
+    for stat in station_name_list:
+        gps_dts, los_gps_data = load_gps_los_data(geo_path, stat)
+
+        df = pd.DataFrame({"dts": _series_to_date(gps_dts)})
+        df[stat + "_gps"] = _moving_average(los_gps_data, days_smooth)
+        # df[stat + "_smooth_gps"] = _moving_average(los_gps_data, days_smooth)
+        df_list.append(df)
+
+    min_date = np.min(pd.concat([df['dts'] for df in df_list]))
+    max_date = np.max(pd.concat([df['dts'] for df in df_list]))
+
+    # Now merge together based on uneven time data
+    gps_df = pd.DataFrame({"dts": pd.date_range(start=min_date, end=max_date).date})
+    for df in df_list:
+        gps_df = pd.merge(gps_df, df, on="dts", how="left")
+
+    return gps_df
+
+
+def combine_gps_insar_dfs(insar_df, gps_df):
+    # First constrain the date range to just the InSAR min/max dates
+    df = pd.DataFrame(
+        {"dts": pd.date_range(start=np.min(insar_df["dts"]), end=np.max(insar_df["dts"])).date})
+    df = pd.merge(df, insar_df, on="dts", how="left")
+    df = pd.merge(df, gps_df, on="dts", how="left", suffixes=("", "_gps"))
+    return df
+
+
+def plot_insar_gps_df(df, ymin=-2, ymax=2):
+    df2 = df.set_index("dts")
+    columns = df2.columns
+
+    fig, axes = plt.subplots(2, len(columns) // 2, figsize=(16, 5))
+    # for idx, column in enumerate(columns):
+    for idx, column in enumerate(columns):
+        ax = axes.ravel()[idx]
+        if 'insar' in column:
+            marker = 'r.'
+        else:
+            marker = 'b.'
+        # axes[idx].plot(df2.index, df2[column].fillna(method='ffill'), marker)
+        ax.plot(df2.index, df2[column], marker)
+        ax.set_title(column)
+        ax.set_ylim(ymin, ymax)
+        xticks = ax.get_xticks()
+        ax.set_xticks([xticks[0], xticks[len(xticks) // 2], xticks[-1]])
+        # ax.locator_params(axis='x', tight=True, nbins=3)
+
+    axes.ravel()[-1].set_xlabel("Date")
+    plt.locator_params(axis='x', nbins=4)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    return fig, axes
+
+
 def _load_station_list(igrams_dir, defo_filename, station_name_list):
     defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_filename)
-    station_list = stations_within_image(defo_img)
+    existing_station_tuples = stations_within_image(defo_img)
     if station_name_list is not None:
-        station_list = [s for s in station_list if s[0] in station_name_list]
-    return station_list
+        station_name_list = [
+            name for name, lon, lat in existing_station_tuples if name in station_name_list
+        ]
+    return sorted(station_name_list, key=lambda name: station_name_list.index(name))
 
 
 def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_list=None):
@@ -410,9 +509,9 @@ def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_li
     due to differences in reference points for the InSAR
     """
     igrams_dir = os.path.join(geo_path, 'igrams')
-    station_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
+    station_name_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
 
-    for station_name, lon, lat in station_list:
+    for station_name in station_name_list:
         plt.figure()
 
         gps_dts, los_gps_data = load_gps_los_data(geo_path, station_name)
@@ -428,7 +527,7 @@ def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_li
                  label='%d day smoothed gps data: %s' % (days_smooth, station_name))
 
         geolist, insar_ts_list = find_insar_ts(defo_filename=defo_filename,
-                                               station_list=[station_name])
+                                               station_name_list=[station_name])
         insar_ts = insar_ts_list[0]
 
         plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
@@ -451,12 +550,10 @@ def plot_gps_vs_insar_diff(geo_path,
                            station_name_list=None):
 
     igrams_dir = os.path.join(geo_path, 'igrams')
-    # station_list = list(reversed(_load_station_list(igrams_dir, defo_filename, station_name_list)))
-    station_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
+    station_name_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
 
-    stat1, lon1, lat1 = station_list[0]
-    stat2, lon2, lat2 = station_list[1]
-    logger.info("Using stations: %s" % station_list[:2])
+    stat1, stat2 = station_name_list[:2]
+    logger.info("Using stations: %s" % station_name_list[:2])
 
     # # First way: project each ENU to LOS, then subtract
     gps_dts1, los_gps_data1 = load_gps_los_data(geo_path, stat1, zero_start=False)
@@ -494,7 +591,7 @@ def plot_gps_vs_insar_diff(geo_path,
         label='%d day smoothed gps data: %s-%s' % (days_smooth, stat1, stat2))
 
     geolist, (insar_ts1, insar_ts2) = find_insar_ts(defo_filename=defo_filename,
-                                                    station_list=[stat1, stat2])
+                                                    station_name_list=[stat1, stat2])
 
     insar_diff = insar_ts1 - insar_ts2
 
@@ -513,7 +610,7 @@ def plot_gps_vs_insar_diff(geo_path,
     plt.ylabel('cm of cumulative LOS displacement')
     plt.legend()
 
-    return los_gps_data1, los_gps_data2, gps_diff_ts, insar_ts1, insar_ts2, insar_diff
+    return gps_dts, los_gps_data1, los_gps_data2, gps_diff_ts, geolist, insar_ts1, insar_ts2
 
 
 def plot_all_gps_insar(geo_path,
@@ -525,9 +622,13 @@ def plot_all_gps_insar(geo_path,
     For a subset, pass in the station_name_list
     """
     igrams_dir = os.path.join(geo_path, 'igrams')
-    station_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
+    station_name_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
 
-    ref_dts, ref_los_gps_data = load_gps_los_data(geo_path, ref_station, zero_start=False)
+    insar_df = create_insar_df(defo_filename=defo_filename, station_name_list=station_name_list)
+
+    ref_dts, ref_los_gps_data = load_gps_los_data(geo_path,
+                                                  station_name=ref_station,
+                                                  zero_start=False)
     ref_df = ref_dts.to_frame()
     ref_df['ref_gps'] = ref_los_gps_data
 
@@ -535,7 +636,7 @@ def plot_all_gps_insar(geo_path,
     # gps_dt_list, los_gps_list = [], []
     df_list = []
     for stat in station_list:
-        time_df, los_gps_data = load_gps_los_data(geo_path, stat, zero_start=False)
+        time_df, los_gps_data = load_gps_los_data(geo_path, station_name=stat, zero_start=False)
         df = time_df.to_frame()
         df['gps'] = los_gps_data
         df_list.append(df)
@@ -565,8 +666,6 @@ def plot_all_gps_insar(geo_path,
         # label='%d day smoothed gps data: %s' % (days_smooth, station_name))
         label='%d day smoothed gps data: %s-%s' % (days_smooth, stat1, stat2))
 
-    geolist, (insar_ts1, insar_ts2) = find_insar_ts(defo_filename=defo_filename,
-                                                    station_list=[stat1, stat1])
     insar_diff = insar_ts1 - insar_ts2
 
     plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)
