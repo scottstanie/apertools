@@ -333,17 +333,6 @@ def load_gps_los_data(
     return df['dt'], los_gps_data
 
 
-def difference_gps_stations(station1, station2):
-    df1 = load_station_data(station1)
-    df2 = load_station_data(station2)
-    merged = pd.merge(df1, df2, how='inner', on=['dt'], suffixes=('_1', '_2'))
-    merged['d_east'] = merged['east_1'] - merged['east_2']
-    merged['d_north'] = merged['north_1'] - merged['north_2']
-    merged['d_up'] = merged['up_1'] - merged['up_2']
-    return merged
-    # return merged[['dt', 'd_east', 'd_north', 'd_up']]
-
-
 def _moving_average(arr, window_size=7):
     """Takes a 1D array and returns the running average of same size"""
     if not window_size:
@@ -463,33 +452,95 @@ def combine_gps_insar_dfs(insar_df, gps_df):
         {"dts": pd.date_range(start=np.min(insar_df["dts"]), end=np.max(insar_df["dts"])).date})
     df = pd.merge(df, insar_df, on="dts", how="left")
     df = pd.merge(df, gps_df, on="dts", how="left", suffixes=("", "_gps"))
-    return df
+    # Now final df has datetime as index
+    return df.set_index("dts")
 
 
-def plot_insar_gps_df(df, ymin=-2, ymax=2):
-    df2 = df.set_index("dts")
-    columns = df2.columns
+def fit_gps_line(df):
+    """Predicts final GPS dat value by fitting line"""
+    pass
 
-    fig, axes = plt.subplots(2, len(columns) // 2, figsize=(16, 5))
+
+def plot_insar_gps_df(df, kind="line", **kwargs):
+    valid_kinds = ("line", "errbar", "slope")
+    df = df.set_index("dts")
+
     # for idx, column in enumerate(columns):
+    if kind == "line":
+        fig, axes = _plot_line_df(df, **kwargs)
+    elif kind == "errbar":
+        fig, axes = _plot_errbar_df(df, **kwargs)
+    elif kind == "slope":
+        fig, axes = _plot_slope_df(df, **kwargs)
+    else:
+        raise ValueError("kind must be in: %s" % valid_kinds)
+    fig.tight_layout()
+    return fig, axes
+
+
+def _final_vals(df):
+    gps_cols = [col for col in df.columns if 'gps' in col]
+    insar_cols = [col for col in df.columns if 'insar' in col]
+    final_vals = df.tail(1).squeeze()
+    final_gps_vals = [val for col, val in final_vals.items() if col in gps_cols]
+    final_insar_vals = [val for col, val in final_vals.squeeze().items() if col in insar_cols]
+    return gps_cols, insar_cols, final_gps_vals, final_insar_vals
+
+
+def _plot_errbar_df(df, **kwargs):
+    # In [6]: df.std()
+    # Out[6]:
+    # TXKM_insar    0.053233
+    # TXMH_insar    0.432821
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df)
+    gps_stds = [val for col, val in df.std().items() if col in gps_cols]
+    fig, axes = plt.subplots()
+    for idx, (final_gps, final_insar,
+              err) in enumerate(zip(final_gps_vals, final_insar_vals, gps_stds)):
+        axes.errorbar(idx, final_gps, err)
+        axes.plot(idx, final_insar, 'rx')
+
+    labels = [c.strip('_gps') for c in gps_cols]
+    print(labels, len(labels))
+    axes.set_xticks(range(len(labels)))
+    axes.set_xticklabels(labels, rotation='vertical', fontsize=12)
+    return fig, axes
+
+
+def _plot_slope_df(df, **kwargs):
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df)
+    insar_stds = [val for col, val in df.std().items() if col in insar_cols]
+
+    fig, axes = plt.subplots()
+    axes.errorbar(final_gps_vals, final_insar_vals, yerr=insar_stds, fmt='rx')
+
+    max_val = max(np.max(final_insar_vals), np.max(final_gps_vals))
+    min_val = min(np.min(final_insar_vals), np.min(final_gps_vals))
+    axes.plot(np.linspace(min_val, max_val), np.linspace(min_val, max_val), 'g')
+    return fig, axes
+
+
+def _plot_line_df(df, fig, axes, ylims=None, **kwargs):
+    columns = df.columns
+    fig, axes = plt.subplots(2, len(columns) // 2, figsize=(16, 5))
+
     for idx, column in enumerate(columns):
         ax = axes.ravel()[idx]
         if 'insar' in column:
             marker = 'r.'
         else:
             marker = 'b.'
-        # axes[idx].plot(df2.index, df2[column].fillna(method='ffill'), marker)
-        ax.plot(df2.index, df2[column], marker)
+        # axes[idx].plot(df.index, df[column].fillna(method='ffill'), marker)
+        ax.plot(df.index, df[column], marker)
         ax.set_title(column)
-        ax.set_ylim(ymin, ymax)
+        if ylims is not None:
+            ax.set_ylim(ylims)
         xticks = ax.get_xticks()
         ax.set_xticks([xticks[0], xticks[len(xticks) // 2], xticks[-1]])
         # ax.locator_params(axis='x', tight=True, nbins=3)
 
     axes.ravel()[-1].set_xlabel("Date")
-    plt.locator_params(axis='x', nbins=4)
     fig.autofmt_xdate()
-    fig.tight_layout()
     return fig, axes
 
 
