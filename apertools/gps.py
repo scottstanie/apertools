@@ -267,10 +267,6 @@ def station_std(station, to_cm=True, start_year=START_YEAR, end_year=None):
     return np.sum(enu_df.std())
 
 
-# Alias for when we don't really care about the sqrt
-station_variance = station_std
-
-
 def plot_gps_enu(station=None, days_smooth=12, start_year=START_YEAR, end_year=None):
     """Plot the east,north,up components of `station`"""
 
@@ -401,13 +397,34 @@ def _series_to_date(series):
 def create_insar_gps_df(geo_path,
                         defo_filename='deformation.h5',
                         station_name_list=[],
+                        reference_station=None,
                         window_size=1,
-                        insar_days_smooth=5,
-                        gps_days_smooth=30):
-    """Set days_smooth to None or 0 to avoid any data smoothing"""
-    insar_df = create_insar_df(defo_filename, station_name_list, window_size, insar_days_smooth)
-    gps_df = create_gps_los_df(geo_path, station_name_list, gps_days_smooth)
-    return combine_gps_insar_dfs(insar_df, gps_df)
+                        days_smooth_insar=5,
+                        days_smooth_gps=30,
+                        **kwargs):
+    """Set days_smooth to None or 0 to avoid any data smoothing
+
+    If refernce station is specified, all timeseries will subtract
+    that station's data
+    """
+    insar_df = create_insar_df(defo_filename, station_name_list, window_size, days_smooth_insar)
+    gps_df = create_gps_los_df(geo_path, station_name_list, days_smooth_gps)
+    df = combine_gps_insar_dfs(insar_df, gps_df)
+    if reference_station:
+        df = subtract_reference(df, reference_station)
+    return df
+
+
+def subtract_reference(df, reference_station):
+    gps_ref_col = "%s_%s" % (reference_station, "gps")
+    insar_ref_col = "%s_%s" % (reference_station, "insar")
+    df_out = df.copy()
+    for col in df.columns:
+        if 'gps' in col:
+            df_out[col] = df[col] - df[gps_ref_col]
+        elif 'insar' in col:
+            df_out[col] = df[col] - df[insar_ref_col]
+    return df_out
 
 
 def create_insar_df(defo_filename='deformation.h5',
@@ -488,10 +505,10 @@ def plot_insar_gps_df(df, kind="errorbar", grid=True, **kwargs):
     valid_kinds = ("line", "errbar", "slope")
 
     # for idx, column in enumerate(columns):
-    if kind == "line":
-        fig, axes = _plot_line_df(df, **kwargs)
-    elif kind == "errorbar":
+    if kind == "errorbar":
         fig, axes = _plot_errorbar_df(df, **kwargs)
+    elif kind == "line":
+        fig, axes = _plot_line_df(df, **kwargs)
     elif kind == "slope":
         fig, axes = _plot_slope_df(df, **kwargs)
     else:
@@ -500,6 +517,89 @@ def plot_insar_gps_df(df, kind="errorbar", grid=True, **kwargs):
     if grid:
         for ax in axes.ravel():
             ax.grid(True)
+    return fig, axes
+
+
+def _plot_errorbar_df(df, ylim=None, **kwargs):
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df, **kwargs)
+    idxs = range(len(final_gps_vals))
+    gps_stds = [flat_std(df[col].dropna()) for col in df.columns if col in gps_cols]
+
+    fig, axes = plt.subplots(squeeze=False)
+    ax = axes[0, 0]
+    ax.errorbar(idxs, final_gps_vals, gps_stds, marker='o', lw=2, linestyle='', capsize=6)
+    ax.plot(idxs, final_insar_vals, 'rx')
+
+    labels = [c.strip('_gps') for c in gps_cols]
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation='vertical', fontsize=12)
+    if ylim is not None:
+        ax.set_ylim(ylim)
+    ax.set_ylabel('CM of cumulative LOS displacement')
+    return fig, axes
+
+
+def _plot_slope_df(df, **kwargs):
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df)
+    insar_stds = [flat_std(df[col].dropna()) for col in df.columns if col in insar_cols]
+
+    fig, axes = plt.subplots(squeeze=False)
+    ax = axes[0, 0]
+    ax.errorbar(final_gps_vals, final_insar_vals, yerr=insar_stds, fmt='rx', capsize=6)
+
+    max_val = max(np.max(final_insar_vals), np.max(final_gps_vals))
+    min_val = min(np.min(final_insar_vals), np.min(final_gps_vals))
+    ax.plot(np.linspace(min_val, max_val), np.linspace(min_val, max_val), 'g')
+    ax.set_ylabel('InSAR predicted cumulative CM')
+    ax.set_xlabel('GPS cumulative CM')
+    return fig, axes
+
+
+def _plot_line_df(df, ylim=None, share=True, days_smooth_gps=None, days_smooth_insar=None,
+                  **kwargs):
+    """share is used to indicate that GPS and insar will be on same axes"""
+
+    def _plot_smoothed(ax, df, column, days_smooth, marker):
+        ax.plot(df[column].dropna().index,
+                df[column].dropna().rolling(days_smooth_gps).mean(),
+                marker,
+                linewidth=3,
+                label="%s day smoothed %s" % (days_smooth, column))
+
+    columns = df.columns
+    nrows = 1 if share else 2
+    fig, axes = plt.subplots(nrows, len(columns) // 2, figsize=(16, 5), squeeze=False)
+
+    gps_idxs = np.where(['gps' in col for col in columns])[0]
+    insar_idxs = np.where(['insar' in col for col in columns])[0]
+
+    for idx, column in enumerate(columns):
+        if 'insar' in column:
+            marker = 'rx'
+            ax_idx = np.where(insar_idxs == idx)[0][0] if share else idx
+        else:
+            marker = 'b.'
+            ax_idx = np.where(gps_idxs == idx)[0][0] if share else idx
+
+        ax = axes.ravel()[ax_idx]
+        # axes[idx].plot(df.index, df[column].fillna(method='ffill'), marker)
+        ax.plot(df.index, df[column], marker, label=column)
+
+        ax.set_title(column)
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        xticks = ax.get_xticks()
+        ax.set_xticks([xticks[0], xticks[len(xticks) // 2], xticks[-1]])
+        if days_smooth_gps and 'gps' in column:
+            _plot_smoothed(ax, df, column, days_smooth_gps, "b-")
+        if days_smooth_insar and 'insar' in column:
+            _plot_smoothed(ax, df, column, days_smooth_insar, "r-")
+
+        ax.set_ylabel('InSAR cumulative CM')
+        ax.legend()
+
+    axes.ravel()[-1].set_xlabel("Date")
+    fig.autofmt_xdate()
     return fig, axes
 
 
@@ -519,66 +619,6 @@ def _final_vals(df, linear=True):
     return gps_cols, insar_cols, final_gps_vals, final_insar_vals
 
 
-def _plot_errorbar_df(df, ylims=None, **kwargs):
-    # In [6]: df.std()
-    # Out[6]:
-    # TXKM_insar    0.053233
-    # TXMH_insar    0.432821
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df, **kwargs)
-    idxs = range(len(final_gps_vals))
-    gps_stds = [flat_std(df[col].dropna()) for col in df.columns if col in gps_cols]
-
-    fig, axes = plt.subplots(squeeze=False)
-    ax = axes[0, 0]
-    ax.errorbar(idxs, final_gps_vals, gps_stds, marker='o', lw=2, linestyle='', capsize=6)
-    ax.plot(idxs, final_insar_vals, 'rx')
-
-    labels = [c.strip('_gps') for c in gps_cols]
-    ax.set_xticks(range(len(labels)))
-    ax.set_xticklabels(labels, rotation='vertical', fontsize=12)
-    if ylims is not None:
-        ax.set_ylim(ylims)
-    return fig, axes
-
-
-def _plot_slope_df(df, **kwargs):
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df)
-    insar_stds = [val for col, val in df.std().items() if col in insar_cols]
-
-    fig, axes = plt.subplots(squeeze=False)
-    ax = axes[0, 0]
-    ax.errorbar(final_gps_vals, final_insar_vals, yerr=insar_stds, fmt='rx')
-
-    max_val = max(np.max(final_insar_vals), np.max(final_gps_vals))
-    min_val = min(np.min(final_insar_vals), np.min(final_gps_vals))
-    ax.plot(np.linspace(min_val, max_val), np.linspace(min_val, max_val), 'g')
-    return fig, axes
-
-
-def _plot_line_df(df, fig, axes, ylims=None, **kwargs):
-    columns = df.columns
-    fig, axes = plt.subplots(2, len(columns) // 2, figsize=(16, 5), squeeze=False)
-
-    for idx, column in enumerate(columns):
-        ax = axes.ravel()[idx]
-        if 'insar' in column:
-            marker = 'r.'
-        else:
-            marker = 'b.'
-        # axes[idx].plot(df.index, df[column].fillna(method='ffill'), marker)
-        ax.plot(df.index, df[column], marker)
-        ax.set_title(column)
-        if ylims is not None:
-            ax.set_ylim(ylims)
-        xticks = ax.get_xticks()
-        ax.set_xticks([xticks[0], xticks[len(xticks) // 2], xticks[-1]])
-        # ax.locator_params(axis='x', tight=True, nbins=3)
-
-    axes.ravel()[-1].set_xlabel("Date")
-    fig.autofmt_xdate()
-    return fig, axes
-
-
 def _load_station_list(igrams_dir, defo_filename, station_name_list):
     defo_img = apertools.latlon.load_deformation_img(igrams_dir, filename=defo_filename)
     existing_station_tuples = stations_within_image(defo_img)
@@ -589,184 +629,23 @@ def _load_station_list(igrams_dir, defo_filename, station_name_list):
     return sorted(station_name_list, key=lambda name: station_name_list.index(name))
 
 
-def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_list=None):
+def plot_gps_vs_insar2(geo_path=None,
+                       defo_filename="deformation.npy",
+                       station_name_list=None,
+                       df=None,
+                       **kwargs):
     """Make a single plot of GPS vs InSAR
     Note that without the `align` option, the two might differ by an angle
     due to differences in reference points for the InSAR
     """
-    igrams_dir = os.path.join(geo_path, 'igrams')
-    station_name_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
 
-    for station_name in station_name_list:
-        plt.figure()
+    if df is None:
+        igrams_dir = os.path.join(geo_path, 'igrams')
+        station_name_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
+        df = create_insar_gps_df(geo_path,
+                                 defo_filename=defo_filename,
+                                 station_name_list=station_name_list,
+                                 **kwargs)
+        # window_size=1, days_smooth_insar=5, days_smooth_gps=30):
 
-        gps_dts, los_gps_data = load_gps_los_data(geo_path, station_name)
-
-        plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % station_name)
-
-        days_smooth = 60
-        los_gps_data_smooth = moving_average(los_gps_data, days_smooth)
-        plt.plot(gps_dts,
-                 los_gps_data_smooth,
-                 'b',
-                 linewidth='4',
-                 label='%d day smoothed gps data: %s' % (days_smooth, station_name))
-
-        geolist, insar_ts_list = find_insar_ts(defo_filename=defo_filename,
-                                               station_name_list=[station_name])
-        insar_ts = insar_ts_list[0]
-
-        plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
-
-        days_smooth = 5
-        insar_ts_smooth = moving_average(insar_ts, days_smooth)
-        plt.plot(geolist,
-                 insar_ts_smooth,
-                 'r',
-                 label='%s day smoothed insar' % days_smooth,
-                 linewidth=3)
-
-        plt.legend()
-    plt.show()
-
-
-def plot_gps_vs_insar_diff(geo_path,
-                           fignum=None,
-                           defo_filename='deformation.h5',
-                           station_name_list=None):
-
-    igrams_dir = os.path.join(geo_path, 'igrams')
-    station_name_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
-
-    stat1, stat2 = station_name_list[:2]
-    logger.info("Using stations: %s" % station_name_list[:2])
-
-    # # First way: project each ENU to LOS, then subtract
-    gps_dts1, los_gps_data1 = load_gps_los_data(geo_path, stat1, zero_start=False)
-    gps_dts2, los_gps_data2 = load_gps_los_data(geo_path, stat2, zero_start=False)
-    logger.info('first gps entries:')
-    logger.info(los_gps_data1[0])
-    logger.info(los_gps_data2[0])
-
-    df1 = gps_dts1.to_frame()
-    df1['gps1'] = los_gps_data1
-    df2 = gps_dts2.to_frame()
-    df2['gps2'] = los_gps_data2
-    diff_df = pd.merge(df1, df2, how='inner', on=['dt'])
-    # diff_df['d_gps'] = diff_df['gps1'] - diff_df['gps2']
-    gps_diff_ts = diff_df['gps1'] - diff_df['gps2']
-    gps_diff_ts = gps_diff_ts - np.mean(gps_diff_ts[:100])
-    gps_dts = diff_df['dt']
-
-    start_mean = np.mean(gps_diff_ts[:100])
-    # start_mean = np.mean(los_gps_data2[:100])
-    logger.info("Resetting GPS data start to 0 of station 2, subtract %f" % start_mean)
-    gps_diff_ts = gps_diff_ts - start_mean
-
-    plt.figure(fignum)
-    plt.plot(gps_dts, gps_diff_ts, 'b.', label='gps data: %s' % stat1)
-
-    days_smooth = 60
-    los_gps_data_smooth = moving_average(gps_diff_ts, days_smooth)
-    plt.plot(
-        gps_dts,
-        los_gps_data_smooth,
-        'b',
-        linewidth='4',
-        # label='%d day smoothed gps data: %s' % (days_smooth, station_name))
-        label='%d day smoothed gps data: %s-%s' % (days_smooth, stat1, stat2))
-
-    geolist, (insar_ts1, insar_ts2) = find_insar_ts(defo_filename=defo_filename,
-                                                    station_name_list=[stat1, stat2])
-
-    insar_diff = insar_ts1 - insar_ts2
-
-    plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)
-
-    days_smooth = 5
-    insar_diff_smooth = moving_average(insar_diff, days_smooth)
-    insar_diff_smooth -= insar_diff_smooth[0]
-    plt.plot(geolist,
-             insar_diff_smooth,
-             'r',
-             label='linear %s day smoothed insar' % days_smooth,
-             linewidth=3)
-
-    # plt.ylim([-2, 2])
-    plt.ylabel('cm of cumulative LOS displacement')
-    plt.legend()
-
-    return gps_dts, los_gps_data1, los_gps_data2, gps_diff_ts, geolist, insar_ts1, insar_ts2
-
-
-def plot_all_gps_insar(geo_path,
-                       fignum=None,
-                       defo_filename='deformation.h5',
-                       ref_station=None,
-                       station_name_list=None):
-    """
-    For a subset, pass in the station_name_list
-    """
-    igrams_dir = os.path.join(geo_path, 'igrams')
-    station_name_list = _load_station_list(igrams_dir, defo_filename, station_name_list)
-
-    insar_df = create_insar_df(defo_filename=defo_filename, station_name_list=station_name_list)
-
-    ref_dts, ref_los_gps_data = load_gps_los_data(geo_path,
-                                                  station_name=ref_station,
-                                                  zero_start=False)
-    ref_df = ref_dts.to_frame()
-    ref_df['ref_gps'] = ref_los_gps_data
-
-    # First way: project each ENU to LOS, then subtract
-    # gps_dt_list, los_gps_list = [], []
-    df_list = []
-    for stat in station_list:
-        time_df, los_gps_data = load_gps_los_data(geo_path, station_name=stat, zero_start=False)
-        df = time_df.to_frame()
-        df['gps'] = los_gps_data
-        df_list.append(df)
-        # los_gps_list.append(los_gps_data)
-
-        diff_df = pd.merge(ref_df, df, how='inner', on=['dt'])
-        # diff_df['d_gps'] = diff_df['gps1'] - diff_df['gps2']
-        gps_diff_ts = diff_df['gps'] - diff_df['ref_gps']
-        gps_diff_ts = gps_diff_ts - np.mean(gps_diff_ts[:100])
-        gps_dts = diff_df['dt']
-
-    start_mean = np.mean(gps_diff_ts[:100])
-    # start_mean = np.mean(los_gps_data2[:100])
-    logger.info("Resetting GPS data start to 0 of station 2, subtract %f" % start_mean)
-    gps_diff_ts = gps_diff_ts - start_mean
-
-    plt.figure(fignum)
-    plt.plot(gps_dts, gps_diff_ts, 'b.', label='gps data: %s' % stat1)
-
-    days_smooth = 60
-    los_gps_data_smooth = moving_average(gps_diff_ts, days_smooth)
-    plt.plot(
-        gps_dts,
-        los_gps_data_smooth,
-        'b',
-        linewidth='4',
-        # label='%d day smoothed gps data: %s' % (days_smooth, station_name))
-        label='%d day smoothed gps data: %s-%s' % (days_smooth, stat1, stat2))
-
-    insar_diff = insar_ts1 - insar_ts2
-
-    plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)
-
-    days_smooth = 5
-    insar_diff_smooth = moving_average(insar_diff, days_smooth)
-    insar_diff_smooth -= insar_diff_smooth[0]
-    plt.plot(geolist,
-             insar_diff_smooth,
-             'r',
-             label='linear %s day smoothed insar' % days_smooth,
-             linewidth=3)
-
-    # plt.ylim([-2, 2])
-    plt.ylabel('cm of cumulative LOS displacement')
-    plt.legend()
-
-    return los_gps_data1, los_gps_data2, gps_diff_ts, insar_ts1, insar_ts2, insar_diff
+    return plot_insar_gps_df(df, kind="line", **kwargs)
