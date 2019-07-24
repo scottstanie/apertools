@@ -65,7 +65,8 @@ def load_station_enu(station, start_year=START_YEAR, end_year=None, to_cm=True):
     """
     station_df = load_station_data(station, to_cm=to_cm)
 
-    enu_zeroed = station_df[['east', 'north', 'up']] - station_df[['east', 'north', 'up']].iloc[0]
+    start_val = station_df[['east', 'north', 'up']].iloc[:10].mean()
+    enu_zeroed = station_df[['east', 'north', 'up']] - start_val
     dts = station_df['dt']
     return dts, enu_zeroed
 
@@ -285,19 +286,19 @@ def plot_gps_enu(station=None, days_smooth=12, start_year=START_YEAR, end_year=N
     axes[0].plot(dts, east_cm, 'b.')
     axes[0].set_ylabel('east (cm)')
     # axes[0].plot(dts, moving_average(east_cm, days_smooth), 'r-')
-    axes[0].plot(dts, pd.Series(east_cm).rolling(days_smooth, min_periods=1).mean(), 'r-')
+    axes[0].plot(dts, pd.Series(east_cm).rolling(days_smooth, min_periods=10).mean(), 'r-')
     axes[0].grid(True)
     remove_xticks(axes[0])
 
     axes[1].plot(dts, north_cm, 'b.')
     axes[1].set_ylabel('north (cm)')
-    axes[1].plot(dts, pd.Series(north_cm).rolling(days_smooth, min_periods=1).mean(), 'r-')
+    axes[1].plot(dts, pd.Series(north_cm).rolling(days_smooth, min_periods=10).mean(), 'r-')
     axes[1].grid(True)
     remove_xticks(axes[1])
 
     axes[2].plot(dts, up_cm, 'b.')
     axes[2].set_ylabel('up (cm)')
-    axes[2].plot(dts, pd.Series(up_cm).rolling(days_smooth, min_periods=1).mean(), 'r-')
+    axes[2].plot(dts, pd.Series(up_cm).rolling(days_smooth, min_periods=10).mean(), 'r-')
     axes[2].grid(True)
     # remove_xticks(axes[2])
 
