@@ -19,6 +19,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm
+import matplotlib.dates as mdates
 
 from scipy.ndimage.filters import uniform_filter1d
 try:
@@ -287,19 +288,20 @@ def plot_gps_enu(station=None, days_smooth=12, start_year=START_YEAR, end_year=N
     fig, axes = plt.subplots(3, 1)
     axes[0].plot(dts, east_cm, 'b.')
     axes[0].set_ylabel('east (cm)')
-    axes[0].plot(dts, _moving_average(east_cm, days_smooth), 'r-')
+    # axes[0].plot(dts, moving_average(east_cm, days_smooth), 'r-')
+    axes[0].plot(dts, pd.Series(east_cm).rolling(days_smooth, min_periods=1).mean(), 'r-')
     axes[0].grid(True)
     remove_xticks(axes[0])
 
     axes[1].plot(dts, north_cm, 'b.')
     axes[1].set_ylabel('north (cm)')
-    axes[1].plot(dts, _moving_average(north_cm, days_smooth), 'r-')
+    axes[1].plot(dts, pd.Series(north_cm).rolling(days_smooth, min_periods=1).mean(), 'r-')
     axes[1].grid(True)
     remove_xticks(axes[1])
 
     axes[2].plot(dts, up_cm, 'b.')
     axes[2].set_ylabel('up (cm)')
-    axes[2].plot(dts, _moving_average(up_cm, days_smooth), 'r-')
+    axes[2].plot(dts, pd.Series(up_cm).rolling(days_smooth, min_periods=1).mean(), 'r-')
     axes[2].grid(True)
     # remove_xticks(axes[2])
 
@@ -333,7 +335,7 @@ def load_gps_los_data(
     return df['dt'], los_gps_data
 
 
-def _moving_average(arr, window_size=7):
+def moving_average(arr, window_size=7):
     """Takes a 1D array and returns the running average of same size"""
     if not window_size:
         return arr
@@ -420,8 +422,8 @@ def create_insar_df(defo_filename='deformation.h5',
     )
     insar_df = pd.DataFrame({'dts': _series_to_date(pd.Series(geolist))})
     for stat, ts in zip(station_name_list, insar_ts_list):
-        insar_df[stat + "_insar"] = _moving_average(ts, days_smooth)
-        # insar_df[stat + "_smooth_insar"] = _moving_average(ts, days_smooth)
+        insar_df[stat + "_insar"] = moving_average(ts, days_smooth)
+        # insar_df[stat + "_smooth_insar"] = moving_average(ts, days_smooth)
     return insar_df
 
 
@@ -431,8 +433,8 @@ def create_gps_los_df(geo_path, station_name_list=[], days_smooth=30):
         gps_dts, los_gps_data = load_gps_los_data(geo_path, stat)
 
         df = pd.DataFrame({"dts": _series_to_date(gps_dts)})
-        df[stat + "_gps"] = _moving_average(los_gps_data, days_smooth)
-        # df[stat + "_smooth_gps"] = _moving_average(los_gps_data, days_smooth)
+        df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
+        # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
         df_list.append(df)
 
     min_date = np.min(pd.concat([df['dts'] for df in df_list]))
@@ -456,54 +458,86 @@ def combine_gps_insar_dfs(insar_df, gps_df):
     return df.set_index("dts")
 
 
-def fit_gps_line(df):
-    """Predicts final GPS dat value by fitting line"""
-    pass
+def fit_date_series(series):
+    """Fit a line to `series` with (possibly) uneven dates as index.
+
+    Can be used to detrend, or predict final value
+
+    Returns:
+        Series: a line, equal length to arr, with same index as `series`
+    """
+    full_dates = series.index  # Keep for final series formation
+    full_date_idxs = mdates.date2num(full_dates)
+
+    series_clean = series.dropna()
+    idxs = mdates.date2num(series_clean.index)
+
+    coeffs = np.polyfit(idxs, series_clean, 1)
+    poly = np.poly1d(coeffs)
+
+    line_fit = poly(full_date_idxs)
+    return pd.Series(line_fit, index=full_dates)
 
 
-def plot_insar_gps_df(df, kind="line", **kwargs):
+def flat_std(series):
+    """Find the std dev of an Series with a linear component removed"""
+    return np.std(series - fit_date_series(series))
+
+
+def plot_insar_gps_df(df, kind="errorbar", grid=True, **kwargs):
     valid_kinds = ("line", "errbar", "slope")
-    df = df.set_index("dts")
 
     # for idx, column in enumerate(columns):
     if kind == "line":
         fig, axes = _plot_line_df(df, **kwargs)
-    elif kind == "errbar":
-        fig, axes = _plot_errbar_df(df, **kwargs)
+    elif kind == "errorbar":
+        fig, axes = _plot_errorbar_df(df, **kwargs)
     elif kind == "slope":
         fig, axes = _plot_slope_df(df, **kwargs)
     else:
         raise ValueError("kind must be in: %s" % valid_kinds)
     fig.tight_layout()
+    if grid:
+        for ax in axes.ravel():
+            ax.grid(True)
     return fig, axes
 
 
-def _final_vals(df):
-    gps_cols = [col for col in df.columns if 'gps' in col]
-    insar_cols = [col for col in df.columns if 'insar' in col]
-    final_vals = df.tail(1).squeeze()
-    final_gps_vals = [val for col, val in final_vals.items() if col in gps_cols]
-    final_insar_vals = [val for col, val in final_vals.squeeze().items() if col in insar_cols]
+def _final_vals(df, linear=True):
+    if linear:
+        final_vals = np.array([fit_date_series(df[col]).tail(1).squeeze() for col in df.columns])
+    else:
+        final_vals = df.tail(1).squeeze().values
+
+    gps_idxs = ['gps' in col for col in df.columns]
+    insar_idxs = ['insar' in col for col in df.columns]
+    gps_cols = df.columns[gps_idxs]
+    insar_cols = df.columns[insar_idxs]
+
+    final_gps_vals = final_vals[gps_idxs]
+    final_insar_vals = final_vals[insar_idxs]
     return gps_cols, insar_cols, final_gps_vals, final_insar_vals
 
 
-def _plot_errbar_df(df, **kwargs):
+def _plot_errorbar_df(df, ylims=None, **kwargs):
     # In [6]: df.std()
     # Out[6]:
     # TXKM_insar    0.053233
     # TXMH_insar    0.432821
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df)
-    gps_stds = [val for col, val in df.std().items() if col in gps_cols]
-    fig, axes = plt.subplots()
-    for idx, (final_gps, final_insar,
-              err) in enumerate(zip(final_gps_vals, final_insar_vals, gps_stds)):
-        axes.errorbar(idx, final_gps, err)
-        axes.plot(idx, final_insar, 'rx')
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df, **kwargs)
+    idxs = range(len(final_gps_vals))
+    gps_stds = [flat_std(df[col].dropna()) for col in df.columns if col in gps_cols]
+
+    fig, axes = plt.subplots(squeeze=False)
+    ax = axes[0, 0]
+    ax.errorbar(idxs, final_gps_vals, gps_stds, marker='o', lw=2, linestyle='', capsize=6)
+    ax.plot(idxs, final_insar_vals, 'rx')
 
     labels = [c.strip('_gps') for c in gps_cols]
-    print(labels, len(labels))
-    axes.set_xticks(range(len(labels)))
-    axes.set_xticklabels(labels, rotation='vertical', fontsize=12)
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation='vertical', fontsize=12)
+    if ylims is not None:
+        ax.set_ylim(ylims)
     return fig, axes
 
 
@@ -511,18 +545,19 @@ def _plot_slope_df(df, **kwargs):
     gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df)
     insar_stds = [val for col, val in df.std().items() if col in insar_cols]
 
-    fig, axes = plt.subplots()
-    axes.errorbar(final_gps_vals, final_insar_vals, yerr=insar_stds, fmt='rx')
+    fig, axes = plt.subplots(squeeze=False)
+    ax = axes[0, 0]
+    ax.errorbar(final_gps_vals, final_insar_vals, yerr=insar_stds, fmt='rx')
 
     max_val = max(np.max(final_insar_vals), np.max(final_gps_vals))
     min_val = min(np.min(final_insar_vals), np.min(final_gps_vals))
-    axes.plot(np.linspace(min_val, max_val), np.linspace(min_val, max_val), 'g')
+    ax.plot(np.linspace(min_val, max_val), np.linspace(min_val, max_val), 'g')
     return fig, axes
 
 
 def _plot_line_df(df, fig, axes, ylims=None, **kwargs):
     columns = df.columns
-    fig, axes = plt.subplots(2, len(columns) // 2, figsize=(16, 5))
+    fig, axes = plt.subplots(2, len(columns) // 2, figsize=(16, 5), squeeze=False)
 
     for idx, column in enumerate(columns):
         ax = axes.ravel()[idx]
@@ -570,7 +605,7 @@ def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_li
         plt.plot(gps_dts, los_gps_data, 'b.', label='gps data: %s' % station_name)
 
         days_smooth = 60
-        los_gps_data_smooth = _moving_average(los_gps_data, days_smooth)
+        los_gps_data_smooth = moving_average(los_gps_data, days_smooth)
         plt.plot(gps_dts,
                  los_gps_data_smooth,
                  'b',
@@ -584,7 +619,7 @@ def plot_gps_vs_insar(geo_path, defo_filename="deformation.npy", station_name_li
         plt.plot(geolist, insar_ts, 'rx', label='insar data', ms=5)
 
         days_smooth = 5
-        insar_ts_smooth = _moving_average(insar_ts, days_smooth)
+        insar_ts_smooth = moving_average(insar_ts, days_smooth)
         plt.plot(geolist,
                  insar_ts_smooth,
                  'r',
@@ -632,7 +667,7 @@ def plot_gps_vs_insar_diff(geo_path,
     plt.plot(gps_dts, gps_diff_ts, 'b.', label='gps data: %s' % stat1)
 
     days_smooth = 60
-    los_gps_data_smooth = _moving_average(gps_diff_ts, days_smooth)
+    los_gps_data_smooth = moving_average(gps_diff_ts, days_smooth)
     plt.plot(
         gps_dts,
         los_gps_data_smooth,
@@ -649,7 +684,7 @@ def plot_gps_vs_insar_diff(geo_path,
     plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)
 
     days_smooth = 5
-    insar_diff_smooth = _moving_average(insar_diff, days_smooth)
+    insar_diff_smooth = moving_average(insar_diff, days_smooth)
     insar_diff_smooth -= insar_diff_smooth[0]
     plt.plot(geolist,
              insar_diff_smooth,
@@ -708,7 +743,7 @@ def plot_all_gps_insar(geo_path,
     plt.plot(gps_dts, gps_diff_ts, 'b.', label='gps data: %s' % stat1)
 
     days_smooth = 60
-    los_gps_data_smooth = _moving_average(gps_diff_ts, days_smooth)
+    los_gps_data_smooth = moving_average(gps_diff_ts, days_smooth)
     plt.plot(
         gps_dts,
         los_gps_data_smooth,
@@ -722,7 +757,7 @@ def plot_all_gps_insar(geo_path,
     plt.plot(geolist, insar_diff, 'r', label='insar data difference', ms=5)
 
     days_smooth = 5
-    insar_diff_smooth = _moving_average(insar_diff, days_smooth)
+    insar_diff_smooth = moving_average(insar_diff, days_smooth)
     insar_diff_smooth -= insar_diff_smooth[0]
     plt.plot(geolist,
              insar_diff_smooth,
