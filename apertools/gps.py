@@ -95,7 +95,7 @@ def load_station_data(station_name,
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
     clean_df = _clean_gps_df(df, start_year, end_year)
     if to_cm:
-        logger.info("Converting %s GPS to cm" % station_name)
+        # logger.info("Converting %s GPS to cm" % station_name)
         clean_df[['east', 'north', 'up']] = 100 * clean_df[['east', 'north', 'up']]
     return clean_df
 
@@ -138,7 +138,7 @@ def stations_within_image(image_ll=None, filename=None, mask_invalid=True, gps_f
     if mask_invalid:
         for name, lon, lat in candidates:
             val = image_ll[..., lat, lon]
-            if np.isnan(val) or val == 0:
+            if np.isnan(val):  #  or val == 0: TODO: with window 1 reference, it's 0
                 continue
             else:
                 good_stations.append([name, lon, lat])
@@ -437,6 +437,8 @@ def _remove_bad_cols(df, nan_threshold=.4):
         np.array(empty_ends),
         np.array(high_pct_nan),
     ))
+    logger.info("Removing the following bad columns:")
+    logger.info(bad_cols)
 
     for col in bad_cols:
         if col not in df.columns:
@@ -648,7 +650,7 @@ def _final_vals(df, linear=True):
     if linear:
         final_vals = np.array([fit_date_series(df[col]).tail(1).squeeze() for col in df.columns])
     else:
-        final_vals = df.tail(1).squeeze().values
+        final_vals = df.tail(10).mean().values
 
     gps_idxs = ['gps' in col for col in df.columns]
     insar_idxs = ['insar' in col for col in df.columns]
