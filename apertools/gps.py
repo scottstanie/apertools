@@ -536,7 +536,7 @@ def flat_std(series):
     return np.std(series - fit_date_series(series))
 
 
-def plot_insar_gps_df(df, kind="errorbar", grid=True, **kwargs):
+def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, **kwargs):
     """Plot insar vs gps values from dataframe
 
     kinds:
@@ -560,6 +560,8 @@ def plot_insar_gps_df(df, kind="errorbar", grid=True, **kwargs):
     if grid:
         for ax in axes.ravel():
             ax.grid(True)
+
+    plt.show(block=block)
     return fig, axes
 
 
@@ -662,14 +664,19 @@ def _final_vals(df, linear=True):
     return gps_cols, insar_cols, final_gps_vals, final_insar_vals
 
 
-def _load_station_list(igrams_dir=None,
-                       defo_filename=None,
-                       defo_full_path=None,
-                       station_name_list=[]):
+def _load_stations(igrams_dir=None, defo_filename=None, defo_full_path=None):
     directory, filename, full_path = apertools.sario.get_full_path(igrams_dir, defo_filename,
                                                                    defo_full_path)
     defo_img = apertools.latlon.load_deformation_img(filename=filename, full_path=full_path)
     existing_station_tuples = stations_within_image(defo_img)
+    return existing_station_tuples
+
+
+def _load_station_list(igrams_dir=None,
+                       defo_filename=None,
+                       defo_full_path=None,
+                       station_name_list=[]):
+    existing_station_tuples = _load_stations(igrams_dir, defo_filename, defo_full_path)
     if not station_name_list:
         # Take all station names
         station_name_list = [name for name, lon, lat in existing_station_tuples]
@@ -714,3 +721,17 @@ def plot_insar_vs_gps(geo_path=None,
         # window_size=1, days_smooth_insar=5, days_smooth_gps=30):
 
     return plot_insar_gps_df(df, kind=kind, **kwargs)
+
+
+def get_mean_correlations(igrams_dir=None,
+                          defo_filename=None,
+                          defo_full_path=None,
+                          cc_filename="cc_stack.h5"):
+    existing_station_tuples = _load_stations(igrams_dir, defo_filename, defo_full_path)
+    corrs = {}
+    dem_rsc = apertools.sario.load_dem_from_h5(defo_filename)
+    with h5py.File(cc_filename) as f:
+        for name, lon, lat in existing_station_tuples:
+            row, col = apertools.latlon.latlon_to_rowcol(lat, lon, dem_rsc)
+            corrs[name] = f["mean_stack"][row, col]
+    return corrs
