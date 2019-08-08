@@ -30,6 +30,7 @@ except ImportError:
 import apertools
 import apertools.utils
 import apertools.sario
+import apertools.plotting
 from apertools.log import get_log
 
 logger = get_log()
@@ -77,17 +78,21 @@ def plot_insar_vs_gps(geo_path=None,
 
     if df is None:
         igrams_dir = os.path.join(geo_path, 'igrams')
+        df = create_df(
+            geo_path,
+            defo_filename=defo_filename,
+            # station_name_list=station_name_list,  # For now, filter given names after grabbing all
+            reference_station=reference_station,
+            **kwargs)
+        # window_size=1, days_smooth_insar=5, days_smooth_gps=30):
+    if station_name_list is not None:
         station_name_list = _load_station_list(
             igrams_dir=igrams_dir,
             defo_filename=defo_filename,
             station_name_list=station_name_list,
         )
-        df = create_df(geo_path,
-                       defo_filename=defo_filename,
-                       station_name_list=station_name_list,
-                       reference_station=reference_station,
-                       **kwargs)
-        # window_size=1, days_smooth_insar=5, days_smooth_gps=30):
+        select_cols = [col for col in df.columns if any(name in col for name in station_name_list)]
+        df = df[select_cols]
 
     return plot_insar_gps_df(df, kind=kind, **kwargs)
 
@@ -583,6 +588,7 @@ def fit_date_series(series):
     Returns:
         Series: a line, equal length to arr, with same index as `series`
     """
+    # TODO: check that subtracting first item doesn't change it
     full_dates = series.index  # Keep for final series formation
     full_date_idxs = mdates.date2num(full_dates)
 
@@ -602,7 +608,7 @@ def flat_std(series):
 
 
 def _plot_errorbar_df(df, ylim=None, **kwargs):
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df, **kwargs)
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = final_vals(df, **kwargs)
     gps_stds = [flat_std(df[col].dropna()) for col in df.columns if col in gps_cols]
 
     fig, axes = plt.subplots(squeeze=False)
@@ -621,7 +627,7 @@ def _plot_errorbar_df(df, ylim=None, **kwargs):
 
 
 def _plot_slope_df(df, **kwargs):
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df)
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = final_vals(df)
     insar_stds = [flat_std(df[col].dropna()) for col in df.columns if col in insar_cols]
 
     fig, axes = plt.subplots(squeeze=False)
@@ -692,7 +698,7 @@ def _get_gps_insar_cols(df):
     return gps_idxs, gps_cols, insar_idxs, insar_cols
 
 
-def _final_vals(df, linear=True, as_df=False):
+def final_vals(df, linear=True, as_df=False):
     if linear:
         final_vals = np.array([fit_date_series(df[col]).tail(1).squeeze() for col in df.columns])
     else:
@@ -759,31 +765,40 @@ def create_station_location_df(timeseries_df=None, station_name_list=None):
     return pd.DataFrame(index=station_name_list, data={'lon': lons, 'lat': lats})
 
 
-def plot_residuals_by_loc(df, which='gps', title=None, **plot_kwargs):
+def plot_residuals_by_loc(df, which='diff', title=None, fig=None, ax=None, **plot_kwargs):
     """Takes a timeseries df and plots the final values at their lat/lons
 
     df should be the timeseries df with "dts" as index created by create_df
-    `which` argument is "gps" or "insar"
+    `which` argument is "diff","gps","insar", where 'diff' takes (gps - insar)
     """
-    if which not in ('gps', 'insar'):
-        raise ValueError("argument `which` must be 'gps' or 'insar'")
 
-    df_final_vals = _final_vals(df, as_df=True)
+    def _build_labels(df_merged, values):
+        """Inclue station name and final value in label"""
+        return ["{}:\n{:.2f}".format(name, val) for name, val in zip(df_merged.index, values)]
+
+    if which not in ('gps', 'insar', 'diff'):
+        raise ValueError("argument `which` must in ('diff','gps','insar')")
+
+    df_final_vals = final_vals(df, as_df=True)
     df_locations = create_station_location_df(df)
     df_merged = df_locations.join(df_final_vals)
 
     xs = df_merged['lon']
     ys = df_merged['lat']
-    colors = df_merged[which]
+    if which == 'diff':
+        values = df_merged['gps'] - df_merged['insar']
+    else:
+        values = df_merged[which]
 
-    fig, ax = plt.subplots()
-    axim = ax.scatter(xs, ys, c=colors, **plot_kwargs)
+    fig, ax = apertools.plotting.get_fig_ax(fig, ax)
+
+    axim = ax.scatter(xs, ys, c=values, zorder=10, **plot_kwargs)
     fig.colorbar(axim)
     if title is None:
         title = "Final values of %s by location" % which
     ax.set_title(title)
 
-    labels = df_merged.index  # Use station name as labels
+    labels = _build_labels(df_merged, values)
     for label, x, y in zip(labels, xs, ys):
 
         ax.annotate(
@@ -791,10 +806,10 @@ def plot_residuals_by_loc(df, which='gps', title=None, **plot_kwargs):
             xy=(x, y),
             xytext=(-10, 10),
             textcoords='offset points',
-            ha='right',
-            va='bottom',
+            # ha='right',
+            # va='bottom',
             bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
-            arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'),
+            # arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'),
         )
     return fig, ax
 

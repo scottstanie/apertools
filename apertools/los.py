@@ -43,7 +43,7 @@ def find_enu_coeffs(lon, lat, geo_path=None, verbose=False):
     enu_coeffs = los_to_enu(los_file)
 
     # Note: vectors are from sat to ground, so uplift is negative
-    return enu_coeffs[0]
+    return -1 * enu_coeffs[0]
 
 
 def _find_db_path(geo_path):
@@ -54,7 +54,6 @@ def _find_db_path(geo_path):
         return geo_path
 
 
-# TODO: why is thi different?? do i need -1 or not
 def find_east_up_coeffs(geo_path):
     """Find the coefficients for east and up components for LOS vector at midpoint of scene
 

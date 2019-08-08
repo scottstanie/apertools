@@ -160,6 +160,18 @@ def make_shifted_cmap(img=None, vmax=None, vmin=None, cmap_name='seismic', num_l
     return shifted_color_map(cmap_name, midpoint=midpoint, num_levels=num_levels)
 
 
+def get_fig_ax(fig, ax):
+    """Handle passing None to either fig or ax by creating new, returns both"""
+    if not fig and not ax:
+        fig = plt.figure()
+        ax = fig.gca()
+    elif ax and not fig:
+        fig = ax.figure
+    elif fig and not ax:
+        ax = fig.gca()
+    return fig, ax
+
+
 def plot_image_shifted(img,
                        fig=None,
                        ax=None,
@@ -198,6 +210,7 @@ def plot_image_shifted(img,
     else:
         extent = (0, ncols, nrows, 0)
 
+    fig, ax = get_fig_ax(fig, ax)
     if not fig and not ax:
         fig = plt.figure()
         ax = fig.gca()
@@ -472,11 +485,7 @@ def save_paper_figure(fig, fname, axis_off=True):
 def plot_shapefile(filename, fig=None, ax=None):
     # Credit: https://gis.stackexchange.com/a/152331
     import shapefile
-    if not ax:
-        if not fig:
-            fig, ax = plt.subplots()
-        else:
-            ax = fig.gca()
+    fig, ax = get_fig_ax(fig, ax)
 
     with shapefile.Reader(filename) as sf:
         for shape in sf.shapeRecords():
