@@ -30,6 +30,7 @@ except ImportError:
 import apertools
 import apertools.utils
 import apertools.sario
+import apertools.plotting
 from apertools.log import get_log
 
 logger = get_log()
@@ -54,6 +55,75 @@ def _get_gps_dir():
 
 
 GPS_DIR = _get_gps_dir()
+
+
+def plot_insar_vs_gps(geo_path=None,
+                      defo_filename="deformation.npy",
+                      station_name_list=None,
+                      df=None,
+                      kind="line",
+                      reference_station=None,
+                      **kwargs):
+    """Make a GPS vs InSAR plot.
+
+    kinds:
+        line: plot out full data for each station
+        errorbar: predict cumulative value for each station with error bars
+        slope: plot gps value vs predicted insar (with 1-1 slope being perfect),
+            gives insar error bars
+
+    If reference_station is provided, all columns are centered to that series
+        with gps subtracting the gps, insar subtracting the insar
+    """
+
+    if df is None:
+        igrams_dir = os.path.join(geo_path, 'igrams')
+        df = create_df(
+            geo_path,
+            defo_filename=defo_filename,
+            # station_name_list=station_name_list,  # For now, filter given names after grabbing all
+            reference_station=reference_station,
+            **kwargs)
+        # window_size=1, days_smooth_insar=5, days_smooth_gps=30):
+    if station_name_list is not None:
+        station_name_list = _load_station_list(
+            igrams_dir=igrams_dir,
+            defo_filename=defo_filename,
+            station_name_list=station_name_list,
+        )
+        select_cols = [col for col in df.columns if any(name in col for name in station_name_list)]
+        df = df[select_cols]
+
+    return plot_insar_gps_df(df, kind=kind, **kwargs)
+
+
+def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, **kwargs):
+    """Plot insar vs gps values from dataframe
+
+    kinds:
+        line: plot out full data for each station
+        errorbar: predict cumulative value for each station with error bars
+        slope: plot gps value vs predicted insar (with 1-1 slope being perfect),
+            gives insar error bars
+    """
+    valid_kinds = ("line", "errorbar", "slope")
+
+    # for idx, column in enumerate(columns):
+    if kind == "errorbar":
+        fig, axes = _plot_errorbar_df(df, **kwargs)
+    elif kind == "line":
+        fig, axes = _plot_line_df(df, **kwargs)
+    elif kind == "slope":
+        fig, axes = _plot_slope_df(df, **kwargs)
+    else:
+        raise ValueError("kind must be in: %s" % valid_kinds)
+    fig.tight_layout()
+    if grid:
+        for ax in axes.ravel():
+            ax.grid(True)
+
+    plt.show(block=block)
+    return fig, axes
 
 
 def load_station_enu(station, start_year=START_YEAR, end_year=None, to_cm=True):
@@ -138,7 +208,7 @@ def stations_within_image(image_ll=None, filename=None, mask_invalid=True, gps_f
     if mask_invalid:
         for name, lon, lat in candidates:
             val = image_ll[..., lat, lon]
-            if np.isnan(val):  #  or val == 0: TODO: with window 1 reference, it's 0
+            if np.isnan(val):  # or val == 0: TODO: with window 1 reference, it's 0
                 continue
             else:
                 good_stations.append([name, lon, lat])
@@ -518,6 +588,7 @@ def fit_date_series(series):
     Returns:
         Series: a line, equal length to arr, with same index as `series`
     """
+    # TODO: check that subtracting first item doesn't change it
     full_dates = series.index  # Keep for final series formation
     full_date_idxs = mdates.date2num(full_dates)
 
@@ -536,42 +607,13 @@ def flat_std(series):
     return np.std(series - fit_date_series(series))
 
 
-def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, **kwargs):
-    """Plot insar vs gps values from dataframe
-
-    kinds:
-        line: plot out full data for each station
-        errorbar: predict cumulative value for each station with error bars
-        slope: plot gps value vs predicted insar (with 1-1 slope being perfect),
-            gives insar error bars
-    """
-    valid_kinds = ("line", "errorbar", "slope")
-
-    # for idx, column in enumerate(columns):
-    if kind == "errorbar":
-        fig, axes = _plot_errorbar_df(df, **kwargs)
-    elif kind == "line":
-        fig, axes = _plot_line_df(df, **kwargs)
-    elif kind == "slope":
-        fig, axes = _plot_slope_df(df, **kwargs)
-    else:
-        raise ValueError("kind must be in: %s" % valid_kinds)
-    fig.tight_layout()
-    if grid:
-        for ax in axes.ravel():
-            ax.grid(True)
-
-    plt.show(block=block)
-    return fig, axes
-
-
 def _plot_errorbar_df(df, ylim=None, **kwargs):
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df, **kwargs)
-    idxs = range(len(final_gps_vals))
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = final_vals(df, **kwargs)
     gps_stds = [flat_std(df[col].dropna()) for col in df.columns if col in gps_cols]
 
     fig, axes = plt.subplots(squeeze=False)
     ax = axes[0, 0]
+    idxs = range(len(final_gps_vals))
     ax.errorbar(idxs, final_gps_vals, gps_stds, marker='o', lw=2, linestyle='', capsize=6)
     ax.plot(idxs, final_insar_vals, 'rx')
 
@@ -585,7 +627,7 @@ def _plot_errorbar_df(df, ylim=None, **kwargs):
 
 
 def _plot_slope_df(df, **kwargs):
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = _final_vals(df)
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = final_vals(df)
     insar_stds = [flat_std(df[col].dropna()) for col in df.columns if col in insar_cols]
 
     fig, axes = plt.subplots(squeeze=False)
@@ -648,20 +690,33 @@ def _plot_line_df(df, ylim=None, share=True, days_smooth_gps=None, days_smooth_i
     return fig, axes
 
 
-def _final_vals(df, linear=True):
+def _get_gps_insar_cols(df):
+    gps_idxs = ['gps' in col for col in df.columns]
+    insar_idxs = ['insar' in col for col in df.columns]
+    gps_cols = df.columns[gps_idxs]
+    insar_cols = df.columns[insar_idxs]
+    return gps_idxs, gps_cols, insar_idxs, insar_cols
+
+
+def final_vals(df, linear=True, as_df=False):
     if linear:
         final_vals = np.array([fit_date_series(df[col]).tail(1).squeeze() for col in df.columns])
     else:
         final_vals = df.tail(10).mean().values
 
-    gps_idxs = ['gps' in col for col in df.columns]
-    insar_idxs = ['insar' in col for col in df.columns]
-    gps_cols = df.columns[gps_idxs]
-    insar_cols = df.columns[insar_idxs]
+    gps_idxs, gps_cols, insar_idxs, insar_cols = _get_gps_insar_cols(df)
 
     final_gps_vals = final_vals[gps_idxs]
     final_insar_vals = final_vals[insar_idxs]
-    return gps_cols, insar_cols, final_gps_vals, final_insar_vals
+    if not as_df:
+        return gps_cols, insar_cols, final_gps_vals, final_insar_vals
+    else:
+        final_val_station_order = [s.split('_')[0] for s in gps_cols]
+        return pd.DataFrame(index=final_val_station_order,
+                            data={
+                                'gps': final_gps_vals,
+                                'insar': final_insar_vals
+                            })
 
 
 def _load_stations(igrams_dir=None, defo_filename=None, defo_full_path=None):
@@ -687,40 +742,76 @@ def _load_station_list(igrams_dir=None,
     return sorted(station_name_list, key=lambda name: station_name_list.index(name))
 
 
-def plot_insar_vs_gps(geo_path=None,
-                      defo_filename="deformation.npy",
-                      station_name_list=None,
-                      df=None,
-                      kind="line",
-                      reference_station=None,
-                      **kwargs):
-    """Make a GPS vs InSAR plot.
+def _stations_from_df(df):
+    """Takes df with columns ['NMHB_insar', 'TXAD_insar',...], returns unique station names"""
+    return list(set(map(lambda s: s.split('_')[0], df.columns)))
 
-    kinds:
-        line: plot out full data for each station
-        errorbar: predict cumulative value for each station with error bars
-        slope: plot gps value vs predicted insar (with 1-1 slope being perfect),
-            gives insar error bars
 
-    If reference_station is provided, all columns are centered to that series
-        with gps subtracting the gps, insar subtracting the insar
+def create_station_location_df(timeseries_df=None, station_name_list=None):
+    """Start with a list of station names or a df
+    with index of `dts` and columns as ['NMHB_gps', 'TXAD_insar'...],
+    Create a dataframe like
+
+    station_name |     lon    |   lat
+    ------------------------------------
+     TXKM        |  -103.108  | 31.8426
+
+    Index is station_name, so lon/lat can be accessed with `df.loc['TXKM']`
+    """
+    if station_name_list is None:
+        station_name_list = _stations_from_df(timeseries_df)
+    station_lonlats = [station_lonlat(name) for name in station_name_list]
+    lons, lats = zip(*station_lonlats)
+    return pd.DataFrame(index=station_name_list, data={'lon': lons, 'lat': lats})
+
+
+def plot_residuals_by_loc(df, which='diff', title=None, fig=None, ax=None, **plot_kwargs):
+    """Takes a timeseries df and plots the final values at their lat/lons
+
+    df should be the timeseries df with "dts" as index created by create_df
+    `which` argument is "diff","gps","insar", where 'diff' takes (gps - insar)
     """
 
-    if df is None:
-        igrams_dir = os.path.join(geo_path, 'igrams')
-        station_name_list = _load_station_list(
-            igrams_dir=igrams_dir,
-            defo_filename=defo_filename,
-            station_name_list=station_name_list,
-        )
-        df = create_df(geo_path,
-                       defo_filename=defo_filename,
-                       station_name_list=station_name_list,
-                       reference_station=reference_station,
-                       **kwargs)
-        # window_size=1, days_smooth_insar=5, days_smooth_gps=30):
+    def _build_labels(df_merged, values):
+        """Inclue station name and final value in label"""
+        return ["{}:\n{:.2f}".format(name, val) for name, val in zip(df_merged.index, values)]
 
-    return plot_insar_gps_df(df, kind=kind, **kwargs)
+    if which not in ('gps', 'insar', 'diff'):
+        raise ValueError("argument `which` must in ('diff','gps','insar')")
+
+    df_final_vals = final_vals(df, as_df=True)
+    df_locations = create_station_location_df(df)
+    df_merged = df_locations.join(df_final_vals)
+
+    xs = df_merged['lon']
+    ys = df_merged['lat']
+    if which == 'diff':
+        values = df_merged['gps'] - df_merged['insar']
+    else:
+        values = df_merged[which]
+
+    fig, ax = apertools.plotting.get_fig_ax(fig, ax)
+
+    axim = ax.scatter(xs, ys, c=values, zorder=10, **plot_kwargs)
+    fig.colorbar(axim)
+    if title is None:
+        title = "Final values of %s by location" % which
+    ax.set_title(title)
+
+    labels = _build_labels(df_merged, values)
+    for label, x, y in zip(labels, xs, ys):
+
+        ax.annotate(
+            label,
+            xy=(x, y),
+            xytext=(-10, 10),
+            textcoords='offset points',
+            # ha='right',
+            # va='bottom',
+            bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+            # arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'),
+        )
+    return fig, ax
 
 
 def get_mean_correlations(igrams_dir=None,
