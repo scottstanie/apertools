@@ -23,6 +23,12 @@ import apertools.parsers
 from apertools.log import get_log
 logger = get_log()
 
+# 2to3 compat.
+try:
+    basestring
+except NameError:
+    basestring = str
+
 FLOAT_32_LE = np.dtype('<f4')
 COMPLEX_64_LE = np.dtype('<c8')
 
@@ -270,7 +276,7 @@ def _assert_valid_size(data, cols):
     assert math.modf(float(len(data)) / cols)[0] == 0, error_str
 
 
-def load_real(filename, ann_info=None, rsc_data=None):
+def load_real(filename, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
     """Reads in real 4-byte per pixel files""
 
     Valid filetypes: See sario.REAL_EXTS
@@ -284,13 +290,13 @@ def load_real(filename, ann_info=None, rsc_data=None):
         ndarray: float32 values for the real 2D matrix
 
     """
-    data = np.fromfile(filename, FLOAT_32_LE)
+    data = np.fromfile(filename, dtype)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
     return data.reshape([-1, cols])
 
 
-def load_complex(filename, ann_info=None, rsc_data=None):
+def load_complex(filename, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
     """Combines real and imaginary values from a filename to make complex image
 
     Valid filetypes: See sario.COMPLEX_EXTS
@@ -303,7 +309,7 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     Returns:
         ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
-    data = np.fromfile(filename, FLOAT_32_LE)
+    data = np.fromfile(filename, dtype)
     rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
 
@@ -311,7 +317,12 @@ def load_complex(filename, ann_info=None, rsc_data=None):
     return combine_real_imag(real_data, imag_data)
 
 
-def load_stacked_img(filename, rsc_data=None, ann_info=None, return_amp=False, **kwargs):
+def load_stacked_img(filename,
+                     rsc_data=None,
+                     ann_info=None,
+                     return_amp=False,
+                     dtype=FLOAT_32_LE,
+                     **kwargs):
     """Helper function to load .unw and .cor files
 
     Format is two stacked matrices:
@@ -345,7 +356,7 @@ def load_stacked_img(filename, rsc_data=None, ann_info=None, return_amp=False, *
     print(np.max(phase), np.min(phase))
     # Output: (8.011558, -2.6779003)
     """
-    data = np.fromfile(filename, FLOAT_32_LE)
+    data = np.fromfile(filename, dtype)
     rows, cols = _get_file_rows_cols(rsc_data=rsc_data, ann_info=ann_info)
     _assert_valid_size(data, cols)
 
@@ -585,6 +596,9 @@ def parse_geolist_strings(geolist_str):
 
 
 def parse_intlist_strings(date_pairs):
+    # If we passed filename YYYYmmdd_YYYYmmdd.int
+    if isinstance(date_pairs, basestring):
+        date_pairs = [date_pairs.strip('.int').split('_')]
     return [(_parse(early), _parse(late)) for early, late in date_pairs]
 
 
