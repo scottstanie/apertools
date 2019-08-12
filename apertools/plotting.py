@@ -345,6 +345,7 @@ def view_stack(
         plt.legend(legend_entries, loc=legend_loc)
         x_axis_str = "SAR image date" if geolist is not None else "Image number"
         plt.xlabel(x_axis_str)
+        timefig.autofmt_xdate()
         plt.ylabel(label)
         plt.show()
 
@@ -469,7 +470,7 @@ def save_paper_figure(fig, fname, axis_off=True):
     fig.savefig(fname, bbox_inches='tight', transparent=True, dpi=300)
 
 
-def plot_shapefile(filename, fig=None, ax=None):
+def plot_shapefile(filename, fig=None, ax=None, z=None):
     # Credit: https://gis.stackexchange.com/a/152331
     import shapefile
     if not ax:
@@ -482,5 +483,9 @@ def plot_shapefile(filename, fig=None, ax=None):
         for shape in sf.shapeRecords():
             x = [i[0] for i in shape.shape.points[:]]
             y = [i[1] for i in shape.shape.points[:]]
-            ax.plot(x, y)
+            if z is not None:
+                ax.plot3D(x, y, z, 'b')
+            else:
+                ax.plot(x, y, 'b')
+
         plt.show()
