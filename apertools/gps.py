@@ -76,9 +76,9 @@ def plot_insar_vs_gps(geo_path=None,
         with gps subtracting the gps, insar subtracting the insar
     """
 
+    igrams_dir = os.path.join(geo_path, 'igrams')
     if df is None:
-        igrams_dir = os.path.join(geo_path, 'igrams')
-        df = create_df(
+        df = create_insar_gps_df(
             geo_path,
             defo_filename=defo_filename,
             # station_name_list=station_name_list,  # For now, filter given names after grabbing all
@@ -86,15 +86,19 @@ def plot_insar_vs_gps(geo_path=None,
             **kwargs)
         # window_size=1, days_smooth_insar=5, days_smooth_gps=30):
     if station_name_list is not None:
-        station_name_list = _load_station_list(
-            igrams_dir=igrams_dir,
-            defo_filename=defo_filename,
-            station_name_list=station_name_list,
-        )
-        select_cols = [col for col in df.columns if any(name in col for name in station_name_list)]
-        df = df[select_cols]
+        df = _filter_df_by_stations(df, station_name_list, igrams_dir, defo_filename)
 
     return plot_insar_gps_df(df, kind=kind, **kwargs)
+
+
+def _filter_df_by_stations(df, station_name_list, igrams_dir, defo_filename):
+    station_name_list = _load_station_list(
+        igrams_dir=igrams_dir,
+        defo_filename=defo_filename,
+        station_name_list=station_name_list,
+    )
+    select_cols = [col for col in df.columns if any(name in col for name in station_name_list)]
+    return df[select_cols]
 
 
 def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, **kwargs):
@@ -465,14 +469,14 @@ def _series_to_date(series):
     return pd.to_datetime(series).apply(lambda row: row.date())
 
 
-def create_df(geo_path,
-              defo_filename='deformation.h5',
-              station_name_list=[],
-              reference_station=None,
-              window_size=1,
-              days_smooth_insar=None,
-              days_smooth_gps=None,
-              **kwargs):
+def create_insar_gps_df(geo_path,
+                        defo_filename='deformation.h5',
+                        station_name_list=[],
+                        reference_station=None,
+                        window_size=1,
+                        days_smooth_insar=None,
+                        days_smooth_gps=None,
+                        **kwargs):
     """Set days_smooth to None or 0 to avoid any data smoothing
 
     If refernce station is specified, all timeseries will subtract
@@ -580,6 +584,67 @@ def combine_insar_gps_dfs(insar_df, gps_df):
     return df.set_index("dts")
 
 
+def create_gps_enu_df(station_name_list=None,
+                      defo_filename=None,
+                      igrams_dir=None,
+                      start_year=START_YEAR,
+                      end_year=None,
+                      days_smooth=None,
+                      to_cm=True):
+    if not station_name_list:
+        station_name_list = _load_station_list(
+            igrams_dir=igrams_dir,
+            defo_filename=defo_filename,
+            station_name_list=station_name_list,
+        )
+
+    df_list = []
+    for station in station_name_list:
+        dts, enu_df = load_station_enu(station,
+                                       start_year=start_year,
+                                       end_year=end_year,
+                                       to_cm=to_cm)
+
+        enu_df["dts"] = _series_to_date(dts)
+        # Add station name to columns for post-merge identification
+        mapper = {
+            direction: "{}_{}".format(station, direction)
+            for direction in ("east", "north", "up")
+        }
+        enu_df.rename(mapper, inplace=True, axis=1)
+        df_list.append(enu_df)
+
+    min_date = np.min(pd.concat([df['dts'] for df in df_list]))
+    max_date = np.max(pd.concat([df['dts'] for df in df_list]))
+
+    # Now merge together based on uneven time data
+    enu_df = pd.DataFrame({"dts": pd.date_range(start=min_date, end=max_date).date})
+    for df in df_list:
+        enu_df = pd.merge(enu_df, df, on="dts", how="left")
+
+    enu_df = enu_df.set_index("dts")
+    # Drop empty columns or no data for last 14 days
+    bad_cols = enu_df.columns[enu_df.count() == 0]
+    bad_cols = bad_cols.append(enu_df.columns[enu_df.tail(14).mean().isna()])
+    for col in np.unique(bad_cols):
+        logger.info("Dropping %s", col)
+        enu_df.drop(col, axis=1, inplace=True)
+
+    return enu_df
+
+
+def get_final_east_values(east_df):
+    stations, vals = [], []
+
+    direc = None
+    for column, val in east_df.tail(14).mean().items():
+        station, d = column.split("_")
+        direc = d
+        stations.append(station)
+        vals.append(val)
+    return pd.DataFrame(index=stations, data={direc: vals})
+
+
 def fit_date_series(series):
     """Fit a line to `series` with (possibly) uneven dates as index.
 
@@ -608,7 +673,8 @@ def flat_std(series):
 
 
 def _plot_errorbar_df(df, ylim=None, **kwargs):
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = final_vals(df, **kwargs)
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = get_final_gps_insar_values(
+        df, **kwargs)
     gps_stds = [flat_std(df[col].dropna()) for col in df.columns if col in gps_cols]
 
     fig, axes = plt.subplots(squeeze=False)
@@ -627,7 +693,7 @@ def _plot_errorbar_df(df, ylim=None, **kwargs):
 
 
 def _plot_slope_df(df, **kwargs):
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = final_vals(df)
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = get_final_gps_insar_values(df)
     insar_stds = [flat_std(df[col].dropna()) for col in df.columns if col in insar_cols]
 
     fig, axes = plt.subplots(squeeze=False)
@@ -698,16 +764,20 @@ def _get_gps_insar_cols(df):
     return gps_idxs, gps_cols, insar_idxs, insar_cols
 
 
-def final_vals(df, linear=True, as_df=False):
+def _fit_line_to_dates(df):
+    return np.array([fit_date_series(df[col]).tail(1).squeeze() for col in df.columns])
+
+
+def get_final_gps_insar_values(df, linear=True, as_df=False):
     if linear:
-        final_vals = np.array([fit_date_series(df[col]).tail(1).squeeze() for col in df.columns])
+        final_val_arr = _fit_line_to_dates(df)
     else:
-        final_vals = df.tail(10).mean().values
+        final_val_arr = df.tail(10).mean().values
 
     gps_idxs, gps_cols, insar_idxs, insar_cols = _get_gps_insar_cols(df)
 
-    final_gps_vals = final_vals[gps_idxs]
-    final_insar_vals = final_vals[insar_idxs]
+    final_gps_vals = final_val_arr[gps_idxs]
+    final_insar_vals = final_val_arr[insar_idxs]
     if not as_df:
         return gps_cols, insar_cols, final_gps_vals, final_insar_vals
     else:
@@ -765,10 +835,16 @@ def create_station_location_df(timeseries_df=None, station_name_list=None):
     return pd.DataFrame(index=station_name_list, data={'lon': lons, 'lat': lats})
 
 
-def plot_residuals_by_loc(df, which='diff', title=None, fig=None, ax=None, **plot_kwargs):
+def plot_residuals_by_loc(df,
+                          which='diff',
+                          title=None,
+                          fig=None,
+                          ax=None,
+                          plot_scatter=True,
+                          **plot_kwargs):
     """Takes a timeseries df and plots the final values at their lat/lons
 
-    df should be the timeseries df with "dts" as index created by create_df
+    df should be the timeseries df with "dts" as index created by create_insar_gps_df
     `which` argument is "diff","gps","insar", where 'diff' takes (gps - insar)
     """
 
@@ -779,7 +855,7 @@ def plot_residuals_by_loc(df, which='diff', title=None, fig=None, ax=None, **plo
     if which not in ('gps', 'insar', 'diff'):
         raise ValueError("argument `which` must in ('diff','gps','insar')")
 
-    df_final_vals = final_vals(df, as_df=True)
+    df_final_vals = get_final_gps_insar_values(df, as_df=True)
     df_locations = create_station_location_df(df)
     df_merged = df_locations.join(df_final_vals)
 
@@ -790,15 +866,36 @@ def plot_residuals_by_loc(df, which='diff', title=None, fig=None, ax=None, **plo
     else:
         values = df_merged[which]
 
-    fig, ax = apertools.plotting.get_fig_ax(fig, ax)
-
-    axim = ax.scatter(xs, ys, c=values, zorder=10, **plot_kwargs)
-    fig.colorbar(axim)
+    labels = _build_labels(df_merged, values)
     if title is None:
         title = "Final values of %s by location" % which
-    ax.set_title(title)
+    fig, ax = _plot_latlon_with_labels(xs,
+                                       ys,
+                                       values,
+                                       labels,
+                                       title="",
+                                       fig=fig,
+                                       ax=ax,
+                                       plot_scatter=plot_scatter,
+                                       **plot_kwargs)
+    return df_merged, fig, ax
 
-    labels = _build_labels(df_merged, values)
+
+def _plot_latlon_with_labels(xs,
+                             ys,
+                             values,
+                             labels,
+                             title="",
+                             fig=None,
+                             ax=None,
+                             plot_scatter=True,
+                             **plot_kwargs):
+    fig, ax = apertools.plotting.get_fig_ax(fig, ax)
+
+    if plot_scatter:
+        axim = ax.scatter(xs, ys, c=values, zorder=10, **plot_kwargs)
+        fig.colorbar(axim)
+
     for label, x, y in zip(labels, xs, ys):
 
         ax.annotate(
@@ -811,6 +908,7 @@ def plot_residuals_by_loc(df, which='diff', title=None, fig=None, ax=None, **plo
             bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
             # arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'),
         )
+    ax.set_title(title)
     return fig, ax
 
 
