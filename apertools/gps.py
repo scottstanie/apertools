@@ -137,7 +137,7 @@ def load_station_enu(station, start_year=START_YEAR, end_year=None, to_cm=True):
     Will scale to cm by default, and center the first data point
     to 0
     """
-    station_df = load_station_data(station, to_cm=to_cm)
+    station_df = load_station_data(station, to_cm=to_cm, start_year=start_year, end_year=end_year)
 
     start_val = station_df[['east', 'north', 'up']].iloc[:10].mean()
     enu_zeroed = station_df[['east', 'north', 'up']] - start_val
@@ -174,10 +174,11 @@ def load_station_data(station_name,
     return clean_df
 
 
-def _clean_gps_df(df, start_year, end_year=None):
+def _clean_gps_df(df, start_year=None, end_year=None):
     df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
 
-    df_ranged = df[df['dt'] >= datetime.datetime(start_year, 1, 1)]
+    if start_year:
+        df_ranged = df[df['dt'] >= datetime.datetime(start_year, 1, 1)]
     if end_year:
         df_ranged = df_ranged[df_ranged['dt'] <= datetime.datetime(end_year, 1, 1)]
     df_enu = df_ranged[['dt', '__east(m)', '_north(m)', '____up(m)']]
@@ -498,19 +499,23 @@ def create_insar_gps_df(geo_path,
     return _remove_bad_cols(df)
 
 
-def _remove_bad_cols(df, nan_threshold=.4):
-    """Drops columns that are all NaNs, or where GPS doesn't cover whole period"""
+def _find_bad_cols(df, nan_threshold):
     empty_starts = df.columns[df.head(10).isna().all()]
     empty_ends = df.columns[df.tail(10).isna().all()]
     nan_pcts = df.isna().sum() / len(df)
     high_pct_nan = df.columns[nan_pcts > nan_threshold]
     high_pct_nan = [c for c in high_pct_nan if 'gps' in c]  # Ignore all the insar nans
 
-    bad_cols = np.concatenate((
+    return np.concatenate((
         np.array(empty_starts),
         np.array(empty_ends),
         np.array(high_pct_nan),
     ))
+
+
+def _remove_bad_cols(df, nan_threshold=.4):
+    """Drops columns that are all NaNs, or where GPS doesn't cover whole period"""
+    bad_cols = _find_bad_cols(df, nan_threshold)
     logger.info("Removing the following bad columns:")
     logger.info(bad_cols)
 
@@ -623,9 +628,9 @@ def create_gps_enu_df(station_name_list=None,
         enu_df = pd.merge(enu_df, df, on="dts", how="left")
 
     enu_df = enu_df.set_index("dts")
+    nan_thresh = .8
     # Drop empty columns or no data for last 14 days
-    bad_cols = enu_df.columns[enu_df.count() == 0]
-    bad_cols = bad_cols.append(enu_df.columns[enu_df.tail(14).mean().isna()])
+    bad_cols = _find_bad_cols(enu_df, nan_thresh)
     for col in np.unique(bad_cols):
         logger.info("Dropping %s", col)
         enu_df.drop(col, axis=1, inplace=True)
@@ -910,6 +915,48 @@ def _plot_latlon_with_labels(xs,
         )
     ax.set_title(title)
     return fig, ax
+
+
+def plot_gps_east_by_loc(defo_filename,
+                         igrams_dir,
+                         start_year=START_YEAR,
+                         end_year=None,
+                         cmap_name="seismic_r",
+                         **plot_kwargs):
+    enu_df = create_gps_enu_df(
+        defo_filename=defo_filename,
+        igrams_dir=igrams_dir,
+        end_year=end_year,
+        start_year=start_year,
+    )
+    east_cols = [col for col in enu_df if "east" in col]
+    east_df = enu_df[east_cols]
+
+    df_locations = create_station_location_df(east_df)
+    df_final_vals = get_final_east_values(east_df)
+    df_merged = df_locations.join(df_final_vals)
+
+    labels = [
+        "{}: {:.2f}".format(stat, val) for stat, val in zip(df_merged.index, df_merged['east'])
+    ]
+    xs = df_merged['lon']
+    ys = df_merged['lat']
+    vals = df_merged['east']
+    # Note: reversed for ascending path so that red = west movement = toward satellite
+    cmap = apertools.plotting.make_shifted_cmap(cmap_name=cmap_name,
+                                                vmax=vals.max(),
+                                                vmin=vals.min())
+
+    first_date, last_date = east_df.index[0], east_df.index[-1]
+    title = "east GPS movement from {} to {}".format(first_date, last_date)
+    fig, axes = _plot_latlon_with_labels(xs,
+                                         ys,
+                                         vals,
+                                         labels,
+                                         title=title,
+                                         cmap=cmap,
+                                         **plot_kwargs)
+    return df_merged, fig, axes
 
 
 def get_mean_correlations(igrams_dir=None,
