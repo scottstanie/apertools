@@ -12,6 +12,7 @@ Note: ^^ This file is stored in the `STATION_LLH_FILE`
 """
 from __future__ import division, print_function
 import os
+import difflib  # For station name misspelling checks
 import datetime
 import requests
 import h5py
@@ -295,6 +296,9 @@ def read_station_llas(header=None, filename=None):
 def station_lonlat(station_name):
     """Return the (lon, lat) of a `station_name`"""
     df = read_station_llas()
+    if station_name not in df['name'].values:
+        closest_names = difflib.get_close_matches(station_name, df['name'], n=5)
+        raise ValueError("No station named %s found. Closest: %s" % (station_name, closest_names))
     name, lat, lon, alt = df[df['name'] == station_name].iloc[0]
     return lon, lat
 
@@ -840,6 +844,21 @@ def create_station_location_df(timeseries_df=None, station_name_list=None):
     return pd.DataFrame(index=station_name_list, data={'lon': lons, 'lat': lats})
 
 
+def _get_residuals(df, which):
+    if which not in ('gps', 'insar', 'diff'):
+        raise ValueError("argument `which` must in ('diff','gps','insar')")
+
+    df_final_vals = get_final_gps_insar_values(df, as_df=True)
+    df_locations = create_station_location_df(df)
+    df_merged = df_locations.join(df_final_vals)
+
+    if which == 'diff':
+        values = df_merged['gps'] - df_merged['insar']
+    else:
+        values = df_merged[which]
+    return df_merged, values
+
+
 def plot_residuals_by_loc(df,
                           which='diff',
                           title=None,
@@ -857,20 +876,13 @@ def plot_residuals_by_loc(df,
         """Inclue station name and final value in label"""
         return ["{}:\n{:.2f}".format(name, val) for name, val in zip(df_merged.index, values)]
 
-    if which not in ('gps', 'insar', 'diff'):
-        raise ValueError("argument `which` must in ('diff','gps','insar')")
+    df_merged, values = _get_residuals(df, which)
 
-    df_final_vals = get_final_gps_insar_values(df, as_df=True)
-    df_locations = create_station_location_df(df)
-    df_merged = df_locations.join(df_final_vals)
+    print("Total abs values summed:", total_abs_error(values))
+    print("RMS value:", rms(values))
 
     xs = df_merged['lon']
     ys = df_merged['lat']
-    if which == 'diff':
-        values = df_merged['gps'] - df_merged['insar']
-    else:
-        values = df_merged[which]
-
     labels = _build_labels(df_merged, values)
     if title is None:
         title = "Final values of %s by location" % which
@@ -884,6 +896,14 @@ def plot_residuals_by_loc(df,
                                        plot_scatter=plot_scatter,
                                        **plot_kwargs)
     return df_merged, fig, ax
+
+
+def rms(values):
+    return np.sqrt(np.mean(np.square(values)))
+
+
+def total_abs_error(errors):
+    return np.sum(np.abs(errors))
 
 
 def _plot_latlon_with_labels(xs,
