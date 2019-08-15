@@ -397,7 +397,7 @@ def load_gps_los_data(
     lon, lat = station_lonlat(station_name)
     enu_coeffs = apertools.los.find_enu_coeffs(lon, lat, geo_path=geo_path)
 
-    df = load_station_data(station_name, to_cm=to_cm)
+    df = load_station_data(station_name, to_cm=to_cm, start_year=start_year, end_year=end_year)
     enu_data = df[['east', 'north', 'up']].T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
