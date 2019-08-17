@@ -287,7 +287,7 @@ def read_station_llas(header=None, filename=None):
     Must give "header" argument if there is a header
     """
     filename = filename or STATION_LLH_FILE
-    logger.info("Searching %s for gps data" % filename)
+    logger.debug("Searching %s for gps data" % filename)
     df = pd.read_csv(filename, header=header)
     df.columns = ['name', 'lat', 'lon', 'alt']
     return df
@@ -406,7 +406,7 @@ def load_gps_los_data(
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
     if zero_start:
-        logger.info("Resetting GPS data start to 0")
+        logger.debug("Resetting GPS data start to 0")
         los_gps_data = los_gps_data - np.mean(los_gps_data[:100])
     return df['dt'], los_gps_data
 
@@ -457,13 +457,13 @@ def get_stack_timeseries(filename,
     with h5py.File(filename, 'a') as f:
         try:
             dset = f[station]
-            logger.info("Getting cached timeseries at %s" % station)
+            logger.debug("Getting cached timeseries at %s" % station)
             return dset[:]
         except (TypeError, KeyError):
             pass
 
         dset = f[stack_dset_name]
-        logger.info("Reading timeseries at %s from %s" % (station, filename))
+        logger.debug("Reading timeseries at %s from %s" % (station, filename))
         ts = apertools.utils.window_stack(dset, row, col, window_size)
         if station is not None:
             f[station] = ts
