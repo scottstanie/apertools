@@ -102,7 +102,7 @@ def _filter_df_by_stations(df, station_name_list, igrams_dir, defo_filename):
     return df[select_cols]
 
 
-def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, **kwargs):
+def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, velocity=True, **kwargs):
     """Plot insar vs gps values from dataframe
 
     kinds:
@@ -115,7 +115,7 @@ def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, **kwargs):
 
     # for idx, column in enumerate(columns):
     if kind == "errorbar":
-        fig, axes = _plot_errorbar_df(df, **kwargs)
+        fig, axes = _plot_errorbar_df(df, velocity=velocity, **kwargs)
     elif kind == "line":
         fig, axes = _plot_line_df(df, **kwargs)
     elif kind == "slope":
@@ -681,9 +681,9 @@ def flat_std(series):
     return np.std(series - fit_date_series(series))
 
 
-def _plot_errorbar_df(df, ylim=None, **kwargs):
+def _plot_errorbar_df(df, ylim=None, velocity=True, **kwargs):
     gps_cols, insar_cols, final_gps_vals, final_insar_vals = get_final_gps_insar_values(
-        df, **kwargs)
+        df, velocity=velocity, **kwargs)
     gps_stds = [flat_std(df[col].dropna()) for col in df.columns if col in gps_cols]
 
     fig, axes = plt.subplots(squeeze=False)
@@ -692,12 +692,16 @@ def _plot_errorbar_df(df, ylim=None, **kwargs):
     ax.errorbar(idxs, final_gps_vals, gps_stds, marker='o', lw=2, linestyle='', capsize=6)
     ax.plot(idxs, final_insar_vals, 'rx')
 
+    if velocity:
+        ax.set_ylabel('mm/year of LOS displacement')
+    else:
+        ax.set_ylabel('CM of cumulative LOS displacement')
+
     labels = [c.replace('_gps', '') for c in gps_cols]
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation='vertical', fontsize=12)
     if ylim is not None:
         ax.set_ylim(ylim)
-    ax.set_ylabel('CM of cumulative LOS displacement')
     return fig, axes
 
 
@@ -777,11 +781,16 @@ def _fit_line_to_dates(df):
     return np.array([fit_date_series(df[col]).tail(1).squeeze() for col in df.columns])
 
 
-def get_final_gps_insar_values(df, linear=True, as_df=False):
+def get_final_gps_insar_values(df, linear=True, as_df=False, velocity=True):
+    # TODO: get rid of the "linear fit to unregularized"
     if linear:
         final_val_arr = _fit_line_to_dates(df)
     else:
         final_val_arr = df.tail(10).mean().values
+    if velocity:
+        full_dates = df.index
+        days_spanning = (full_dates[-1] - full_dates[0]).days
+        final_val_arr *= (10 * 365 / days_spanning)  # Now in mm/year
 
     gps_idxs, gps_cols, insar_idxs, insar_cols = _get_gps_insar_cols(df)
 
