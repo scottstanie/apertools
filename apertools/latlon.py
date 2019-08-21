@@ -231,6 +231,8 @@ class LatlonImage(np.ndarray):
         # print("Slicing lat = %s" % lat)
         # print("Slicing lon = %s" % lon)
         rows, cols = self.nearest_pixel(lon=lon, lat=lat)
+        rows = rows[rows != np.array(None)]
+        cols = cols[cols != np.array(None)]
         # print("Row: %s" % rows)
         # print("Col: %s" % cols)
         # TODO: do I care about converting lat slices to index slices?
@@ -550,13 +552,15 @@ def latlon_to_rowcol(lat, lon, rsc_data):
     Example:
         >>> rsc_data = {"x_first": 1.0, "y_first": 2.0, "x_step": 0.2, "y_step": -0.1}
         >>> latlon_to_rowcol(1.4, 1.4, rsc_data)
-        (7, 3)
+        (6, 2)
+        >>> latlon_to_rowcol(2.0, 1.0, rsc_data)
+        (0, 0)
     """
     start_lon = rsc_data["x_first"]
     start_lat = rsc_data["y_first"]
     lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
-    row = 1 + (lat - start_lat) / lat_step
-    col = 1 + (lon - start_lon) / lon_step
+    row = (lat - start_lat) / lat_step
+    col = (lon - start_lon) / lon_step
     return int(round(row)), int(round(col))
 
 
@@ -1007,26 +1011,35 @@ def contains_floats(slice_items):
 
 def load_cropped_masked_deformation(path=".",
                                     filename="deformation.h5",
+                                    full_path=None,
                                     rsc_name="dem.rsc",
                                     row_start=0,
                                     row_end=None,
                                     col_start=0,
                                     col_end=None,
+                                    n=None,
                                     perform_mask=True):
     """Returns stack_ll, 3D LatlonImage, and stack_mask, used to mask the data"""
-    geo_date_list, deformation = apertools.sario.load_deformation(path, filename=filename)
+    path, filename, full_path = apertools.sario.get_full_path(path, filename, full_path)
+    geo_date_list, deformation = apertools.sario.load_deformation(
+        igram_path=path,
+        filename=filename,
+        full_path=full_path,
+        n=n,
+    )
 
     if geo_date_list is None or deformation is None:
         return
 
     rsc_data = apertools.sario.load(os.path.join(path, rsc_name))
     stack_mask = apertools.sario.load_composite_mask(geo_date_list=geo_date_list,
-                                                     perform_mask=perform_mask)
+                                                     perform_mask=perform_mask,
+                                                     directory=path)
 
     stack_ll = LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
 
-    stack_ll = stack_ll[:, row_start:row_end, col_start:col_end]
+    stack_ll = stack_ll[..., row_start:row_end, col_start:col_end]
     return stack_ll, stack_mask
 
 
