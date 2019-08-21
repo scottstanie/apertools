@@ -390,9 +390,11 @@ def load_gps_los_data(
         geo_path,
         station_name=None,
         to_cm=True,
-        zero_start=True,
+        zero_mean=True,
+        zero_start=False,
         start_year=START_YEAR,
         end_year=None,
+        reference_station=None,
 ):
     """Load the GPS timeseries of a station name
 
@@ -408,6 +410,10 @@ def load_gps_los_data(
     if zero_start:
         logger.debug("Resetting GPS data start to 0")
         los_gps_data = los_gps_data - np.mean(los_gps_data[:100])
+    elif zero_mean:
+        logger.debug("Making GPS data 0 mean")
+        los_gps_data = los_gps_data - np.mean(los_gps_data)
+
     return df['dt'], los_gps_data
 
 
