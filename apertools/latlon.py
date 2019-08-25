@@ -1032,9 +1032,9 @@ def load_cropped_masked_deformation(path=".",
         return
 
     rsc_data = apertools.sario.load(os.path.join(path, rsc_name))
-    stack_mask = apertools.sario.load_composite_mask(geo_date_list=geo_date_list,
-                                                     perform_mask=perform_mask,
-                                                     directory=path)
+    stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list,
+                                           perform_mask=perform_mask,
+                                           directory=path)
 
     stack_ll = LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
