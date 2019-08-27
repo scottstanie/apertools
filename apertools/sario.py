@@ -506,9 +506,9 @@ def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
 
 def get_full_path(directory=None, filename=None, full_path=None):
     if full_path:
-        directory, filename = os.path.split(full_path)
+        directory, filename = os.path.split(os.path.abspath(full_path))
     else:
-        full_path = os.path.join(directory, filename)
+        full_path = os.path.join(directory, os.path.split(filename)[1])
     return directory, filename, full_path
 
 
@@ -598,7 +598,7 @@ def parse_geolist_strings(geolist_str):
 def parse_intlist_strings(date_pairs):
     # If we passed filename YYYYmmdd_YYYYmmdd.int
     if isinstance(date_pairs, basestring):
-        date_pairs = [date_pairs.strip('.int').split('_')]
+        date_pairs = [date_pairs.strip('.int').split('_')[:2]]
     return [(_parse(early), _parse(late)) for early, late in date_pairs]
 
 
@@ -669,7 +669,7 @@ def find_igrams(directory=".", parse=True, filename=None):
 
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
-        date_pairs = [intname.strip('.int').split('_') for intname in igram_fnames]
+        date_pairs = [intname.strip('.int').split('_')[:2] for intname in igram_fnames]
         return parse_intlist_strings(date_pairs)
     else:
         return igram_file_list
@@ -801,7 +801,7 @@ def load_mask(geo_date_list=None,
         # Maks a single mask image for any pixel that has a mask
         # Note: not using GEO_MASK_SUM_DSET since we may be sub selecting layers
         geo_dset = f[GEO_MASK_DSET]
-        with geo_dset.astype(int):
+        with geo_dset.astype(bool):
             stack_mask = np.sum(geo_dset[used_bool_arr, :, :], axis=0) > 0
         return stack_mask
 
