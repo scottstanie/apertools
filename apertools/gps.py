@@ -414,7 +414,27 @@ def load_gps_los_data(
         logger.debug("Making GPS data 0 mean")
         los_gps_data = los_gps_data - np.mean(los_gps_data)
 
+    if reference_station is not None:
+        dt_ref, losref = load_gps_los_data(geo_path, reference_station, to_cm, zero_mean,
+                                           zero_start, start_year, end_year)
+        return _merge_los(df['dt'], los_gps_data, dt_ref, losref)
+
     return df['dt'], los_gps_data
+
+
+def _merge_los(dt1, los1, dt_ref, los_ref):
+    df1 = pd.DataFrame(data={"g1": los1, "dt": dt1})
+    df_ref = pd.DataFrame(data={"gref": los_ref, "dt": dt_ref})
+
+    start = np.min(pd.concat([dt1, dt_ref]))
+    end = np.max(pd.concat([dt1, dt1]))
+    dt_merged = pd.date_range(start=start, end=end)
+
+    df = pd.DataFrame(data={"dt": dt_merged})
+    df = pd.merge(df, df1, on="dt", how="left")
+    df = pd.merge(df, df_ref, on="dt", how="left")
+    df.dropna(inplace=True)
+    return df["dt"], (df["g1"] - df["gref"]).values
 
 
 def moving_average(arr, window_size=7):
