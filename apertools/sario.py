@@ -569,7 +569,9 @@ def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None
         if n is not None:
             deformation = deformation[-n:]
         # geolist is a list of datetimes: encoding must be bytes
-        geolist = np.load(os.path.join(igram_path, 'geolist.npy'), encoding='bytes')
+        geolist = np.load(os.path.join(igram_path, 'geolist.npy'),
+                          encoding='bytes',
+                          allow_pickle=True)
     except (IOError, OSError):
         logger.error("%s or geolist.npy not found in path %s", filename, igram_path)
         return None, None
@@ -782,6 +784,9 @@ def load_mask(geo_date_list=None,
         _, _, mask_full_path = get_full_path(directory=directory, filename=mask_filename)
     else:
         mask_full_path = mask_filename
+    if not os.path.exists(mask_full_path):
+        logger.warning("{} doesnt exist, not masking".format(mask_full_path))
+        return np.ma.nomask
 
     # If they pass a deformation .h5 stack, get only the dates actually used
     # instead of all possible dates stored in the mask stack
