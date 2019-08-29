@@ -2,9 +2,10 @@
 """
 from __future__ import division, print_function
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib import cm
 from apertools.log import get_log
 from apertools import utils, latlon
 
@@ -34,7 +35,7 @@ def make_dismph_colormap():
         '#9aabf6', '#a1a5f6', '#a79ef6', '#ad98f6', '#b392f6', '#b98cf6', '#bf86f6', '#c67ff6',
         '#cc79f6', '#d273f6', '#d86df6', '#de67f6', '#e561f6', '#e967ec', '#ed6de2', '#f173d7'
     ]
-    dismphCM = matplotlib.colors.LinearSegmentedColormap.from_list('dismph', colors)
+    dismphCM = LinearSegmentedColormap.from_list('dismph', colors)
     dismphCM.set_bad('w', 0.0)
     return dismphCM
 
@@ -56,10 +57,10 @@ def discrete_seismic_colors(n=5):
         # http://colorbrewer2.org/#type=diverging&scheme=RdYlBu&n=7
         return list(
             np.array([
-                (69, 117, 180, 256),
+                (69, 117, 199, 256),
                 (145, 191, 219, 256),
                 (224, 243, 248, 256),
-                (255, 255, 191, 245),  # small alpha drop
+                (255, 255, 191, 255),  # small alpha drop
                 (254, 224, 144, 256),
                 (252, 141, 89, 256),
                 (215, 48, 39, 256),
@@ -79,14 +80,19 @@ def discrete_seismic_colors(n=5):
 
 DISMPH = make_dismph_colormap()
 plt.register_cmap(cmap=DISMPH)
-DISCRETE_SEISMIC5 = matplotlib.colors.LinearSegmentedColormap.from_list('discrete_seismic5',
-                                                                        discrete_seismic_colors(5),
-                                                                        N=5)
+DISCRETE_SEISMIC5 = LinearSegmentedColormap.from_list('discrete_seismic5',
+                                                      discrete_seismic_colors(5),
+                                                      N=5)
 plt.register_cmap(cmap=DISCRETE_SEISMIC5)
-DISCRETE_SEISMIC7 = matplotlib.colors.LinearSegmentedColormap.from_list('discrete_seismic7',
-                                                                        discrete_seismic_colors(7),
-                                                                        N=7)
+DISCRETE_SEISMIC7 = LinearSegmentedColormap.from_list('discrete_seismic7',
+                                                      discrete_seismic_colors(7),
+                                                      N=7)
 plt.register_cmap(cmap=DISCRETE_SEISMIC7)
+
+SEISMIC_Y = LinearSegmentedColormap.from_list('seismic_y', discrete_seismic_colors(7), N=250)
+plt.register_cmap(cmap=SEISMIC_Y)
+SEISMIC_Y2 = LinearSegmentedColormap.from_list('seismic_y2', discrete_seismic_colors(5), N=250)
+plt.register_cmap(cmap=SEISMIC_Y2)
 
 
 def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
@@ -117,7 +123,7 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
         matplotlib.cmap
     """
     if isinstance(cmap, str):
-        cmap = matplotlib.cm.get_cmap(cmap, num_levels)
+        cmap = cm.get_cmap(cmap, num_levels)
 
     cdict = {'red': [], 'green': [], 'blue': [], 'alpha': []}
 
@@ -140,7 +146,7 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
         cdict['blue'].append((si, b, b))
         cdict['alpha'].append((si, a, a))
 
-    newcmap = matplotlib.colors.LinearSegmentedColormap('shiftedcmap', cdict, N=num_levels or N)
+    newcmap = LinearSegmentedColormap('shiftedcmap', cdict, N=num_levels or N)
     plt.register_cmap(cmap=newcmap)
 
     return newcmap

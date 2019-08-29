@@ -164,6 +164,13 @@ def load_file(filename,
         return utils.take_looks(sardem.loading.load_elevation(filename), *looks)
     elif ext == '.rsc':
         return sardem.loading.load_dem_rsc(filename, **kwargs)
+    elif ext == '.h5':
+        with h5py.File(filename, "r") as f:
+            try:
+                return f[kwargs["dset"]][:]
+            except KeyError:
+                print("sario.load for h5 requres `dset` kwarg")
+                raise
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
     if rsc_data is None and rsc_file:
