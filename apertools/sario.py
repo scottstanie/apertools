@@ -166,11 +166,14 @@ def load_file(filename,
         return sardem.loading.load_dem_rsc(filename, **kwargs)
     elif ext == '.h5':
         with h5py.File(filename, "r") as f:
-            try:
-                return f[kwargs["dset"]][:]
-            except KeyError:
-                print("sario.load for h5 requres `dset` kwarg")
-                raise
+            if len(f.keys()) > 1:
+                try:
+                    return f[kwargs["dset"]][:]
+                except KeyError:
+                    print("sario.load for h5 requres `dset` kwarg")
+                    raise
+            else:
+                return f[list(f)[0]][:]
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
     if rsc_data is None and rsc_file:
@@ -553,17 +556,22 @@ def _load_deformation_h5(igram_path=None, filename=None, full_path=None, n=None)
     igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
     try:
         with h5py.File(full_path, "r") as f:
+            dset = list(f)[0]
             # TODO: get rid of these strings not as constants
             if n is not None:
-                deformation = f["stack"][-n:]
+                deformation = f[dset][-n:]
             else:
-                deformation = f["stack"][:]
+                deformation = f[dset][:]
             # geolist attr will be is a list of strings: need them as datetimes
 
-        geolist = load_geolist_from_h5(full_path)
     except (IOError, OSError) as e:
         logger.error("Can't load %s in path %s: %s", filename, igram_path, e)
         return None, None
+    try:
+        geolist = load_geolist_from_h5(full_path)
+    except Exception as e:
+        logger.error("Can't load geolist from %s in path %s: %s", filename, igram_path, e)
+        geolist = None
 
     return geolist, deformation
 

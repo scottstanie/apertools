@@ -395,13 +395,15 @@ def load_gps_los_data(
         start_year=START_YEAR,
         end_year=None,
         reference_station=None,
+        enu_coeffs=None,
 ):
     """Load the GPS timeseries of a station name
 
     Returns the timeseries, and the datetimes of the points
     """
-    lon, lat = station_lonlat(station_name)
-    enu_coeffs = apertools.los.find_enu_coeffs(lon, lat, geo_path=geo_path)
+    if enu_coeffs is None:
+        lon, lat = station_lonlat(station_name)
+        enu_coeffs = apertools.los.find_enu_coeffs(lon, lat, geo_path=geo_path)
 
     df = load_station_data(station_name, to_cm=to_cm, start_year=start_year, end_year=end_year)
     enu_data = df[['east', 'north', 'up']].T
