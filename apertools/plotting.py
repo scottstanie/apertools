@@ -93,6 +93,12 @@ SEISMIC_Y = LinearSegmentedColormap.from_list('seismic_y', discrete_seismic_colo
 plt.register_cmap(cmap=SEISMIC_Y)
 SEISMIC_Y2 = LinearSegmentedColormap.from_list('seismic_y2', discrete_seismic_colors(5), N=250)
 plt.register_cmap(cmap=SEISMIC_Y2)
+SEISMIC_WIDE = LinearSegmentedColormap.from_list(
+    'seismic_wide',
+    [(0, 0, .3, 1), (0, 0, 1, 1), (.6, .6, 1, 1), (.9, .9, 1, 1), (1, 1, 1, 1), (1, .9, .9, 1),
+     (1, 0.6, 0.6, 1), (1, 0, 0, 1), (.5, 0, 0, 1)],  # Extra white in middle from seismic
+    N=250,
+)
 
 
 def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
