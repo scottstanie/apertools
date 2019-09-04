@@ -80,13 +80,11 @@ def discrete_seismic_colors(n=5):
 
 DISMPH = make_dismph_colormap()
 plt.register_cmap(cmap=DISMPH)
-DISCRETE_SEISMIC5 = LinearSegmentedColormap.from_list('discrete_seismic5',
-                                                      discrete_seismic_colors(5),
-                                                      N=5)
+DISCRETE_SEISMIC5 = LinearSegmentedColormap.from_list(
+    'discrete_seismic5', discrete_seismic_colors(5), N=5)
 plt.register_cmap(cmap=DISCRETE_SEISMIC5)
-DISCRETE_SEISMIC7 = LinearSegmentedColormap.from_list('discrete_seismic7',
-                                                      discrete_seismic_colors(7),
-                                                      N=7)
+DISCRETE_SEISMIC7 = LinearSegmentedColormap.from_list(
+    'discrete_seismic7', discrete_seismic_colors(7), N=7)
 plt.register_cmap(cmap=DISCRETE_SEISMIC7)
 
 SEISMIC_Y = LinearSegmentedColormap.from_list('seismic_y', discrete_seismic_colors(7), N=250)
@@ -99,6 +97,7 @@ SEISMIC_WIDE = LinearSegmentedColormap.from_list(
      (1, 0.6, 0.6, 1), (1, 0, 0, 1), (.5, 0, 0, 1)],  # Extra white in middle from seismic
     N=250,
 )
+plt.register_cmap(cmap=SEISMIC_WIDE)
 
 
 def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
@@ -326,14 +325,15 @@ def view_stack(
         raise ValueError("display_img must be an int or ndarray-like obj")
 
     title = title or "Deformation Time Series"  # Default title
-    plot_image_shifted(img,
-                       fig=imagefig,
-                       title=title,
-                       cmap=cmap,
-                       label=label,
-                       vmin=vmin,
-                       vmax=vmax,
-                       perform_shift=perform_shift)
+    plot_image_shifted(
+        img,
+        fig=imagefig,
+        title=title,
+        cmap=cmap,
+        label=label,
+        vmin=vmin,
+        vmax=vmax,
+        perform_shift=perform_shift)
 
     timefig = plt.figure()
 
@@ -450,12 +450,8 @@ def animate_stack(stack,
         fig.suptitle(titles[idx])
         return axes_image,
 
-    stack_ani = animation.FuncAnimation(fig,
-                                        update_im,
-                                        frames=range(num_images),
-                                        interval=pause_time,
-                                        blit=False,
-                                        repeat=True)
+    stack_ani = animation.FuncAnimation(
+        fig, update_im, frames=range(num_images), interval=pause_time, blit=False, repeat=True)
 
     if save_title:
         logger.info("Saving to %s", save_title)
