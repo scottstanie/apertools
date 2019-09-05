@@ -1,6 +1,7 @@
 import warnings
 warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
+warnings.filterwarnings("ignore", category=FutureWarning)
 from . import geojson
 from . import gps
 from . import kml

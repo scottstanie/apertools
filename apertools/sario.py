@@ -13,6 +13,8 @@ import os
 import re
 import sys
 import numpy as np
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 import h5py
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -211,8 +213,8 @@ def load_file(filename,
         return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename=filename, ext=ext):
-        return utils.take_looks(load_complex(filename, ann_info=ann_info, rsc_data=rsc_data),
-                                *looks)
+        return utils.take_looks(
+            load_complex(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
     else:
         return utils.take_looks(load_real(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
 
@@ -539,15 +541,11 @@ def load_deformation(igram_path=".", filename='deformation.h5', full_path=None, 
     igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
 
     if utils.get_file_ext(filename) == ".npy":
-        return _load_deformation_npy(igram_path=igram_path,
-                                     filename=filename,
-                                     full_path=full_path,
-                                     n=n)
+        return _load_deformation_npy(
+            igram_path=igram_path, filename=filename, full_path=full_path, n=n)
     elif utils.get_file_ext(filename) in (".h5", "hdf5"):
-        return _load_deformation_h5(igram_path=igram_path,
-                                    filename=filename,
-                                    full_path=full_path,
-                                    n=n)
+        return _load_deformation_h5(
+            igram_path=igram_path, filename=filename, full_path=full_path, n=n)
     else:
         raise ValueError("load_deformation only supported for .h5 or .npy")
 
@@ -584,9 +582,8 @@ def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None
         if n is not None:
             deformation = deformation[-n:]
         # geolist is a list of datetimes: encoding must be bytes
-        geolist = np.load(os.path.join(igram_path, 'geolist.npy'),
-                          encoding='bytes',
-                          allow_pickle=True)
+        geolist = np.load(
+            os.path.join(igram_path, 'geolist.npy'), encoding='bytes', allow_pickle=True)
     except (IOError, OSError):
         logger.error("%s or geolist.npy not found in path %s", filename, igram_path)
         return None, None
@@ -736,8 +733,8 @@ def _geolist_to_str(geo_date_list):
 
 
 def _intlist_to_str(int_date_list):
-    return np.array([(a.strftime(DATE_FMT), b.strftime(DATE_FMT))
-                     for a, b in int_date_list]).astype("S")
+    return np.array(
+        [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in int_date_list]).astype("S")
 
 
 def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
@@ -750,10 +747,8 @@ def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
 
     if geolist_ignore_file is not None:
         ignore_filepath = os.path.join(directory, geolist_ignore_file)
-        geo_date_list, int_date_list = ignore_geo_dates(geo_date_list,
-                                                        int_date_list,
-                                                        ignore_file=ignore_filepath,
-                                                        parse=parse)
+        geo_date_list, int_date_list = ignore_geo_dates(
+            geo_date_list, int_date_list, ignore_file=ignore_filepath, parse=parse)
     return geo_date_list, int_date_list
 
 
