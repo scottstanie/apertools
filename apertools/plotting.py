@@ -9,6 +9,11 @@ from matplotlib import cm
 from apertools.log import get_log
 from apertools import utils, latlon
 
+try:
+    basestring = str
+except NameError:
+    pass
+
 logger = get_log()
 
 
@@ -506,3 +511,16 @@ def plot_shapefile(filename, fig=None, ax=None, z=None):
                 ax.plot(x, y, 'b')
 
         plt.show()
+
+
+def plotcompare(fnames, dset="velos", vmax=25, vmin=-25, cmap="seismic_wide"):
+    """Rough tool to compare several plots at once"""
+    import h5py
+    n = len(fnames)
+    fig, axes = plt.subplots(1, n, sharex=True, sharey=True)
+    files = [h5py.File(f) if isinstance(f, str) else f for f in fnames]
+    for ii in range(n):
+        axim = axes[ii].imshow(files[ii][dset], cmap=cmap, vmax=vmax, vmin=vmin)
+    fig.colorbar(axim)
+    [f.close() for f in files]
+    return fig, axes
