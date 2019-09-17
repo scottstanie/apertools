@@ -213,8 +213,8 @@ class LatlonImage(np.ndarray):
             dslice = None
             lat, lon = slice_items
         else:
-            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" %
-                             (self.ndim, slice_items))
+            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" % (self.ndim,
+                                                                                     slice_items))
 
         if isinstance(lat, slice):
             # Use class step size if None given
@@ -496,10 +496,8 @@ def load_deformation_img(igram_path=".",
     """
     igram_path, filename, full_path = apertools.sario.get_full_path(igram_path, filename, full_path)
 
-    _, defo_stack = apertools.sario.load_deformation(igram_path=igram_path,
-                                                     filename=filename,
-                                                     full_path=full_path,
-                                                     n=n)
+    _, defo_stack = apertools.sario.load_deformation(
+        igram_path=igram_path, filename=filename, full_path=full_path, n=n)
     if filename.endswith(".h5"):
         rsc_data = apertools.sario.load_dem_from_h5(h5file=full_path)
     else:
@@ -924,6 +922,32 @@ def intersection_over_union(box1, box2):
         return intersect_area(box1, box2) / ua
 
 
+def intersection_corners(dem1, dem2):
+    """
+    Returns:
+        tuple[float]: the boundaries of the intersection box of the 2 areas in order:
+        (lon_left,lon_right,lat_bottom,lat_top)
+    """
+
+    def _largest_common(a, b):
+        """Greatest lower bound of two iterables"""
+        return max(min(a), min(b))
+
+    def _least_common(a, b):
+        """Least upper bound of two iterables"""
+        return min(max(lons1), max(lons2))
+
+    corners1 = grid_corners(**dem1)
+    corners2 = grid_corners(**dem2)
+    lons1, lats1 = zip(*corners1)
+    lons2, lats2 = zip(*corners2)
+    left = _largest_common(lons1, lons2)
+    right = _least_common(lons1, lons2)
+    bottom = _largest_common(lats1, lats2)
+    top = _least_common(lats1, lats2)
+    return left, right, bottom, top
+
+
 def sort_by_lat(latlon_img_list):
     """Sorts a list of LatlonImages by latitude, north to south"""
     return sorted(latlon_img_list, key=lambda img: img.y_first, reverse=True)
@@ -1032,9 +1056,8 @@ def load_cropped_masked_deformation(path=".",
         return
 
     rsc_data = apertools.sario.load(os.path.join(path, rsc_name))
-    stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list,
-                                           perform_mask=perform_mask,
-                                           directory=path)
+    stack_mask = apertools.sario.load_mask(
+        geo_date_list=geo_date_list, perform_mask=perform_mask, directory=path)
 
     stack_ll = LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
