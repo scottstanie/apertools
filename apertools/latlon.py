@@ -929,21 +929,21 @@ def intersection_corners(dem1, dem2):
         (lon_left,lon_right,lat_bottom,lat_top)
     """
 
-    def _largest_common(a, b):
-        """Greatest lower bound of two iterables"""
+    def _max_min(a, b):
+        """The max of two iterable mins"""
         return max(min(a), min(b))
 
     def _least_common(a, b):
-        """Least upper bound of two iterables"""
-        return min(max(lons1), max(lons2))
+        """The min of two iterable maxes"""
+        return min(max(a), max(b))
 
     corners1 = grid_corners(**dem1)
     corners2 = grid_corners(**dem2)
     lons1, lats1 = zip(*corners1)
     lons2, lats2 = zip(*corners2)
-    left = _largest_common(lons1, lons2)
+    left = _max_min(lons1, lons2)
     right = _least_common(lons1, lons2)
-    bottom = _largest_common(lats1, lats2)
+    bottom = _max_min(lats1, lats2)
     top = _least_common(lats1, lats2)
     return left, right, bottom, top
 
