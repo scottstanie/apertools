@@ -80,6 +80,7 @@ REAL_EXTS = [
 # Note about UAVSAR Multi-look products:
 # Will end with `_ML5X5.grd`, e.g., for 5x5 downsampled
 
+BOOL_EXTS = ['.mask']
 ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_stacked_img for detail
@@ -184,7 +185,7 @@ def load_file(filename,
     if ext in IMAGE_EXTS:
         return np.array(Image.open(filename).convert("L"))  # L for luminance == grayscale
 
-    if ext in SENTINEL_EXTS:
+    if ext in SENTINEL_EXTS or ext in BOOL_EXTS:
         rsc_file = rsc_file if rsc_file else find_rsc_file(filename, verbose=verbose)
         if rsc_file:
             rsc_data = sardem.loading.load_dem_rsc(rsc_file)
@@ -208,7 +209,9 @@ def load_file(filename,
     if not ann_info and not rsc_data:
         raise ValueError("Need .rsc file or .ann file to load")
 
-    if ext in STACKED_FILES:
+    if ext in BOOL_EXTS:
+        return utils.take_looks(load_bool(filename, rsc_data=rsc_data), *looks)
+    elif ext in STACKED_FILES:
         stacked = load_stacked_img(filename, rsc_data=rsc_data, ann_info=ann_info, **kwargs)
         return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
@@ -327,6 +330,23 @@ def load_complex(filename, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
 
     real_data, imag_data = parse_complex_data(data, cols)
     return combine_real_imag(real_data, imag_data)
+
+
+def load_bool(filename, ann_info=None, rsc_data=None, dtype=np.bool):
+    """Load binary boolean image
+
+    Args:
+        filename (str): path to the file to open
+        rsc_data (dict): output from load_dem_rsc, gives width of file
+        ann_info (dict): data parsed from UAVSAR annotation file
+
+    Returns:
+        ndarray: imaginary numbers of the combined floats (dtype('complex64'))
+    """
+    data = np.fromfile(filename, dtype)
+    rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
+    _assert_valid_size(data, cols)
+    return data.reshape([-1, cols])
 
 
 def load_stacked_img(filename,
@@ -460,6 +480,8 @@ def save(filename, array, normalize=True, cmap="gray", preview=False, vmax=None,
 
         plt.imsave(filename, array, cmap=cmap, vmin=vmin, vmax=vmax, format=ext.strip('.'))
 
+    elif ext in BOOL_EXTS:
+        array.tofile(filename)
     elif (ext in COMPLEX_EXTS + REAL_EXTS + ELEVATION_EXTS) and (ext not in STACKED_FILES):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
         # TODO: Do we need to do this at all??
@@ -592,14 +614,17 @@ def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None
     return geolist, deformation
 
 
-def load_geolist_from_h5(h5file):
+def load_geolist_from_h5(h5file, dset=None):
     with h5py.File(h5file, "r") as f:
-        geolist_str = f[GEOLIST_DSET][()].astype(str)
+        if dset is None:
+            geolist_str = f[GEOLIST_DSET][()].astype(str)
+        else:
+            geolist_str = f[dset].attrs[GEOLIST_DSET][()].astype(str)
 
     return parse_geolist_strings(geolist_str)
 
 
-def load_intlist_from_h5(h5file):
+def load_intlist_from_h5(h5file, dset=None):
     with h5py.File(h5file, "r") as f:
         date_pair_strs = f[INTLIST_DSET][:].astype(str)
 
