@@ -5,6 +5,7 @@ import os
 import glob
 import numpy as np
 from numpy import sin, cos
+import h5py
 import subprocess
 # from scipy import interpolate
 import sardem.loading
@@ -16,7 +17,7 @@ import matplotlib.pyplot as plt
 logger = get_log()
 
 
-def find_enu_coeffs(lon, lat, geo_path=None, verbose=False):
+def find_enu_coeffs(lon, lat, geo_path=None, los_map_file=None, verbose=False):
     """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
 
     Args:
@@ -28,22 +29,38 @@ def find_enu_coeffs(lon, lat, geo_path=None, verbose=False):
 
     Returns:
         ndarray: enu_coeffs, shape = (3,) array [alpha_e, alpha_n, alpha_up]
+        Pointing from ground to satellite
         Can be used to project an ENU vector into the line of sight direction
     """
+
+    if los_map_file is not None:
+        return _read_los_map_file(los_map_file, lat, lon)
+
     los_file = os.path.realpath(os.path.join(geo_path, 'los_vector_%s_%s.txt' % (lon, lat)))
     if not os.path.exists(los_file):
         db_path = _find_db_path(geo_path)
-        record_xyz_los_vector(lon,
-                              lat,
-                              db_path=db_path,
-                              outfile=los_file,
-                              clear=True,
-                              verbose=verbose)
+        record_xyz_los_vector(
+            lon, lat, db_path=db_path, outfile=los_file, clear=True, verbose=verbose)
 
     enu_coeffs = los_to_enu(los_file)
 
     # Note: vectors are from sat to ground, so uplift is negative
     return -1 * enu_coeffs[0]
+
+
+def _read_los_map_file(los_map_file, lat, lon):
+    with h5py.File(los_map_file) as f:
+        lats = f["lats"]
+        lons = f["lons"]
+        row = _find_nearest(lats, lat)
+        col = _find_nearest(lons, lon)
+        return f["stack"][:, row, col]
+
+
+def _find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return array[idx]
 
 
 def _find_db_path(geo_path):
@@ -498,10 +515,8 @@ def create_los_map(geo_path, downsample=100, verbose=False, savename="los_enu_ma
     logger.info("Finding LOS vector for %s points total" % (len(lats) * len(lons)))
     for rowidx, lat in enumerate(lats.reshape(-1)):
         for colidx, lon in enumerate(lons.reshape(-1)):
-            up_img[:, rowidx, colidx] = find_enu_coeffs(lon,
-                                                        lat,
-                                                        geo_path=geo_path,
-                                                        verbose=verbose)
+            up_img[:, rowidx, colidx] = find_enu_coeffs(
+                lon, lat, geo_path=geo_path, verbose=verbose)
 
     enu_ll = latlon.LatlonImage(data=up_img, dem_rsc=down_rsc)
     if savename:

@@ -46,7 +46,9 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("ascending")
     p.add_argument("descending")
+    p.add_argument("--dset", default="velos/1")
     args = p.parse_args()
+    dset = args.dset
 
     # desc_path = "/data4/scott/path85/allpath85/igrams/deformation_linear_maxtemp400_huber.h5"
     # asc_path = "deformation_linear_maxtemp400_huber.h5"
@@ -54,13 +56,13 @@ if __name__ == "__main__":
     desc_path = os.path.abspath(args.descending)
     print("Ascending: %s, descending: %s" % (asc_path, desc_path))
     with h5py.File(asc_path) as f:
-        asc_velo = f["velos"][:]
+        asc_velo = f[dset][:]
         asc_mask = asc_velo == 0
         asc_velo[asc_mask] = np.nan
         asc_velo = latlon.LatlonImage(data=asc_velo, dem_rsc_file=sario.find_rsc_file(asc_path))
 
     with h5py.File(desc_path) as f:
-        desc_velo = f["velos"][:]
+        desc_velo = f[dset][:]
         desc_mask = desc_velo == 0
         desc_velo[desc_mask] = np.nan
         desc_velo = latlon.LatlonImage(data=desc_velo, dem_rsc_file=sario.find_rsc_file(desc_path))
@@ -73,8 +75,8 @@ if __name__ == "__main__":
     # asc_full, asc_mask = latlon.load_cropped_masked_deformation(full_path=asc_path, n=1)
     # asc_full = asc_full[0]
 
-    asc_geolist = sario.load_geolist_from_h5(asc_path)
-    desc_geolist = sario.load_geolist_from_h5(desc_path)
+    # asc_geolist = sario.load_geolist_from_h5(asc_path, dset=dset)
+    # desc_geolist = sario.load_geolist_from_h5(desc_path, dset=dset)
 
     # asc_diff = (asc_geolist[-1] - asc_geolist[0]).days
     # desc_diff = (desc_geolist[-1] - desc_geolist[0]).days
@@ -102,16 +104,16 @@ if __name__ == "__main__":
 
     # asc_patch = asc_velo[32.3:30.71, -104.1:-102.31]
     # desc_patch = desc_velo[32.3:30.71, -104.1:-102.31]
-    asc_patch = asc_velo[top:bottom, left:right]
-    desc_patch = desc_velo[top:bottom, left:right]
+    asc_patch = asc_velo_up[top:bottom, left:right]
+    desc_patch = desc_velo_up[top:bottom, left:right]
     diff_patch = asc_patch - desc_patch
 
     mm_thresh = 5
-    # shift, _ = find_min_shift(diff_patch, mm_thresh=mm_thresh)
+    shift, _ = find_min_shift(diff_patch, mm_thresh=mm_thresh)
     # Only look at left edge to minimize
     # shift, _ = find_min_shift(diff_patch[:, 50:500], mm_thresh=mm_thresh)
     # shift, _ = find_min_shift(diff_patch[:, 400:1000], mm_thresh=mm_thresh)
-    shift, _ = find_min_shift(diff_patch[:, 10:100], mm_thresh=mm_thresh)
+    # shift, _ = find_min_shift(diff_patch[:, 10:100], mm_thresh=mm_thresh)
     # shift = 1
 
     print(" %.2f is greater than %f mm/year difference on the two paths" %
@@ -120,6 +122,6 @@ if __name__ == "__main__":
     # asc_patch += shift
     # diff_patch += shift
 
-    # ax1, ax2, ax3 = plot_stuff(asc_patch + shift, desc_patch)
-    ax1, ax2, ax3 = plot_stuff(asc_patch, desc_patch - shift)
+    ax1, ax2, ax3 = plot_stuff(asc_patch + shift, desc_patch)
+    # ax1, ax2, ax3 = plot_stuff(asc_patch, desc_patch - shift)
     plt.show()

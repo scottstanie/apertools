@@ -389,7 +389,8 @@ def plot_gps_enu(station=None, days_smooth=12, start_year=START_YEAR, end_year=N
 
 
 def load_gps_los_data(
-        geo_path,
+        geo_path=None,
+        los_map_file=None,
         station_name=None,
         to_cm=True,
         zero_mean=True,
@@ -405,7 +406,8 @@ def load_gps_los_data(
     """
     if enu_coeffs is None:
         lon, lat = station_lonlat(station_name)
-        enu_coeffs = apertools.los.find_enu_coeffs(lon, lat, geo_path=geo_path)
+        enu_coeffs = apertools.los.find_enu_coeffs(
+            lon, lat, geo_path=geo_path, los_map_file=los_map_file)
 
     df = load_station_data(station_name, to_cm=to_cm, start_year=start_year, end_year=end_year)
     enu_data = df[['east', 'north', 'up']].T
@@ -419,8 +421,8 @@ def load_gps_los_data(
         los_gps_data = los_gps_data - np.mean(los_gps_data)
 
     if reference_station is not None:
-        dt_ref, losref = load_gps_los_data(geo_path, reference_station, to_cm, zero_mean,
-                                           zero_start, start_year, end_year)
+        dt_ref, losref = load_gps_los_data(geo_path, los_map_file, reference_station, to_cm,
+                                           zero_mean, zero_start, start_year, end_year)
         return _merge_los(df['dt'], los_gps_data, dt_ref, losref)
 
     return df['dt'], los_gps_data
