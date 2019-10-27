@@ -278,7 +278,7 @@ def view_stack(
         display_img,
         geolist=None,
         label="Centimeters",
-        cmap='seismic',
+        cmap='seismic_wide',
         perform_shift=False,
         title='',
         vmin=None,

@@ -131,7 +131,12 @@ def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, velocity=True
     return fig, axes
 
 
-def load_station_enu(station, start_year=START_YEAR, end_year=None, to_cm=True):
+def load_station_enu(station,
+                     start_year=START_YEAR,
+                     end_year=None,
+                     to_cm=True,
+                     zero_mean=True,
+                     zero_start=False):
     """Loads one gps station's ENU data since start_year until end_year
     as separate Series items
 
@@ -140,8 +145,13 @@ def load_station_enu(station, start_year=START_YEAR, end_year=None, to_cm=True):
     """
     station_df = load_station_data(station, to_cm=to_cm, start_year=start_year, end_year=end_year)
 
-    start_val = station_df[['east', 'north', 'up']].iloc[:10].mean()
-    enu_zeroed = station_df[['east', 'north', 'up']] - start_val
+    if zero_start:
+        start_val = station_df[['east', 'north', 'up']].iloc[:10].mean()
+        enu_zeroed = station_df[['east', 'north', 'up']] - start_val
+    elif zero_mean:
+        mean_val = station_df[['east', 'north', 'up']].mean()
+        enu_zeroed = station_df[['east', 'north', 'up']] - mean_val
+
     dts = station_df['dt']
     return dts, enu_zeroed
 
@@ -297,6 +307,7 @@ def read_station_llas(header=None, filename=None):
 def station_lonlat(station_name):
     """Return the (lon, lat) of a `station_name`"""
     df = read_station_llas()
+    station_name = station_name.upper()
     if station_name not in df['name'].values:
         closest_names = difflib.get_close_matches(station_name, df['name'], n=5)
         raise ValueError("No station named %s found. Closest: %s" % (station_name, closest_names))

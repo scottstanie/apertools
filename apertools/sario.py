@@ -579,7 +579,7 @@ def _load_deformation_h5(igram_path=None, filename=None, full_path=None, n=None,
             if dset is None:
                 dset = list(f)[0]
             # TODO: get rid of these strings not as constants
-            if n is not None:
+            if n is not None and n > 1:
                 deformation = f[dset][-n:]
             else:
                 deformation = f[dset][:]
@@ -589,7 +589,7 @@ def _load_deformation_h5(igram_path=None, filename=None, full_path=None, n=None,
         logger.error("Can't load %s in path %s: %s", filename, igram_path, e)
         return None, None
     try:
-        geolist = load_geolist_from_h5(full_path)
+        geolist = load_geolist_from_h5(full_path, dset=dset)
     except Exception as e:
         logger.error("Can't load geolist from %s in path %s: %s", filename, igram_path, e)
         geolist = None
@@ -810,6 +810,7 @@ def check_dset(h5file, dset_name, overwrite):
 def load_mask(geo_date_list=None,
               perform_mask=True,
               deformation_filename=None,
+              dset=None,
               mask_filename="masks.h5",
               directory=None):
     # TODO: Dedupe this from the insar one
@@ -829,7 +830,7 @@ def load_mask(geo_date_list=None,
     if deformation_filename is not None:
         if directory is not None:
             deformation_filename = os.path.join(directory, deformation_filename)
-            geo_date_list = load_geolist_from_h5(deformation_filename)
+            geo_date_list = load_geolist_from_h5(deformation_filename, dset=dset)
 
     # Get the indices of the mask layers that were used in the deformation stack
     all_geo_dates = load_geolist_from_h5(mask_full_path)

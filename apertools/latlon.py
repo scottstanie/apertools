@@ -487,8 +487,9 @@ class LatlonImage(np.ndarray):
 
 
 def load_deformation_img(igram_path=".",
-                         n=3,
-                         filename='deformation.npy',
+                         n=1,
+                         filename='deformation.h5',
+                         dset=None,
                          full_path=None,
                          rsc_filename='dem.rsc'):
     """Loads mean of last n images of a deformation stack in LatlonImage
@@ -497,12 +498,13 @@ def load_deformation_img(igram_path=".",
     igram_path, filename, full_path = apertools.sario.get_full_path(igram_path, filename, full_path)
 
     _, defo_stack = apertools.sario.load_deformation(
-        igram_path=igram_path, filename=filename, full_path=full_path, n=n)
+        igram_path=igram_path, filename=filename, full_path=full_path, dset=dset, n=n)
     if filename.endswith(".h5"):
         rsc_data = apertools.sario.load_dem_from_h5(h5file=full_path)
     else:
         rsc_data = apertools.sario.load(os.path.join(igram_path, rsc_filename))
-    img = LatlonImage(data=np.mean(defo_stack, axis=0), dem_rsc=rsc_data)
+    img = np.mean(defo_stack, axis=0) if n > 1 else defo_stack
+    img = LatlonImage(data=img, dem_rsc=rsc_data)
     return img
 
 
@@ -1035,6 +1037,7 @@ def contains_floats(slice_items):
 
 def load_cropped_masked_deformation(path=".",
                                     filename="deformation.h5",
+                                    dset=None,
                                     full_path=None,
                                     rsc_name="dem.rsc",
                                     row_start=0,
@@ -1057,7 +1060,7 @@ def load_cropped_masked_deformation(path=".",
 
     rsc_data = apertools.sario.load(os.path.join(path, rsc_name))
     stack_mask = apertools.sario.load_mask(
-        geo_date_list=geo_date_list, perform_mask=perform_mask, directory=path)
+        geo_date_list=geo_date_list, perform_mask=perform_mask, directory=path, dset=dset)
 
     stack_ll = LatlonImage(data=deformation, dem_rsc=rsc_data)
     stack_ll[:, stack_mask] = np.nan
