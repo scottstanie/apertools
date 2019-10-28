@@ -191,7 +191,7 @@ def get_fig_ax(fig, ax):
 def plot_image_shifted(img,
                        fig=None,
                        ax=None,
-                       cmap='seismic',
+                       cmap='seismic_wide',
                        img_data=None,
                        title='',
                        label='',
