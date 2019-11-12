@@ -45,7 +45,7 @@ STATION_LLH_FILE = os.environ.get(
     'STATION_LIST',
     os.path.join(DIRNAME, 'data/station_llh_all.csv'),
 )
-START_YEAR = 2014  # So far I don't care about older data
+START_DATE = datetime.datetime(2014, 11, 1)  # Start of InSAR data I care about
 
 
 def _get_gps_dir():
@@ -132,18 +132,18 @@ def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, velocity=True
 
 
 def load_station_enu(station,
-                     start_year=START_YEAR,
-                     end_year=None,
+                     start_date=START_DATE,
+                     end_date=None,
                      to_cm=True,
                      zero_mean=True,
                      zero_start=False):
-    """Loads one gps station's ENU data since start_year until end_year
+    """Loads one gps station's ENU data since start_date until end_date
     as separate Series items
 
     Will scale to cm by default, and center the first data point
     to 0
     """
-    station_df = load_station_data(station, to_cm=to_cm, start_year=start_year, end_year=end_year)
+    station_df = load_station_data(station, to_cm=to_cm, start_date=start_date, end_date=end_date)
 
     if zero_start:
         start_val = station_df[['east', 'north', 'up']].iloc[:10].mean()
@@ -157,17 +157,17 @@ def load_station_enu(station,
 
 
 def load_station_data(station_name,
-                      start_year=START_YEAR,
-                      end_year=None,
+                      start_date=START_DATE,
+                      end_date=None,
                       download_if_missing=True,
                       to_cm=True):
-    """Loads one gps station's ENU data since start_year until end_year as a dataframe
+    """Loads one gps station's ENU data since start_date until end_date as a dataframe
 
     Args:
         station_name (str): 4 Letter name of GPS station
             See http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html for map
-        start_year (int), default 2014, cutoff for beginning of GPS data
-        end_year (int): default None, cut off for end of GPS data
+        start_date (datetime), default 2014-11-1, cutoff for beginning of GPS data
+        end_date (datetime): default None, cut off for end of GPS data
         download_if_missing (bool): default True
     """
     station_name = station_name.upper()
@@ -179,20 +179,20 @@ def load_station_data(station_name,
             download_station_data(station_name)
 
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
-    clean_df = _clean_gps_df(df, start_year, end_year)
+    clean_df = _clean_gps_df(df, start_date, end_date)
     if to_cm:
         # logger.info("Converting %s GPS to cm" % station_name)
         clean_df[['east', 'north', 'up']] = 100 * clean_df[['east', 'north', 'up']]
     return clean_df
 
 
-def _clean_gps_df(df, start_year=None, end_year=None):
+def _clean_gps_df(df, start_date=None, end_date=None):
     df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
 
-    if start_year:
-        df_ranged = df[df['dt'] >= datetime.datetime(start_year, 1, 1)]
-    if end_year:
-        df_ranged = df_ranged[df_ranged['dt'] <= datetime.datetime(end_year, 1, 1)]
+    if start_date:
+        df_ranged = df[df['dt'] >= start_date]
+    if end_date:
+        df_ranged = df_ranged[df_ranged['dt'] <= end_date]
     df_enu = df_ranged[['dt', '__east(m)', '_north(m)', '____up(m)']]
     df_enu = df_enu.rename(mapper=lambda s: s.replace('_', '').replace('(m)', ''), axis='columns')
     df_enu.reset_index(inplace=True, drop=True)
@@ -351,16 +351,16 @@ def download_station_data(station_name):
         f.write(response.text)
 
 
-def station_std(station, to_cm=True, start_year=START_YEAR, end_year=None):
+def station_std(station, to_cm=True, start_date=START_DATE, end_date=None):
     """Calculates the sum of east, north, and vertical stds of gps"""
-    dts, enu_df = load_station_enu(station, start_year=start_year, end_year=end_year, to_cm=to_cm)
+    dts, enu_df = load_station_enu(station, start_date=start_date, end_date=end_date, to_cm=to_cm)
     if enu_df.empty:
         logger.warning("%s gps data returned an empty dataframe")
         return np.nan
     return np.sum(enu_df.std())
 
 
-def plot_gps_enu(station=None, days_smooth=12, start_year=START_YEAR, end_year=None):
+def plot_gps_enu(station=None, days_smooth=12, start_date=START_DATE, end_date=None):
     """Plot the east,north,up components of `station`"""
 
     def remove_xticks(ax):
@@ -371,7 +371,7 @@ def plot_gps_enu(station=None, days_smooth=12, start_year=START_YEAR, end_year=N
             top=False,  # ticks along the top edge are off
             labelbottom=False)
 
-    dts, enu_df = load_station_enu(station, start_year=start_year, end_year=end_year, to_cm=True)
+    dts, enu_df = load_station_enu(station, start_date=start_date, end_date=end_date, to_cm=True)
     (east_cm, north_cm, up_cm) = enu_df[['east', 'north', 'up']].T.values
 
     fig, axes = plt.subplots(3, 1)
@@ -406,8 +406,8 @@ def load_gps_los_data(
         to_cm=True,
         zero_mean=True,
         zero_start=False,
-        start_year=START_YEAR,
-        end_year=None,
+        start_date=START_DATE,
+        end_date=None,
         reference_station=None,
         enu_coeffs=None,
 ):
@@ -420,7 +420,7 @@ def load_gps_los_data(
         enu_coeffs = apertools.los.find_enu_coeffs(
             lon, lat, geo_path=geo_path, los_map_file=los_map_file)
 
-    df = load_station_data(station_name, to_cm=to_cm, start_year=start_year, end_year=end_year)
+    df = load_station_data(station_name, to_cm=to_cm, start_date=start_date, end_date=end_date)
     enu_data = df[['east', 'north', 'up']].T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
@@ -433,7 +433,7 @@ def load_gps_los_data(
 
     if reference_station is not None:
         dt_ref, losref = load_gps_los_data(geo_path, los_map_file, reference_station, to_cm,
-                                           zero_mean, zero_start, start_year, end_year)
+                                           zero_mean, zero_start, start_date, end_date)
         return _merge_los(df['dt'], los_gps_data, dt_ref, losref)
 
     return df['dt'], los_gps_data
@@ -638,8 +638,8 @@ def combine_insar_gps_dfs(insar_df, gps_df):
 def create_gps_enu_df(station_name_list=None,
                       defo_filename=None,
                       igrams_dir=None,
-                      start_year=START_YEAR,
-                      end_year=None,
+                      start_date=START_DATE,
+                      end_date=None,
                       days_smooth=None,
                       to_cm=True):
     if not station_name_list:
@@ -652,7 +652,7 @@ def create_gps_enu_df(station_name_list=None,
     df_list = []
     for station in station_name_list:
         dts, enu_df = load_station_enu(
-            station, start_year=start_year, end_year=end_year, to_cm=to_cm)
+            station, start_date=start_date, end_date=end_date, to_cm=to_cm)
 
         enu_df["dts"] = _series_to_date(dts)
         # Add station name to columns for post-merge identification
@@ -982,15 +982,15 @@ def _plot_latlon_with_labels(xs,
 
 def plot_gps_east_by_loc(defo_filename,
                          igrams_dir,
-                         start_year=START_YEAR,
-                         end_year=None,
+                         start_date=START_DATE,
+                         end_date=None,
                          cmap_name="seismic_r",
                          **plot_kwargs):
     enu_df = create_gps_enu_df(
         defo_filename=defo_filename,
         igrams_dir=igrams_dir,
-        end_year=end_year,
-        start_year=start_year,
+        end_date=end_date,
+        start_date=start_date,
     )
     east_cols = [col for col in enu_df if "east" in col]
     east_df = enu_df[east_cols]

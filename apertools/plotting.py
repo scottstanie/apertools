@@ -418,6 +418,7 @@ def view_stack(
         else:
             legend_entries.append('Row %s, Col %s' % (row, col))
 
+        plt.figure(2)
         plt.plot(geolist, timeline, **line_plot_kwargs)
         plt.legend(legend_entries, loc=legend_loc)
         x_axis_str = "SAR image date" if geolist is not None else "Image number"
