@@ -45,7 +45,7 @@ STATION_LLH_FILE = os.environ.get(
     'STATION_LIST',
     os.path.join(DIRNAME, 'data/station_llh_all.csv'),
 )
-START_DATE = datetime.datetime(2014, 11, 1)  # Start of InSAR data I care about
+START_DATE = datetime.date(2014, 11, 1)  # Start of InSAR data I care about
 
 
 def _get_gps_dir():
