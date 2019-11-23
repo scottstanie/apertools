@@ -284,8 +284,7 @@ Transformations_between_ECEF_and_ENU_coordinates
     # Rotate about axis 3 with longitude, then axis 1 with latitude
     R3 = rot(90 + lon, 3, in_degrees=True)
     R1 = rot(90 - lat, 1, in_degrees=True)
-    R = np.matmul(R3, R1)
-    return np.matmul(R, xyz)
+    return np.matmul(R1, np.matmul(R3, xyz))
 
 
 def rot(angle, axis, in_degrees=True):
