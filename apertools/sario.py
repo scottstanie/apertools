@@ -51,6 +51,7 @@ UAVSAR_EXTS = [
     '.amp2.grd',
     '.amp.grd',
 ]
+ALOS_EXTS = ['.slc', '.cc', '.int', '.amp', '.unw', '.unwflat']  # TODO: check these
 IMAGE_EXTS = ['.png', '.tif', '.tiff', '.jpg']
 
 # Notes: .grd, .mlc can be either real or complex for UAVSAR,
@@ -121,6 +122,8 @@ def load_file(filename,
               rsc_file=None,
               rsc_data=None,
               ann_info=None,
+              rows=None,
+              cols=None,
               verbose=False,
               **kwargs):
     """Examines file type for real/complex and runs appropriate load
@@ -130,6 +133,8 @@ def load_file(filename,
         rsc_file (str): path to a dem.rsc file (if Sentinel)
         rsc_data (str): preloaded dem.rsc file as a dict
         ann_info (dict): data parsed from annotation file (UAVSAR)
+        rows (int): manually pass number of rows (overrides rsc/ann data)
+        cols (int): manually pass number of cols (overrides rsc/ann data)
         downsample (int): rate at which to downsample the file
             None is equivalent to 1, no downsampling.
         looks (tuple[int, int]): downsample by taking looks
@@ -179,7 +184,9 @@ def load_file(filename,
                 return f[list(f)[0]][:]
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
-    if rsc_data is None and rsc_file:
+    if rows is not None and cols is not None:
+        rsc_data = {"rows": rows, "cols": cols, "width": cols, "height": rows}
+    elif rsc_data is None and rsc_file:
         rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
     if ext in IMAGE_EXTS:
@@ -210,16 +217,24 @@ def load_file(filename,
         raise ValueError("Need .rsc file or .ann file to load")
 
     if ext in BOOL_EXTS:
-        return utils.take_looks(load_bool(filename, rsc_data=rsc_data), *looks)
+        return utils.take_looks(load_bool(filename, rsc_data=rsc_data, rows=rows, cols=cols),
+                                *looks)
     elif ext in STACKED_FILES:
-        stacked = load_stacked_img(filename, rsc_data=rsc_data, ann_info=ann_info, **kwargs)
+        stacked = load_stacked_img(filename,
+                                   rsc_data=rsc_data,
+                                   ann_info=ann_info,
+                                   rows=rows,
+                                   cols=cols,
+                                   **kwargs)
         return stacked[..., ::downsample, ::downsample]
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename=filename, ext=ext):
         return utils.take_looks(
-            load_complex(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
+            load_complex(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols),
+            *looks)
     else:
-        return utils.take_looks(load_real(filename, ann_info=ann_info, rsc_data=rsc_data), *looks)
+        return utils.take_looks(
+            load_real(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols), *looks)
 
 
 # Make a shorter alias for load_file
@@ -271,9 +286,11 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
     return utils.fullpath(possible_rscs[0])
 
 
-def _get_file_rows_cols(ann_info=None, rsc_data=None):
+def _get_file_rows_cols(rows=None, cols=None, ann_info=None, rsc_data=None):
     """Wrapper function to find file width for different SV types"""
-    if (not rsc_data and not ann_info) or (rsc_data and ann_info):
+    if rows is not None and cols is not None:
+        return rows, cols
+    elif (not rsc_data and not ann_info) or (rsc_data and ann_info):
         raise ValueError("needs either ann_info or rsc_data (but not both) to find number of cols")
     elif rsc_data:
         return rsc_data['file_length'], rsc_data['width']
@@ -291,13 +308,15 @@ def _assert_valid_size(data, cols):
     assert math.modf(float(len(data)) / cols)[0] == 0, error_str
 
 
-def load_real(filename, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
+def load_real(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
     """Reads in real 4-byte per pixel files""
 
     Valid filetypes: See sario.REAL_EXTS
 
     Args:
         filename (str): path to the file to open
+        rows (int): manually pass number of rows (overrides rsc/ann data)
+        cols (int): manually pass number of cols (overrides rsc/ann data)
         rsc_data (dict): output from load_dem_rsc, gives width of file
         ann_info (dict): data parsed from UAVSAR annotation file
 
@@ -306,18 +325,20 @@ def load_real(filename, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
 
     """
     data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
     return data.reshape([-1, cols])
 
 
-def load_complex(filename, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
+def load_complex(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
     """Combines real and imaginary values from a filename to make complex image
 
     Valid filetypes: See sario.COMPLEX_EXTS
 
     Args:
         filename (str): path to the file to open
+        rows (int): manually pass number of rows (overrides rsc/ann data)
+        cols (int): manually pass number of cols (overrides rsc/ann data)
         rsc_data (dict): output from load_dem_rsc, gives width of file
         ann_info (dict): data parsed from UAVSAR annotation file
 
@@ -325,18 +346,20 @@ def load_complex(filename, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
         ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
     data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
 
     real_data, imag_data = parse_complex_data(data, cols)
     return combine_real_imag(real_data, imag_data)
 
 
-def load_bool(filename, ann_info=None, rsc_data=None, dtype=np.bool):
+def load_bool(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=np.bool):
     """Load binary boolean image
 
     Args:
         filename (str): path to the file to open
+        rows (int): manually pass number of rows (overrides rsc/ann data)
+        cols (int): manually pass number of cols (overrides rsc/ann data)
         rsc_data (dict): output from load_dem_rsc, gives width of file
         ann_info (dict): data parsed from UAVSAR annotation file
 
@@ -344,12 +367,14 @@ def load_bool(filename, ann_info=None, rsc_data=None, dtype=np.bool):
         ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
     data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(ann_info=ann_info, rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
     return data.reshape([-1, cols])
 
 
 def load_stacked_img(filename,
+                     rows=None,
+                     cols=None,
                      rsc_data=None,
                      ann_info=None,
                      return_amp=False,
@@ -365,6 +390,8 @@ def load_stacked_img(filename,
 
     Args:
         filename (str): path to the file to open
+        rows (int): manually pass number of rows (overrides rsc/ann data)
+        cols (int): manually pass number of cols (overrides rsc/ann data)
         rsc_data (dict): output from load_dem_rsc, gives width of file
         return_amp (bool): flag to request the amplitude data to be returned
 
@@ -389,7 +416,7 @@ def load_stacked_img(filename,
     # Output: (8.011558, -2.6779003)
     """
     data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rsc_data=rsc_data, ann_info=ann_info)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
 
     first = data.reshape((rows, 2 * cols))[:, :cols]
@@ -563,11 +590,16 @@ def load_deformation(igram_path=".", filename='deformation.h5', full_path=None, 
     igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
 
     if utils.get_file_ext(filename) == ".npy":
-        return _load_deformation_npy(
-            igram_path=igram_path, filename=filename, full_path=full_path, n=n)
+        return _load_deformation_npy(igram_path=igram_path,
+                                     filename=filename,
+                                     full_path=full_path,
+                                     n=n)
     elif utils.get_file_ext(filename) in (".h5", "hdf5"):
-        return _load_deformation_h5(
-            igram_path=igram_path, filename=filename, full_path=full_path, n=n, dset=dset)
+        return _load_deformation_h5(igram_path=igram_path,
+                                    filename=filename,
+                                    full_path=full_path,
+                                    n=n,
+                                    dset=dset)
     else:
         raise ValueError("load_deformation only supported for .h5 or .npy")
 
@@ -605,8 +637,9 @@ def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None
         if n is not None:
             deformation = deformation[-n:]
         # geolist is a list of datetimes: encoding must be bytes
-        geolist = np.load(
-            os.path.join(igram_path, 'geolist.npy'), encoding='bytes', allow_pickle=True)
+        geolist = np.load(os.path.join(igram_path, 'geolist.npy'),
+                          encoding='bytes',
+                          allow_pickle=True)
     except (IOError, OSError):
         logger.error("%s or geolist.npy not found in path %s", filename, igram_path)
         return None, None
@@ -759,8 +792,8 @@ def _geolist_to_str(geo_date_list):
 
 
 def _intlist_to_str(int_date_list):
-    return np.array(
-        [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in int_date_list]).astype("S")
+    return np.array([(a.strftime(DATE_FMT), b.strftime(DATE_FMT))
+                     for a, b in int_date_list]).astype("S")
 
 
 def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
@@ -773,8 +806,10 @@ def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
 
     if geolist_ignore_file is not None:
         ignore_filepath = os.path.join(directory, geolist_ignore_file)
-        geo_date_list, int_date_list = ignore_geo_dates(
-            geo_date_list, int_date_list, ignore_file=ignore_filepath, parse=parse)
+        geo_date_list, int_date_list = ignore_geo_dates(geo_date_list,
+                                                        int_date_list,
+                                                        ignore_file=ignore_filepath,
+                                                        parse=parse)
     return geo_date_list, int_date_list
 
 
