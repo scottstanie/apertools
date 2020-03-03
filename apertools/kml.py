@@ -1,6 +1,8 @@
 from __future__ import division, print_function
 import subprocess
 import re
+import gdal
+from osgeo import gdal_array
 from apertools import geojson, latlon
 
 # TODO: GEOTiff stuff with gdal!
@@ -230,3 +232,51 @@ def create_geotiff(rsc_data=None, kml_file=None, img_filename=None, shape='box',
     print('Running:')
     print(cmd)
     subprocess.check_call(cmd, shell=True)
+
+
+def rsc_to_geotransform(rsc_data):
+
+    # See here for geotransform info
+    # https://gdal.org/user/raster_data_model.html#affine-geotransform
+    # NOTE: gdal standard is to reference pixel by top left corner,
+    # while the SAR .rsc stuff wants center of pixel
+    # Xgeo = GT(0) + Xpixel*GT(1) + Yline*GT(2)
+    # Ygeo = GT(3) + Xpixel*GT(4) + Yline*GT(5)
+
+    # So for us, this means we have
+    # X0 = trans[0] + .5*trans[1] + (.5*trans[2])
+    # Y0 = trans[3] + (.5*trans[4]) + .5*trans[5]
+    # where trans[2], trans[4] are 0s for north-up rasters
+
+    x_step = rsc_data["x_step"]
+    y_step = rsc_data["y_step"]
+    X0 = rsc_data["x_first"] - 0.5 * x_step
+    Y0 = rsc_data["y_first"] - 0.5 * y_step
+    return (X0, x_step, 0.0, Y0, 0.0, y_step)
+
+
+def save_as_geotiff(outfile=None, array=None, rsc_data=None):
+    """ Ref: https://gdal.org/tutorials/raster_api_tut.html#using-create"""
+
+    rows, cols = array.shape
+    if rows != rsc_data["file_length"] or cols != rsc_data["width"]:
+        raise ValueError("rsc_data ({}, {}) does not match array shape: ({}, {})".format(
+            (rsc_data["file_length"], rsc_data["width"], rows, cols)))
+
+    driver = gdal.GetDriverByName('GTiff')
+
+    gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
+    out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
+
+    # Set geotransform (based on rsc data) and projection
+    out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
+    srs = gdal.osr.SpatialReference()
+    srs.SetWellKnownGeogCS("WGS84")
+    out_raster.SetProjection(srs.ExportToWkt())
+
+    band = out_raster.GetRasterBand(1)
+    band.WriteArray(array)
+    band.SetNoDataValue(0.0)
+    band.FlushCache()
+    band = None
+    out_raster = None
