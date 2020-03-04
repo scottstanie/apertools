@@ -939,18 +939,25 @@ def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data
     if outfile is None:
         raise ValueError("Need outfile or filename to save")
 
-    driver = gdal.GetDriverByName("VRT")
+    vrt_driver = gdal.GetDriverByName("VRT")
     gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
     # print("gdal dtyle", gdal_dtype, array.dtype)
 
     rows, cols = array.shape[-2:]
-    # out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
-    out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=0)
+    # out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
+    out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=0)
 
-    # TODO: add image offset for line interleaved (see below)
-    image_offset = 0
-    pixel_offset = 8  # For complex64 numpy dtype: TODO make general
-    line_offset = pixel_offset * cols
+    # Set geotransform (based on rsc data) and projection
+    if rsc_data is None:
+        if rsc_file is None:
+            rsc_file = rsc_file if rsc_file else find_rsc_file(filename)
+            rsc_data = load(rsc_file)
+        gt = rsc_to_geotransform(rsc_data)
+        out_raster.SetGeoTransform(gt)
+
+    srs = gdal.osr.SpatialReference()
+    srs.SetWellKnownGeogCS("WGS84")
+    out_raster.SetProjection(srs.ExportToWkt())
 
     interleave, num_bands = get_interleave(filename)
     band = 1  # TODO: fix?
@@ -971,25 +978,56 @@ def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data
         'LineOffset={}'.format(line_offset),
         # 'ByteOrder=LSB'
     ]
-    # print(options)
-
     out_raster.AddBand(gdal_dtype, options)
+    out_raster = None  # Force write
 
-    # Set geotransform (based on rsc data) and projection
-    print(rsc_data)
-    if rsc_data is None:
-        if rsc_file is None:
-            rsc_file = rsc_file if rsc_file else find_rsc_file(filename)
-            rsc_data = load(rsc_file)
-        gt = rsc_to_geotransform(rsc_data)
-        print(gt)
-        out_raster.SetGeoTransform(gt)
+    create_derived_band(outfile, rows, cols, gt, func="log10")
+    create_derived_band(outfile, rows, cols, gt, func="phase")
+    return
 
+
+def create_derived_band(filename, rows, cols, gt, desc=None, func="log10"):
+    # For new outfile, only have one .vrt extension
+    outfile = "{}.{}.vrt".format(filename.replace(".vrt", ""), func)
+    desc = desc or "{func} of {filename}".format(func=func, filename=filename)
     srs = gdal.osr.SpatialReference()
     srs.SetWellKnownGeogCS("WGS84")
-    out_raster.SetProjection(srs.ExportToWkt())
+    srs_string = srs.ExportToWkt()
 
-    out_raster = None  # Force write
+    src_dtype = "CFloat32"
+    derived_vrt_template = """<VRTDataset rasterXSize="{cols}" rasterYSize="{rows}">
+  <SRS> {srs} </SRS>
+  <GeoTransform> {gt} </GeoTransform>
+  <VRTRasterBand dataType="Float32" band="1" subClass="VRTDerivedRasterBand">
+    <Description> {desc} </Description>
+    <SimpleSource>
+      <SourceFilename relativeToVRT="1">20160327_20160420.int.vrt</SourceFilename>
+      <SourceBand>1</SourceBand>
+    </SimpleSource>
+    <PixelFunctionType>{func}</PixelFunctionType>
+    <SourceTransferType>{src_dtype}</SourceTransferType>
+    <NoDataValue>-inf</NoDataValue>
+  </VRTRasterBand>
+</VRTDataset>
+""".format(
+        gt=",".join((str(n) for n in gt)),
+        srs=srs_string,
+        rows=rows,
+        cols=cols,
+        desc=desc,
+        func=func,
+        src_dtype=src_dtype,
+    )
+    # colors=make_cmy_colortable())
+    with open(outfile, "w") as f:
+        f.write(derived_vrt_template)
+
+    # Colors:
+    # ds = gdal.Open(outfile)
+    # colors = make_cmy_colortable()
+    # band = ds.GetRasterBand(1)
+    # band.SetRasterColorTable(colors)
+    # band.SetRasterColorInterpretation(gdal.GCI_PaletteIndex)
     return
 
 
@@ -1079,6 +1117,52 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None):
     out_raster = None
 
 
+def cmy_colors():
+    # Default cyclic colormap from isce/mdx, provided by Piyush Agram, Jan 2020
+    # generate the color list
+    rgbs = np.zeros((256, 3), dtype=np.uint8)
+
+    for kk in range(85):
+        rgbs[kk, 0] = kk * 3
+        rgbs[kk, 1] = 255 - kk * 3
+        rgbs[kk, 2] = 255
+
+    rgbs[85:170, 0] = rgbs[0:85, 2]
+    rgbs[85:170, 1] = rgbs[0:85, 0]
+    rgbs[85:170, 2] = rgbs[0:85, 1]
+
+    rgbs[170:255, 0] = rgbs[0:85, 1]
+    rgbs[170:255, 1] = rgbs[0:85, 2]
+    rgbs[170:255, 2] = rgbs[0:85, 0]
+
+    rgbs[255, 0] = 0
+    rgbs[255, 1] = 255
+    rgbs[255, 2] = 255
+
+    rgbs = np.roll(rgbs, int(256 / 2 - 214), axis=0)  # shift green to the center
+    rgbs = np.flipud(rgbs)  # flip up-down so that orange is in the later half (positive)
+    return rgbs
+
+
+def make_cmy_colortable():
+    # create color table
+    colors = gdal.ColorTable()
+
+    rgbs = cmy_colors()
+    rgbs = [rgbs[0], rgbs[42], rgbs[84], rgbs[126], rgbs[168], rgbs[200], rgbs[255]]
+    vals = np.linspace(-np.pi, np.pi, len(rgbs))
+    # set color for each value
+    # out = "<ColorTable>\n"
+    for (val, (r, g, b)) in zip(vals, rgbs):
+        print(int(val))
+        colors.SetColorEntry(int(val), (r, g, b))
+        # out += '<Entry c1="{}" c2="{}" c3="{}" c4="255"/>\n'.format(r, g, b)
+
+    # out += "</ColorTable>\n"
+    return colors
+    # return out
+
+
 #     def memMap(self, mode='r', band=None):
 #         if self.scheme.lower() == 'bil':
 #             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
@@ -1096,3 +1180,22 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None):
 #             if band is not None:
 #                 immap = immap[band, :, :]
 #         return immap
+
+
+def testt(fn):
+    ds = gdal.Open(fn, 1)
+    band = ds.GetRasterBand(1)
+
+    # create color table
+    colors = gdal.ColorTable()
+
+    # set color for each value
+    colors.SetColorEntry(1, (112, 153, 89))
+    colors.SetColorEntry(2, (242, 238, 162))
+    colors.SetColorEntry(3, (242, 206, 133))
+    colors.SetColorEntry(4, (194, 140, 124))
+    colors.SetColorEntry(5, (214, 193, 156))
+
+    # set color table and color interpretation
+    band.SetRasterColorTable(colors)
+    band.SetRasterColorInterpretation(gdal.GCI_PaletteIndex)
