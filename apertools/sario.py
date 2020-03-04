@@ -19,6 +19,8 @@ import h5py
 import matplotlib.pyplot as plt
 from PIL import Image
 import sardem
+import gdal
+from osgeo import gdal_array
 
 from apertools import utils
 import apertools.parsers
@@ -89,6 +91,9 @@ ELEVATION_EXTS = ['.dem', '.hgt']
 STACKED_FILES = ['.cc', '.unw', '.unwflat', '.unw.grd', '.cc.grd']
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = ['.grd', '.mlc']
+
+BIL_FILES = STACKED_FILES  # Other name for storing binary interleaved by line
+BIP_FILES = COMPLEX_EXTS
 
 DATE_FMT = "%Y%m%d"
 
@@ -475,7 +480,6 @@ def save(filename, array, normalize=True, cmap="gray", preview=False, vmax=None,
     Raises:
         NotImplementedError: if file extension of filename not a known ext
     """
-
     def _is_little_endian():
         """All UAVSAR data products save in little endian byte order"""
         return sys.byteorder == 'little'
@@ -905,3 +909,217 @@ def load_single_mask(int_date_string=None,
         dset = f[IGRAM_MASK_DSET]
         with dset.astype(bool):
             return dset[idx]
+
+
+# ######### GDAL FUNCTIONS ##############
+def load_genbin_bip(filename):
+    """Load the pixel-interleaved genbins. These should be complex (not supported by GenBin),
+    with data stored as (real, imag, real, image,...)"""
+    gbin = gdal.Open(filename)
+    arr3 = gbin.ReadAsArray()
+    gbin = None
+    return arr3[0] + 1j * arr3[1]
+
+
+def load_genbin_bil(filename):
+    """Loads the data band of the genbin
+    This is always stored in band 2 (band 1 is amplitude)
+
+    Used for .unw (unwrapped from snaphu), .cor (correlation)
+    """
+    gbin = gdal.Open(filename)
+    out = gbin.GetRasterBand(2).ReadAsArray()
+    gbin = None
+    return out
+
+
+def create_genbin_header(filename, rows, cols):
+    # Note: output will have 3 '{' and 3 '}' to open/close
+    # but need double for python formating
+    template = """\
+{{{{{{
+BANDS:          2
+ROWS:           {rows}
+COLS:           {cols}
+DATATYPE:       F32
+INTERLEAVING:   {band_type}
+DATU
+}}}}}}
+"""
+    # TODO: anythin but DATATYPE F32? or BANDS 2?
+    ext = utils.get_file_ext(filename)
+    if ext in BIL_FILES:
+        band_type = "BIL"
+    elif ext in BIP_FILES:
+        band_type = "BIP"
+    else:
+        raise ValueError("Unknown band interleave format (BIP/BIL) for {}".format(filename))
+    outname = filename + ".hdr"
+    with open(outname, "w") as f:
+        f.write(template.format(rows=rows, cols=cols, band_type=band_type))
+
+
+def save_genbin(filename, array, rsc_data=None, **kwargs):
+    """Save the numpy array as the GDAL GenBin format.
+
+    Uses the existing `save` to write to binary, then 
+    creates the correct .hdr for the GenBin driver.
+
+    Args:
+        filename (str): Output path to save file in
+        array (ndarray): matrix to save
+    Returns:
+        None
+
+    References:
+        https://gdal.org/drivers/raster/genbin.html
+        https://github.com/OSGeo/gdal/blob/master/gdal/frmts/raw/genbindataset.cpp
+
+    Raises:
+        NotImplementedError: if file extension of filename not a known ext
+    """
+    save(filename, array)
+    rows, cols = array.shape[-2:]
+    srs = gdal.osr.SpatialReference()
+    srs.SetWellKnownGeogCS("WGS84")
+    proj = srs.ExportToWkt()
+    # driver = gdal.GetDriverByName('GenBin')
+    create_genbin_header(filename, *array.shape, proj=proj, rsc_data=rsc_data)
+
+
+def save_as_vrt(filename, array, outfile=None, rsc_data=None):
+    """
+
+    options:
+    SourceFilename: The name of the raw file containing the data for this band.
+        The relativeToVRT attribute can be used to indicate if the 
+        SourceFilename is relative to the .vrt file (1) or not (0).
+    ImageOffset: The offset in bytes to the beginning of the first pixel of 
+        data of this image band. Defaults to zero.
+    PixelOffset: The offset in bytes from the beginning of one pixel and 
+        the next on the same line. In packed single band data this will be
+        the size of the dataType in bytes.
+    LineOffset: The offset in bytes from the beginning of one scanline of data
+        and the next scanline of data. In packed single band data this will 
+        be PixelOffset * rasterXSize.
+
+    Ref: https://gdal.org/drivers/raster/vrt.html#vrt-descriptions-for-raw-files
+    """
+    rows, cols = array.shape[-2:]
+    outfile = outfile or filename + ".vrt"
+    driver = gdal.GetDriverByName("VRT")
+    gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
+    print("gdal dtyle", gdal_dtype, array.dtype)
+    # out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
+    out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=0)
+
+    # TODO: add image offset for line interleaved (see below)
+    image_offset = 0
+    pixel_offset = 8  # For complex64 numpy dtype: TODO make general
+    line_offset = pixel_offset * cols
+
+    options = [
+        'subClass=VRTRawRasterBand',
+        'SourceFilename={}'.format(filename),
+        'relativeToVRT=1',  # location of file: make it relative to the VRT file
+        'ImageOffset={}'.format(image_offset),
+        'PixelOffset={}'.format(pixel_offset),
+        'LineOffset={}'.format(line_offset),
+        # 'ByteOrder=LSB'
+    ]
+    # print(options)
+
+    out_raster.AddBand(gdal_dtype, options)
+
+    # Set geotransform (based on rsc data) and projection
+    if rsc_data is not None:
+        out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
+
+    srs = gdal.osr.SpatialReference()
+    srs.SetWellKnownGeogCS("WGS84")
+    out_raster.SetProjection(srs.ExportToWkt())
+
+    out_raster = None  # Force write
+    return
+
+
+def rsc_to_geotransform(rsc_data):
+
+    # See here for geotransform info
+    # https://gdal.org/user/raster_data_model.html#affine-geotransform
+    # NOTE: gdal standard is to reference pixel by top left corner,
+    # while the SAR .rsc stuff wants center of pixel
+    # Xgeo = GT(0) + Xpixel*GT(1) + Yline*GT(2)
+    # Ygeo = GT(3) + Xpixel*GT(4) + Yline*GT(5)
+
+    # So for us, this means we have
+    # X0 = trans[0] + .5*trans[1] + (.5*trans[2])
+    # Y0 = trans[3] + (.5*trans[4]) + .5*trans[5]
+    # where trans[2], trans[4] are 0s for north-up rasters
+
+    x_step = rsc_data["x_step"]
+    y_step = rsc_data["y_step"]
+    X0 = rsc_data["x_first"] - 0.5 * x_step
+    Y0 = rsc_data["y_first"] - 0.5 * y_step
+    return (X0, x_step, 0.0, Y0, 0.0, y_step)
+
+
+def save_as_geotiff(outfile=None, array=None, rsc_data=None):
+    """ Ref: https://gdal.org/tutorials/raster_api_tut.html#using-create"""
+
+    rows, cols = array.shape
+    if rows != rsc_data["file_length"] or cols != rsc_data["width"]:
+        raise ValueError("rsc_data ({}, {}) does not match array shape: ({}, {})".format(
+            (rsc_data["file_length"], rsc_data["width"], rows, cols)))
+
+    driver = gdal.GetDriverByName('GTiff')
+
+    gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
+    out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
+
+    # Set geotransform (based on rsc data) and projection
+    out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
+    srs = gdal.osr.SpatialReference()
+    srs.SetWellKnownGeogCS("WGS84")
+    out_raster.SetProjection(srs.ExportToWkt())
+
+    band = out_raster.GetRasterBand(1)
+    band.WriteArray(array)
+    band.SetNoDataValue(0.0)
+    band.FlushCache()
+    band = None
+    out_raster = None
+
+
+# From ISCE Image.py:
+# ET.SubElement(broot, 'ByteOrder').text = orderMap[ENDIAN[self.byteOrder].upper()]
+# if self.scheme.upper() == 'BIL':
+#     ET.SubElement(broot, 'ImageOffset').text = str(band * self.width * nbytes)
+#     ET.SubElement(broot, 'PixelOffset').text = str(nbytes)
+#     ET.SubElement(broot, 'LineOffset').text = str(self.bands * self.width * nbytes)
+# elif self.scheme.upper() == 'BIP':
+#     ET.SubElement(broot, 'ImageOffset').text = str(band * nbytes)
+#     ET.SubElement(broot, 'PixelOffset').text = str(self.bands * nbytes)
+#     ET.SubElement(broot, 'LineOffset').text = str(self.bands * self.width * nbytes)
+#           elif self.scheme.upper() == 'BSQ':
+#               ET.SubElement(broot, 'ImageOffset').text = str(band * self.width * self.length * nbytes)
+#               ET.SubElement(broot, 'PixelOffset').text = str(nbytes)
+#               ET.SubElement(broot, 'LineOffset').text = str(self.width * nbytes)
+
+#     def memMap(self, mode='r', band=None):
+#         if self.scheme.lower() == 'bil':
+#             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
+#                             shape=(self.coord2.coordSize , self.bands, self.coord1.coordSize))
+#             if band is not None:
+#                 immap = immap[:, band, :]
+#         elif self.scheme.lower() == 'bip':
+#             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
+#                               shape=(self.coord2.coordSize, self.coord1.coordSize, self.bands))
+#             if band is not None:
+#                 immap = immap[:, :, band]
+#         elif self.scheme.lower() == 'bsq':
+#             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
+#                         shape=(self.bands, self.coord2.coordSize, self.coord1.coordSize))
+#             if band is not None:
+#                 immap = immap[band, :, :]
+#         return immap
