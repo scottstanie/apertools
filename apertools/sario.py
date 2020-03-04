@@ -987,29 +987,36 @@ def save_genbin(filename, array, rsc_data=None, **kwargs):
     create_genbin_header(filename, *array.shape, proj=proj, rsc_data=rsc_data)
 
 
-def save_as_vrt(filename, array, outfile=None, rsc_data=None):
+def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data=None):
     """
 
     options:
     SourceFilename: The name of the raw file containing the data for this band.
-        The relativeToVRT attribute can be used to indicate if the 
+        The relativeToVRT attribute can be used to indicate if the
         SourceFilename is relative to the .vrt file (1) or not (0).
-    ImageOffset: The offset in bytes to the beginning of the first pixel of 
+    ImageOffset: The offset in bytes to the beginning of the first pixel of
         data of this image band. Defaults to zero.
-    PixelOffset: The offset in bytes from the beginning of one pixel and 
+    PixelOffset: The offset in bytes from the beginning of one pixel and
         the next on the same line. In packed single band data this will be
         the size of the dataType in bytes.
     LineOffset: The offset in bytes from the beginning of one scanline of data
-        and the next scanline of data. In packed single band data this will 
+        and the next scanline of data. In packed single band data this will
         be PixelOffset * rasterXSize.
 
     Ref: https://gdal.org/drivers/raster/vrt.html#vrt-descriptions-for-raw-files
     """
-    rows, cols = array.shape[-2:]
+    if array is None:
+        array = load(filename)
+
     outfile = outfile or filename + ".vrt"
+    if outfile is None:
+        raise ValueError("Need outfile or filename to save")
+
     driver = gdal.GetDriverByName("VRT")
     gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
-    print("gdal dtyle", gdal_dtype, array.dtype)
+    # print("gdal dtyle", gdal_dtype, array.dtype)
+
+    rows, cols = array.shape[-2:]
     # out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
     out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=0)
 
@@ -1018,6 +1025,16 @@ def save_as_vrt(filename, array, outfile=None, rsc_data=None):
     pixel_offset = 8  # For complex64 numpy dtype: TODO make general
     line_offset = pixel_offset * cols
 
+    interleave, num_bands = get_interleave(utils.get_file_ext(filename))
+    band = 1  # TODO: fix?
+    image_offset, pixel_offset, line_offset = get_offsets(
+        array.dtype,
+        interleave,
+        band,
+        cols,
+        rows,
+        num_bands,
+    )
     options = [
         'subClass=VRTRawRasterBand',
         'SourceFilename={}'.format(filename),
@@ -1032,8 +1049,14 @@ def save_as_vrt(filename, array, outfile=None, rsc_data=None):
     out_raster.AddBand(gdal_dtype, options)
 
     # Set geotransform (based on rsc data) and projection
-    if rsc_data is not None:
-        out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
+    print(rsc_data)
+    if rsc_data is None:
+        if rsc_file is None:
+            rsc_file = rsc_file if rsc_file else find_rsc_file(filename)
+            rsc_data = load(rsc_file)
+        gt = rsc_to_geotransform(rsc_data)
+        print(gt)
+        out_raster.SetGeoTransform(gt)
 
     srs = gdal.osr.SpatialReference()
     srs.SetWellKnownGeogCS("WGS84")
@@ -1041,6 +1064,43 @@ def save_as_vrt(filename, array, outfile=None, rsc_data=None):
 
     out_raster = None  # Force write
     return
+
+
+def get_interleave(ext):
+    """Returns band interleave format, and number of bands"""
+    if ext in BIL_FILES:
+        return "BIL", 2
+    elif ext in BIP_FILES:
+        return "BIP", 1
+    else:
+        raise ValueError("Unknown band interleave format (BIP/BIL) for {}".format(filename))
+
+
+def get_offsets(dtype, interleave, band, width, length, num_bands):
+    """
+    From ISCE Image.py:
+    """
+    num_bytes = np.dtype(dtype).itemsize
+    if interleave == "BIL":
+        return (
+            band * width * num_bytes,  # ImageOFfset
+            num_bytes,  # PixelOffset
+            num_bands * width * num_bytes,  # LineOffset
+        )
+    elif interleave == "BIP":
+        return (
+            band * num_bytes,
+            num_bands * num_bytes,
+            num_bands * width * num_bytes,
+        )
+    elif interleave == "BSQ":
+        return (
+            band * width * length * num_bytes,
+            num_bytes,
+            width * num_bytes,
+        )
+    else:
+        raise ValueError("Unknown interleave: %s" % interleave)
 
 
 def rsc_to_geotransform(rsc_data):
@@ -1091,21 +1151,17 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None):
     out_raster = None
 
 
-# From ISCE Image.py:
-# ET.SubElement(broot, 'ByteOrder').text = orderMap[ENDIAN[self.byteOrder].upper()]
-# if self.scheme.upper() == 'BIL':
-#     ET.SubElement(broot, 'ImageOffset').text = str(band * self.width * nbytes)
-#     ET.SubElement(broot, 'PixelOffset').text = str(nbytes)
-#     ET.SubElement(broot, 'LineOffset').text = str(self.bands * self.width * nbytes)
-# elif self.scheme.upper() == 'BIP':
-#     ET.SubElement(broot, 'ImageOffset').text = str(band * nbytes)
-#     ET.SubElement(broot, 'PixelOffset').text = str(self.bands * nbytes)
-#     ET.SubElement(broot, 'LineOffset').text = str(self.bands * self.width * nbytes)
-#           elif self.scheme.upper() == 'BSQ':
-#               ET.SubElement(broot, 'ImageOffset').text = str(band * self.width * self.length * nbytes)
-#               ET.SubElement(broot, 'PixelOffset').text = str(nbytes)
-#               ET.SubElement(broot, 'LineOffset').text = str(self.width * nbytes)
-
+#
+#     sizeMap = {
+#         'Byte': 1,
+#         'Int16': 2,
+#         'Int32': 4,
+#         'Float32': 4,
+#         'Float64': 8,
+#         'CFloat32': 8,
+#         'CFloat64': 16
+#     }
+#
 #     def memMap(self, mode='r', band=None):
 #         if self.scheme.lower() == 'bil':
 #             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
