@@ -912,79 +912,6 @@ def load_single_mask(int_date_string=None,
 
 
 # ######### GDAL FUNCTIONS ##############
-def load_genbin_bip(filename):
-    """Load the pixel-interleaved genbins. These should be complex (not supported by GenBin),
-    with data stored as (real, imag, real, image,...)"""
-    gbin = gdal.Open(filename)
-    arr3 = gbin.ReadAsArray()
-    gbin = None
-    return arr3[0] + 1j * arr3[1]
-
-
-def load_genbin_bil(filename):
-    """Loads the data band of the genbin
-    This is always stored in band 2 (band 1 is amplitude)
-
-    Used for .unw (unwrapped from snaphu), .cor (correlation)
-    """
-    gbin = gdal.Open(filename)
-    out = gbin.GetRasterBand(2).ReadAsArray()
-    gbin = None
-    return out
-
-
-def create_genbin_header(filename, rows, cols):
-    # Note: output will have 3 '{' and 3 '}' to open/close
-    # but need double for python formating
-    template = """\
-{{{{{{
-BANDS:          2
-ROWS:           {rows}
-COLS:           {cols}
-DATATYPE:       F32
-INTERLEAVING:   {band_type}
-DATU
-}}}}}}
-"""
-    # TODO: anythin but DATATYPE F32? or BANDS 2?
-    ext = utils.get_file_ext(filename)
-    if ext in BIL_FILES:
-        band_type = "BIL"
-    elif ext in BIP_FILES:
-        band_type = "BIP"
-    else:
-        raise ValueError("Unknown band interleave format (BIP/BIL) for {}".format(filename))
-    outname = filename + ".hdr"
-    with open(outname, "w") as f:
-        f.write(template.format(rows=rows, cols=cols, band_type=band_type))
-
-
-def save_genbin(filename, array, rsc_data=None, **kwargs):
-    """Save the numpy array as the GDAL GenBin format.
-
-    Uses the existing `save` to write to binary, then 
-    creates the correct .hdr for the GenBin driver.
-
-    Args:
-        filename (str): Output path to save file in
-        array (ndarray): matrix to save
-    Returns:
-        None
-
-    References:
-        https://gdal.org/drivers/raster/genbin.html
-        https://github.com/OSGeo/gdal/blob/master/gdal/frmts/raw/genbindataset.cpp
-
-    Raises:
-        NotImplementedError: if file extension of filename not a known ext
-    """
-    save(filename, array)
-    rows, cols = array.shape[-2:]
-    srs = gdal.osr.SpatialReference()
-    srs.SetWellKnownGeogCS("WGS84")
-    proj = srs.ExportToWkt()
-    # driver = gdal.GetDriverByName('GenBin')
-    create_genbin_header(filename, *array.shape, proj=proj, rsc_data=rsc_data)
 
 
 def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data=None):
@@ -1025,7 +952,7 @@ def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data
     pixel_offset = 8  # For complex64 numpy dtype: TODO make general
     line_offset = pixel_offset * cols
 
-    interleave, num_bands = get_interleave(utils.get_file_ext(filename))
+    interleave, num_bands = get_interleave(filename)
     band = 1  # TODO: fix?
     image_offset, pixel_offset, line_offset = get_offsets(
         array.dtype,
@@ -1066,8 +993,9 @@ def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data
     return
 
 
-def get_interleave(ext):
+def get_interleave(filename):
     """Returns band interleave format, and number of bands"""
+    ext = utils.get_file_ext(filename)
     if ext in BIL_FILES:
         return "BIL", 2
     elif ext in BIP_FILES:
@@ -1151,17 +1079,6 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None):
     out_raster = None
 
 
-#
-#     sizeMap = {
-#         'Byte': 1,
-#         'Int16': 2,
-#         'Int32': 4,
-#         'Float32': 4,
-#         'Float64': 8,
-#         'CFloat32': 8,
-#         'CFloat64': 16
-#     }
-#
 #     def memMap(self, mode='r', band=None):
 #         if self.scheme.lower() == 'bil':
 #             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
