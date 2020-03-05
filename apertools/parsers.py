@@ -80,6 +80,7 @@ class Sentinel(Base):
 
     Example:
         S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70.zip
+        S1A_IW_RAW__0SSV_20151018T005110_20151018T005142_008200_00B886_61EC.zip
 
     File name format:
         MMM_BB_TTTR_LFPP_YYYYMMDDTHHMMSS_YYYYMMDDTHHMMSS_OOOOOO_DDDDDD_CCCC.EEEE
@@ -499,7 +500,6 @@ def parse_ann_file(ann_filename, filename=None, ext=None, verbose=False):
         dict: the annotation file parsed into a dict. If no annotation file
             can be found, None is returned
     """
-
     def _parse_line(line):
         wordlist = line.split()
         # Pick the entry after the equal sign when splitting the line
