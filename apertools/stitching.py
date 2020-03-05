@@ -46,7 +46,8 @@ def group_geos_by_date(geo_path, reverse=True):
         """
         return [(date, list(g)) for date, g in itertools.groupby(geolist, key=lambda x: x.date)]
 
-    geos = [parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "S1*SLC*.geo"))]
+    # Assuming only IW products are used (included IW to differentiate from my date-only naming)
+    geos = [parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "S1*IW*.geo"))]
     # Find the dates that have multiple frames/.geos
     date_counts = collections.Counter([g.date for g in geos])
     dates_duped = set([date for date, count in date_counts.items() if count > 1])
