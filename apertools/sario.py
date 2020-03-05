@@ -1181,6 +1181,25 @@ def make_cmy_colortable():
 #                 immap = immap[band, :, :]
 #         return immap
 
+#     # TODO:
+# def set_geotransform_from_rsc():
+#     # from gdal_edit.py https://github.com/OSGeo/gdal/blob/master/gdal/swig/python/scripts/gdal_edit.py
+#
+#     if srs == '' or srs == 'None':
+#         ds.SetProjection('')
+#     elif srs is not None:
+#         sr = osr.SpatialReference()
+#         if sr.SetFromUserInput(srs) != 0:
+#             print('Failed to process SRS definition: %s' % srs)
+#             return -1
+#         wkt = sr.ExportToWkt()
+#         if not gcp_list:
+#             ds.SetProjection(wkt)
+#
+#     if lry is not None:
+#         gt = [ulx, (lrx - ulx) / ds.RasterXSize, 0, uly, 0, (lry - uly) / ds.RasterYSize]
+#         ds.SetGeoTransform(gt)
+
 
 def testt(fn):
     ds = gdal.Open(fn, 1)
