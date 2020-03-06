@@ -34,13 +34,13 @@ E.G.
            [148.24612, 149.8064 , 170.14888, 158.08841],
            [151.24222, 174.0751 , 191.23549, 162.8879 ]], dtype=float32)
 
-# Info of filetypes of zebker vs ROI PAC (very similar)
-|                                  | Zebker extention | ROI PAC extension | Data type (numpy/Gdal) |                         File type                        |
-|:--------------------------------:|:----------------:|:-----------------:|:----------------------:|:--------------------------------------------------------:|
-|  SAR image (SLC, or geocoded SLC |  .geo (geocoded) |   .slc (regular)  |   Complex64/CFloat32   |  1 band (or BIP for 2 bands  of real floats, imag float) |
-|          Interferograms          |       .int       |        .int       |   Complex64/CFloat32   |                      1 complex band                      |
-|          Unwrapped igram         |       .unw       |        .unw       |     Float32/Float32    |                        2 band BIL                        |
-|            correlation           |        .cc       |        .cor       |         Float32        |                        2 band BIL                        |
-|             amplitude            |       .amp       |        .amp       |         Float32        |              2 band BIP (bands = SAR images)             |
+# Info on filetypes
+|                                  |         extension (ROIPAC/zebker)        | Data type (numpy/Gdal) |                         File type                        |
+|:--------------------------------:|:----------------------------------------:|:----------------------:|:--------------------------------------------------------:|
+|  SAR image (SLC, or geocoded SLC |  (.slc, regular SAR/ .geo, geocoded SAR) |   Complex64/CFloat32   |  1 band (or BIP for 2 bands  of real floats, imag float) |
+|          Interferograms          |                   .int                   |   Complex64/CFloat32   |                      1 complex band                      |
+|          Unwrapped igram         |                   .unw                   |     Float32/Float32    |                        2 band BIL                        |
+|            correlation           |               (.cor / .cc)               |         Float32        |                        2 band BIL                        |
+|             amplitude            |                   .amp                   |         Float32        |              2 band BIP (bands = SAR images)             |
 
 # VRT Files (todo)
