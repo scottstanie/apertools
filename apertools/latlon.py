@@ -34,11 +34,11 @@ class LatlonImage(np.ndarray):
 
     Attributes:
         filename (str): Name of file where data was loaded from (if from file)
-        dem_rsc_file (str): filename of the dem.rsc file with info (see below)
-        dem_rsc (dict): lat/lon and file infomation about image
-        dem_rsc_is_valid (bool): flag to indicate if the `dem_rsc` applies to image.
+        rsc_file (str): filename of the dem.rsc file with info (see below)
+        rsc_data (dict): lat/lon and file infomation about image
+        dem_rsc_is_valid (bool): flag to indicate if the `rsc_data` applies to image.
             becomes invalid when, for example, 1D slicing occurs to get one row
-    Keys from the dem_rsc dict which are also attributes:
+    Keys from the rsc_data dict which are also attributes:
         width: number of cols in image (redundant with ncols)
         file_length: number of rows in image (redundant with nrows)
         x_first: location of first column
@@ -51,9 +51,8 @@ class LatlonImage(np.ndarray):
         z_scale (1)
         projection (LL)
     """
-
-    def __new__(cls, data=None, filename=None, dem_rsc_file=None, dem_rsc=None):
-        """Can pass in either filenames to load, or 2D arrays/dem_rsc dicts
+    def __new__(cls, data=None, filename=None, rsc_file=None, rsc_data=None):
+        """Can pass in either filenames to load, or 2D arrays/rsc_data dicts
 
         if __new__() returns an instance of cls, then the new instance's __init__()
         is then called
@@ -66,36 +65,36 @@ class LatlonImage(np.ndarray):
         if data is None and filename is None:
             raise ValueError("Need data or filename")
         elif data is None and filename is not None:
-            data = apertools.sario.load(filename)
+            data = apertools.sario.load(filename, rsc_file=rsc_file)
 
         obj = np.asarray(data).view(cls)
         obj.filename = filename
 
-        if dem_rsc_file:
-            obj.dem_rsc_file = apertools.utils.fullpath(dem_rsc_file)
+        if rsc_file:
+            obj.rsc_file = apertools.utils.fullpath(rsc_file)
         else:
-            obj.dem_rsc_file = apertools.sario.find_rsc_file(filename) if filename else None
+            obj.rsc_file = apertools.sario.find_rsc_file(filename) if filename else None
 
-        if dem_rsc:
-            obj.dem_rsc = dem_rsc
-        elif obj.dem_rsc_file:
-            obj.dem_rsc = apertools.sario.load(obj.dem_rsc_file)
+        if rsc_data:
+            obj.rsc_data = rsc_data
+        elif obj.rsc_file:
+            obj.rsc_data = apertools.sario.load(obj.rsc_file)
         else:
-            obj.dem_rsc = None
+            obj.rsc_data = None
 
         # Set the flag to say whether a valid dem rsc exists/ is active
-        # Also make each element in the dem_rsc dict an object attr
+        # Also make each element in the rsc_data dict an object attr
         # e.g. : img.x_first
-        if obj.dem_rsc:
+        if obj.rsc_data:
             obj.dem_rsc_is_valid = True
-            for k, v in obj.dem_rsc.items():
+            for k, v in obj.rsc_data.items():
                 setattr(obj, k, v)
         else:
             obj.dem_rsc_is_valid = False
 
-        if obj.dem_rsc is not None:
+        if obj.rsc_data is not None:
             if (obj.file_length, obj.width) != obj.shape[-2:]:
-                raise ValueError("Shape %s does not equal dem_rsc data (%s, %s)" %
+                raise ValueError("Shape %s does not equal rsc_data data (%s, %s)" %
                                  (obj.shape, obj.file_length, obj.width))
 
         # For things like keeping track of GPS points within image
@@ -115,11 +114,11 @@ class LatlonImage(np.ndarray):
         if obj is None:
             return
         self.filename = getattr(obj, 'filename', None)
-        self.dem_rsc_file = getattr(obj, 'dem_rsc_file', None)
-        self.dem_rsc = getattr(obj, 'dem_rsc', None)
+        self.rsc_file = getattr(obj, 'rsc_file', None)
+        self.rsc_data = getattr(obj, 'rsc_data', None)
         self.dem_rsc_is_valid = getattr(obj, 'dem_rsc_is_valid', False)
-        if self.dem_rsc:
-            for k, v in self.dem_rsc.items():
+        if self.rsc_data:
+            for k, v in self.rsc_data.items():
                 setattr(self, k, v)
         self.points = getattr(obj, 'points', None)
 
@@ -129,7 +128,7 @@ class LatlonImage(np.ndarray):
         return sliced
 
     def __getitem__(self, items):
-        """Runs on access/slicing: we want to adjust the dem_rsc
+        """Runs on access/slicing: we want to adjust the rsc_data
 
         Will get the right starts and steps to pass to `crop_rsc_data`
         """
@@ -166,7 +165,7 @@ class LatlonImage(np.ndarray):
             # except (TypeError, ValueError):
             # TypeError means they did A[100] or A[2:4], not A[2:4,:]
             # ValueError means something like an ndarray was used to index
-            # We'll assume that this indexing will invalidate the dem_rsc data
+            # We'll assume that this indexing will invalidate the rsc_data data
             # raise ValueError("Can only do 2D slices on %s" % self.__class__.__name__)
         else:
             return self._disable_dem_rsc(sliced)
@@ -213,8 +212,8 @@ class LatlonImage(np.ndarray):
             dslice = None
             lat, lon = slice_items
         else:
-            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" % (self.ndim,
-                                                                                     slice_items))
+            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" %
+                             (self.ndim, slice_items))
 
         if isinstance(lat, slice):
             # Use class step size if None given
@@ -252,7 +251,7 @@ class LatlonImage(np.ndarray):
         row_start, row_step = row_slice.start, row_slice.step
         col_start, col_step = col_slice.start, col_slice.step
         new_rsc_data = self.crop_rsc_data(
-            self.dem_rsc,
+            self.rsc_data,
             row_start,
             col_start,
             nrows,
@@ -261,12 +260,12 @@ class LatlonImage(np.ndarray):
             col_step,
         )
 
-        sliced.dem_rsc = new_rsc_data
+        sliced.rsc_data = new_rsc_data
         return sliced
 
     @staticmethod
-    def crop_rsc_data(dem_rsc, row_start, col_start, nrows, ncols, row_step=1, col_step=1):
-        """Adjusts the old dem_rsc for a cropped data
+    def crop_rsc_data(rsc_data, row_start, col_start, nrows, ncols, row_step=1, col_step=1):
+        """Adjusts the old rsc_data for a cropped data
 
         Takes the 'file_length' and 'width' keys for a cropped data
         and adjusts for the smaller size with a new dict
@@ -278,7 +277,7 @@ class LatlonImage(np.ndarray):
         >>> im_test = np.arange(30).reshape((6, 5))
         >>> rsc_info = {'x_first': 1.0, 'y_first': 2.0, 'x_step': 0.1,\
 'y_step': -0.2, 'file_length': 6,'width': 5}
-        >>> im = LatlonImage(data=im_test, dem_rsc=rsc_info)
+        >>> im = LatlonImage(data=im_test, rsc_data=rsc_info)
         >>> out = im.crop_rsc_data(rsc_info, None, None, 2, 2)
         >>> print(out['width'], out['file_length'])
         2 2
@@ -288,11 +287,11 @@ class LatlonImage(np.ndarray):
         >>> out = im.crop_rsc_data(rsc_info, None, None, 2, 2, 2, 2)
         >>> print(out['x_step'], out['y_step'])
         0.2 -0.4
-        >>> im2 = LatlonImage(data=im_test, dem_rsc=None)
+        >>> im2 = LatlonImage(data=im_test, rsc_data=None)
         >>> print(im.crop_rsc_data(None, 1, 4, 2, 5))
         None
         """
-        if not dem_rsc:
+        if not rsc_data:
             return None
 
         # Adjust and Nones from the slice object
@@ -301,7 +300,7 @@ class LatlonImage(np.ndarray):
         row_step = row_step or 1
         col_step = col_step or 1
 
-        rsc_copy = copy.copy(dem_rsc)
+        rsc_copy = copy.copy(rsc_data)
         # Move forward the starting row/col from where it used to be
         rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * col_start
         rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * row_start
@@ -324,7 +323,7 @@ class LatlonImage(np.ndarray):
         row_step, col_step = row_looks, col_looks
         nrows, ncols = downlooked.shape
         new_rsc_data = self.crop_rsc_data(
-            self.dem_rsc,
+            self.rsc_data,
             row_start,
             col_start,
             nrows,
@@ -333,7 +332,7 @@ class LatlonImage(np.ndarray):
             col_step,
         )
 
-        downlooked.dem_rsc = new_rsc_data
+        downlooked.rsc_data = new_rsc_data
         return downlooked
 
     @property
@@ -355,12 +354,12 @@ class LatlonImage(np.ndarray):
             raise ValueError("LatlonImage must be dim 2 or 3 to have ncols")
 
     def rowcol_to_latlon(self, row, col):
-        return rowcol_to_latlon(row, col, self.dem_rsc)
+        return rowcol_to_latlon(row, col, self.rsc_data)
 
     @property
     def extent(self):
         if self.dem_rsc_is_valid:
-            return grid_extent(**self.dem_rsc)
+            return grid_extent(**self.rsc_data)
 
     @property
     def top_left(self):
@@ -416,7 +415,6 @@ class LatlonImage(np.ndarray):
             If array passed for either lon or lat, array is returned
             Otherwise if only one, it is (None, col) or (row, None)
         """
-
         def _check_bounds(idx_arr, bound):
             int_idxs = idx_arr.round().astype(int)
             bad_idxs = np.logical_or(int_idxs < 0, int_idxs >= bound)
@@ -442,12 +440,12 @@ class LatlonImage(np.ndarray):
     def contains(self, lon_lat_point_list=None, lon_lat_point=None):
         if lon_lat_point is not None:
             lon, lat = lon_lat_point
-            return grid_contains((lon, lat), **self.dem_rsc)
+            return grid_contains((lon, lat), **self.rsc_data)
             # Alternative:
             # Each of the tuple must contain an answer for the point to be contained
             # return all(num is not None for num in self.nearest_pixel(lon, lat))
         elif lon_lat_point_list is not None:
-            return [grid_contains((lon, lat), **self.dem_rsc) for lon, lat in lon_lat_point_list]
+            return [grid_contains((lon, lat), **self.rsc_data) for lon, lat in lon_lat_point_list]
 
     def distance(self, row_col1, row_col2):
         """Find the distance in km between two points on the image
@@ -497,14 +495,17 @@ def load_deformation_img(igram_path=".",
     """
     igram_path, filename, full_path = apertools.sario.get_full_path(igram_path, filename, full_path)
 
-    _, defo_stack = apertools.sario.load_deformation(
-        igram_path=igram_path, filename=filename, full_path=full_path, dset=dset, n=n)
+    _, defo_stack = apertools.sario.load_deformation(igram_path=igram_path,
+                                                     filename=filename,
+                                                     full_path=full_path,
+                                                     dset=dset,
+                                                     n=n)
     if filename.endswith(".h5"):
         rsc_data = apertools.sario.load_dem_from_h5(h5file=full_path)
     else:
         rsc_data = apertools.sario.load(os.path.join(igram_path, rsc_filename))
     img = np.mean(defo_stack, axis=0) if n > 1 else defo_stack
-    img = LatlonImage(data=img, dem_rsc=rsc_data)
+    img = LatlonImage(data=img, rsc_data=rsc_data)
     return img
 
 
@@ -930,7 +931,6 @@ def intersection_corners(dem1, dem2):
         tuple[float]: the boundaries of the intersection box of the 2 areas in order:
         (lon_left,lon_right,lat_bottom,lat_top)
     """
-
     def _max_min(a, b):
         """The max of two iterable mins"""
         return max(min(a), min(b))
@@ -982,11 +982,11 @@ def find_total_pixels(image_list):
     """
     # TODO: + 1 needed?
     if any(not img.dem_rsc_is_valid for img in image_list):
-        raise ValueError("All images must have dem_rsc provided")
+        raise ValueError("All images must have rsc_data provided")
     elif any(img.x_step != image_list[0].x_step for img in image_list):
-        raise ValueError("All images must have same x_step in dem_rsc")
+        raise ValueError("All images must have same x_step in rsc_data")
     elif any(img.y_step != image_list[0].y_step for img in image_list):
-        raise ValueError("All images must have same y_step in dem_rsc")
+        raise ValueError("All images must have same y_step in rsc_data")
 
     images_sorted = sort_by_lat(image_list)
     im_first = images_sorted[0]
@@ -1059,10 +1059,12 @@ def load_cropped_masked_deformation(path=".",
         return
 
     rsc_data = apertools.sario.load(os.path.join(path, rsc_name))
-    stack_mask = apertools.sario.load_mask(
-        geo_date_list=geo_date_list, perform_mask=perform_mask, directory=path, dset=dset)
+    stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list,
+                                           perform_mask=perform_mask,
+                                           directory=path,
+                                           dset=dset)
 
-    stack_ll = LatlonImage(data=deformation, dem_rsc=rsc_data)
+    stack_ll = LatlonImage(data=deformation, rsc_data=rsc_data)
     stack_ll[:, stack_mask] = np.nan
 
     stack_ll = stack_ll[..., row_start:row_end, col_start:col_end]
@@ -1070,8 +1072,8 @@ def load_cropped_masked_deformation(path=".",
 
 
 # TODO: should this just roll into latlon_to_rowcol?
-def nearest_pixel(dem_rsc, lon=None, lat=None, ncols=np.inf, nrows=np.inf):
-    """Find the nearest row, col to a given lat and/or lon within dem_rsc
+def nearest_pixel(rsc_data, lon=None, lat=None, ncols=np.inf, nrows=np.inf):
+    """Find the nearest row, col to a given lat and/or lon within rsc_data
 
     Args:
         lon (ndarray[float]): single or array of lons
@@ -1082,7 +1084,6 @@ def nearest_pixel(dem_rsc, lon=None, lat=None, ncols=np.inf, nrows=np.inf):
         If array passed for either lon or lat, array is returned
         Otherwise if only one, it is (None, col) or (row, None)
     """
-
     def _check_bounds(idx_arr, bound):
         int_idxs = idx_arr.round().astype(int)
         bad_idxs = np.logical_or(int_idxs < 0, int_idxs >= bound)
@@ -1098,20 +1099,20 @@ def nearest_pixel(dem_rsc, lon=None, lat=None, ncols=np.inf, nrows=np.inf):
     out_row_col = [None, None]
 
     if lon is not None:
-        out_row_col[1] = _check_bounds(nearest_col(dem_rsc, lon), ncols)
+        out_row_col[1] = _check_bounds(nearest_col(rsc_data, lon), ncols)
     if lat is not None:
-        out_row_col[0] = _check_bounds(nearest_row(dem_rsc, lat), nrows)
+        out_row_col[0] = _check_bounds(nearest_row(rsc_data, lat), nrows)
 
     return tuple(out_row_col)
 
 
-def nearest_row(dem_rsc, lat):
-    """Find the nearest row to a given lat within dem_rsc (no OOB checking)"""
-    y_first, y_step = dem_rsc['y_first'], dem_rsc['y_step']
+def nearest_row(rsc_data, lat):
+    """Find the nearest row to a given lat within rsc_data (no OOB checking)"""
+    y_first, y_step = rsc_data['y_first'], rsc_data['y_step']
     return ((np.array(lat) - y_first) / y_step).round().astype(int)
 
 
-def nearest_col(dem_rsc, lon):
-    """Find the nearest col to a given lon within dem_rsc (no OOB checking)"""
-    x_first, x_step = dem_rsc['x_first'], dem_rsc['x_step']
+def nearest_col(rsc_data, lon):
+    """Find the nearest col to a given lon within rsc_data (no OOB checking)"""
+    x_first, x_step = rsc_data['x_first'], rsc_data['x_step']
     return ((np.array(lon) - x_first) / x_step).round().astype(int)
