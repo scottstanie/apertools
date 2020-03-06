@@ -15,9 +15,11 @@ If you have a .rsc file with the same base name as the data file, it will automa
 
 E.G.
 ```python
->>> ls 20180205_20180217*
+$ cp dem.rsc 20180205_20180217.amp.rsc
+$ ls 20180205_20180217*
 20180205_20180217.amp     20180205_20180217.amp.rsc  ...
 
+$ python
 >>> import gdal
 >>> f1 = gdal.Open("20180205_20180217.amp")
 
