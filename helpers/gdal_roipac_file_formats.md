@@ -14,25 +14,27 @@ since it starts with both bands' data for pixel (1,1), then both bands for (1,2)
 If you have a .rsc file with the same base name as the data file, it will automatically load.
 
 E.G.
-    >>> ls 20180205_20180217*
-    20180205_20180217.amp     20180205_20180217.amp.rsc  ...
+```python
+>>> ls 20180205_20180217*
+20180205_20180217.amp     20180205_20180217.amp.rsc  ...
 
-    >>> import gdal
-    >>> f1 = gdal.Open("20180205_20180217.amp")
+>>> import gdal
+>>> f1 = gdal.Open("20180205_20180217.amp")
 
-    >>> f1.GetDriver().LongName
-    'ROI_PAC raster'
+>>> f1.GetDriver().LongName
+'ROI_PAC raster'
 
-    >>> f1.RasterCount
-    2
+>>> f1.RasterCount
+2
 
-    >>> band1 = f1.GetRasterBand(1)
+>>> band1 = f1.GetRasterBand(1)
 
-    >>> band1.ReadAsArray()[:4, :4]
-    array([[168.60542, 182.9884 , 136.90907, 149.62862],
-           [162.02464, 187.2191 , 146.78882, 124.4787 ],
-           [148.24612, 149.8064 , 170.14888, 158.08841],
-           [151.24222, 174.0751 , 191.23549, 162.8879 ]], dtype=float32)
+>>> band1.ReadAsArray()[:4, :4]
+array([[168.60542, 182.9884 , 136.90907, 149.62862],
+       [162.02464, 187.2191 , 146.78882, 124.4787 ],
+       [148.24612, 149.8064 , 170.14888, 158.08841],
+       [151.24222, 174.0751 , 191.23549, 162.8879 ]], dtype=float32)
+```
 
 # Info on filetypes
 |                                  |         extension (ROIPAC/zebker)        | Data type (numpy/Gdal) |                         File type                        |
