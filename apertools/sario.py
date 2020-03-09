@@ -246,6 +246,19 @@ def load_file(filename,
 load = load_file
 
 
+def _get_file_dtype(filename=None, ext=None):
+    if ext is None:
+        ext = utils.get_file_ext(filename)
+    if ext in ELEVATION_EXTS:
+        return np.int16
+    elif ext in COMPLEX_EXTS:
+        return np.complex64
+    elif ext in REAL_EXTS:
+        return np.float32
+    else:
+        raise NotImplementedError("Unknown file dtype for %s" % ext)
+
+
 def _get_full_grd_ext(filename):
     if any(e in filename for e in ('.int', '.unw', '.cor', '.cc', '.amp1', '.amp2', '.amp')):
         ext = '.' + '.'.join(filename.split('.')[-2:])
@@ -276,6 +289,7 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
     if filename:
         directory = os.path.split(os.path.abspath(filename))[0]
     # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
+    print("HERE:", directory, filename)
     possible_rscs = find_files(directory, '*.rsc')
     if verbose:
         logger.info("Searching %s for rsc files", directory)
@@ -292,7 +306,7 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
 
 
 def _get_file_rows_cols(rows=None, cols=None, ann_info=None, rsc_data=None):
-    """Wrapper function to find file width for different SV types"""
+    """Wrapper function to find file width for different satellite types"""
     if rows is not None and cols is not None:
         return rows, cols
     elif (not rsc_data and not ann_info) or (rsc_data and ann_info):
@@ -914,10 +928,20 @@ def load_single_mask(int_date_string=None,
 # ######### GDAL FUNCTIONS ##############
 
 
-def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data=None):
+def save_as_vrt(filename=None,
+                array=None,
+                rows=None,
+                cols=None,
+                dtype=None,
+                outfile=None,
+                rsc_file=None,
+                rsc_data=None,
+                interleave=None,
+                band=None,
+                num_bands=None):
     """
 
-    options:
+    VRT options:
     SourceFilename: The name of the raw file containing the data for this band.
         The relativeToVRT attribute can be used to indicate if the
         SourceFilename is relative to the .vrt file (1) or not (0).
@@ -932,35 +956,52 @@ def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data
 
     Ref: https://gdal.org/drivers/raster/vrt.html#vrt-descriptions-for-raw-files
     """
-    if array is None:
-        array = load(filename)
-
     outfile = outfile or filename + ".vrt"
     if outfile is None:
         raise ValueError("Need outfile or filename to save")
 
     vrt_driver = gdal.GetDriverByName("VRT")
     gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
-    # print("gdal dtyle", gdal_dtype, array.dtype)
-
-    rows, cols = array.shape[-2:]
-    # out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
-    out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=0)
+    print("gdal dtype", gdal_dtype, array.dtype)
 
     # Set geotransform (based on rsc data) and projection
     if rsc_data is None:
         if rsc_file is None:
-            rsc_file = rsc_file if rsc_file else find_rsc_file(filename)
+            # rsc_file = rsc_file if rsc_file else find_rsc_file(filename)
+            print("Warning: No .rsc file or data given")
+            geotrans = None
+        else:
             rsc_data = load(rsc_file)
-        gt = rsc_to_geotransform(rsc_data)
-        out_raster.SetGeoTransform(gt)
+
+    if array is not None:
+        dtype = array.dtype
+        rows, cols = array.shape[-2:]
+    if rsc_data is not None:
+        rows, cols = _get_file_rows_cols(rows=rows, cols=cols, rsc_data=rsc_data)
+    if dtype is None:
+        dtype = _get_file_dtype(filename)
+    if cols is not None:
+        num_bytes = np.dtype(dtype).itemsize
+        rows = os.path.getsize(filename) / num_bytes / cols
+
+    # out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
+    out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=0)
+
+    if rsc_data is not None:
+        geotrans = rsc_to_geotransform(rsc_data)
+        out_raster.SetGeoTransform(geotrans)
+    else:
+        print("Warning: No GeoTransform could be made/set")
 
     srs = gdal.osr.SpatialReference()
     srs.SetWellKnownGeogCS("WGS84")
     out_raster.SetProjection(srs.ExportToWkt())
 
-    interleave, num_bands = get_interleave(filename)
-    band = 1  # TODO: fix?
+    if interleave is None or num_bands is None:
+        interleave, num_bands = get_interleave(filename)
+    if band is None:
+        band = 2 if utils.get_file_ext(filename) in STACKED_FILES else 1
+
     image_offset, pixel_offset, line_offset = get_offsets(
         array.dtype,
         interleave,
@@ -981,27 +1022,34 @@ def save_as_vrt(filename=None, array=None, outfile=None, rsc_file=None, rsc_data
     out_raster.AddBand(gdal_dtype, options)
     out_raster = None  # Force write
 
-    create_derived_band(outfile, rows, cols, gt, func="log10")
-    create_derived_band(outfile, rows, cols, gt, func="phase")
+    if geotrans is not None:
+        create_derived_band(outfile, rows, cols, geotrans, func="log10")
+        create_derived_band(outfile, rows, cols, geotrans, func="phase")
     return
 
 
-def create_derived_band(filename, rows, cols, gt, desc=None, func="log10"):
+def create_derived_band(src_filename, outfile=None, src_dtype="CFloat32", desc=None, func="log10"):
     # For new outfile, only have one .vrt extension
-    outfile = "{}.{}.vrt".format(filename.replace(".vrt", ""), func)
-    desc = desc or "{func} of {filename}".format(func=func, filename=filename)
+    if outfile is None:
+        outfile = "{}.{}.vrt".format(src_filename.replace(".vrt", ""), func)
+    desc = desc or "{func} of {filename}".format(func=func, filename=src_filename)
     srs = gdal.osr.SpatialReference()
     srs.SetWellKnownGeogCS("WGS84")
     srs_string = srs.ExportToWkt()
 
-    src_dtype = "CFloat32"
+    f_src = gdal.Open(src_filename)
+    geotrans = f_src.GetGeoTransform()
+    rows = f_src.RasterYSize
+    cols = f_src.RasterXSize
+    f_src = None
+
     derived_vrt_template = """<VRTDataset rasterXSize="{cols}" rasterYSize="{rows}">
   <SRS> {srs} </SRS>
-  <GeoTransform> {gt} </GeoTransform>
+  <GeoTransform> {geotrans} </GeoTransform>
   <VRTRasterBand dataType="Float32" band="1" subClass="VRTDerivedRasterBand">
     <Description> {desc} </Description>
     <SimpleSource>
-      <SourceFilename relativeToVRT="1">20160327_20160420.int.vrt</SourceFilename>
+      <SourceFilename relativeToVRT="1">{src_filename}</SourceFilename>
       <SourceBand>1</SourceBand>
     </SimpleSource>
     <PixelFunctionType>{func}</PixelFunctionType>
@@ -1010,7 +1058,8 @@ def create_derived_band(filename, rows, cols, gt, desc=None, func="log10"):
   </VRTRasterBand>
 </VRTDataset>
 """.format(
-        gt=",".join((str(n) for n in gt)),
+        src_filename=src_filename,
+        geotrans=",".join((str(n) for n in geotrans)),
         srs=srs_string,
         rows=rows,
         cols=cols,
@@ -1035,11 +1084,13 @@ def get_interleave(filename):
     """Returns band interleave format, and number of bands"""
     ext = utils.get_file_ext(filename)
     if ext in BIL_FILES:
-        return "BIL", 2
+        interleave, num_bands = "BIL", 2
+    # TODO: the .amp files are actually BIP with 2 bands...
     elif ext in BIP_FILES:
-        return "BIP", 1
+        interleave, num_bands = "BIP", 1
     else:
         raise ValueError("Unknown band interleave format (BIP/BIL) for {}".format(filename))
+    return interleave, num_bands
 
 
 def get_offsets(dtype, interleave, band, width, length, num_bands):

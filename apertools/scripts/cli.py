@@ -141,7 +141,6 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
         aper kml 20180420_20180502.tif --rsc dem.rsc -t "My igram" -d "Kiluea eruption" -o out.kml
 
     """
-
     def _save_npy_file(imgfile, new_filename):
         image = apertools.sario.load(imgfile)
         if image.ndim > 2:
@@ -289,7 +288,6 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
 
         aper overlaps --filename box.geojson > overlap_files.txt
     """
-
     def _parse(date_string):
         return datetime.strptime(date_string, "%Y%m%d").date()
 
@@ -332,3 +330,26 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     _log_paths(sent_list)
 
     print("\n".join(s.filename for s in sent_list))
+
+
+# COMMAND: save-vrt
+@cli.command("save-vrt")
+@click.argument("filename")
+@click.option("--rsc-file", help="If exists, the .rsc file of data")
+@click.option("--cols", type=int, help="Number of columns (width) in file")
+@click.option("--rows", type=int, help="Number of rows (file_length) in file")
+@click.option("--dtype", help="Optional number dtype string")
+@click.option("--band", help="The band number to use for the VRT")
+@click.option("--num-bands", help="Number of bands in file")
+def save_vrt(filename, rsc_file, cols, rows, dtype, band, num_bands):
+    """Save a GDAL .vrt file nary raster loading
+    """
+    apertools.sario.save_as_vrt(
+        filename=filename,
+        rows=rows,
+        cols=cols,
+        dtype=dtype,
+        rsc_file=rsc_file,
+        band=band,
+        num_bands=num_bands,
+    )
