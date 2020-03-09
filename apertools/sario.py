@@ -960,10 +960,6 @@ def save_as_vrt(filename=None,
     if outfile is None:
         raise ValueError("Need outfile or filename to save")
 
-    vrt_driver = gdal.GetDriverByName("VRT")
-    gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
-    print("gdal dtype", gdal_dtype, array.dtype)
-
     # Set geotransform (based on rsc data) and projection
     if rsc_data is None:
         if rsc_file is None:
@@ -983,6 +979,8 @@ def save_as_vrt(filename=None,
     if cols is not None:
         num_bytes = np.dtype(dtype).itemsize
         rows = os.path.getsize(filename) / num_bytes / cols
+
+    vrt_driver = gdal.GetDriverByName("VRT")
 
     # out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
     out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=0)
@@ -1019,6 +1017,8 @@ def save_as_vrt(filename=None,
         'LineOffset={}'.format(line_offset),
         # 'ByteOrder=LSB'
     ]
+    gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(dtype)
+    # print("gdal dtype", gdal_dtype, dtype)
     out_raster.AddBand(gdal_dtype, options)
     out_raster = None  # Force write
 
