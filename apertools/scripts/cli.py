@@ -36,21 +36,26 @@ def cli(ctx, verbose, path):
 
 # COMMAND: view-stack
 @cli.command('view-stack')
-@click.option("--filename", default='deformation.npy', help="Name of saved deformation stack")
+@click.option("--filename",
+              default='deformation.npy',
+              help="Name of saved deformation stack")
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
-@click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
+@click.option("--label",
+              default='Centimeters',
+              help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
 @click.option('--row-start', default=0)
 @click.option('--row-end', default=-1)
 @click.option('--col-start', default=0)
 @click.option('--col-end', default=-1)
-@click.option("--rowcol",
-              help="Use row,col for legened entries (instead of default lat,lon)",
-              is_flag=True,
-              default=False)
+@click.option(
+    "--rowcol",
+    help="Use row,col for legened entries (instead of default lat,lon)",
+    is_flag=True,
+    default=False)
 @click.pass_obj
-def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
-               rowcol):
+def view_stack(context, filename, cmap, label, title, row_start, row_end,
+               col_start, col_end, rowcol):
     """Explore timeseries on deformation image.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -62,9 +67,13 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
     if filename.endswith(".h5"):
         h_file = h5py.File(filename, "r")
         deformation = h_file["deformation"]
-        geolist = [datetime.strptime(g.decode("ascii"), "%Y%m%d").date() for g in h_file["geolist"]]
+        geolist = [
+            datetime.strptime(g.decode("ascii"), "%Y%m%d").date()
+            for g in h_file["geolist"]
+        ]
     else:
-        geolist, deformation = apertools.sario.load_deformation(context['path'], filename=filename)
+        geolist, deformation = apertools.sario.load_deformation(
+            context['path'], filename=filename)
 
     if geolist is None or deformation is None:
         return
@@ -72,9 +81,11 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
     if rowcol:
         rsc_data = None
     else:
-        rsc_data = sardem.loading.load_dem_rsc(os.path.join(context['path'], 'dem.rsc'))
+        rsc_data = sardem.loading.load_dem_rsc(
+            os.path.join(context['path'], 'dem.rsc'))
 
-    deformation = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
+    deformation = apertools.latlon.LatlonImage(data=deformation,
+                                               dem_rsc=rsc_data)
     deformation = deformation[:, row_start:row_end, col_start:col_end]
     img = np.mean(deformation[-3:], axis=0)
 
@@ -98,7 +109,9 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
 @click.option("--alpha",
               default=0.6,
               help="Transparency for background magnitude (if plotting insar)")
-@click.option("--colorbar/--no-colorbar", default=True, help="Display colorbar on figure")
+@click.option("--colorbar/--no-colorbar",
+              default=True,
+              help="Display colorbar on figure")
 def plot(filename, downsample, cmap, title, alpha, colorbar):
     """Quick plot of a single InSAR file.
 
@@ -119,20 +132,30 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
 # COMMAND: kml
 @cli.command()
 @click.argument("imgfile", required=False)
-@click.option("--shape",
-              default="box",
-              help="kml shape: use 'box' for image overlay, 'polygon' for geojson square")
+@click.option(
+    "--shape",
+    default="box",
+    help="kml shape: use 'box' for image overlay, 'polygon' for geojson square"
+)
 @click.option("--rsc", help=".rsc file containing lat/lon start and steps")
-@click.option("--geojson", "-g", help="Optional: if making shape from .geojson, file to specify")
+@click.option("--geojson",
+              "-g",
+              help="Optional: if making shape from .geojson, file to specify")
 @click.option("--title", "-t", help="Title of the KML object once loaded.")
 @click.option("--desc", "-d", help="Description for google Earth.")
 @click.option("--output", "-o", help="File to save kml output to")
-@click.option("--cmap", default="seismic", help="Colormap (if saving .npy image)")
-@click.option("--normalize", is_flag=True, default=False, help="Center image to [-1, 1]")
+@click.option("--cmap",
+              default="seismic",
+              help="Colormap (if saving .npy image)")
+@click.option("--normalize",
+              is_flag=True,
+              default=False,
+              help="Center image to [-1, 1]")
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
 @click.pass_obj
-def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normalize, vmax, vmin):
+def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap,
+        normalize, vmax, vmin):
     """Creates .kml file for some image
     IMGFILE is the image to load into Google Earth
 
@@ -197,16 +220,24 @@ def kml(context, imgfile, shape, rsc, geojson, title, desc, output, cmap, normal
               help="Pop up matplotlib figure to view (instead of just saving)",
               default=True)
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
-@click.option("--shifted/--no-shifted", default=True, help="Shift colormap to be 0 centered.")
-@click.option("--file-ext", help="If not loading deformation.npy, the extension of files to load")
-@click.option("--intlist/--no-intlist",
-              default=False,
-              help="If loading other file type, also load `intlist` file  for titles")
-@click.option("--db/--no-db", help="Use dB scale for images (default false)", default=False)
+@click.option("--shifted/--no-shifted",
+              default=True,
+              help="Shift colormap to be 0 centered.")
+@click.option(
+    "--file-ext",
+    help="If not loading deformation.npy, the extension of files to load")
+@click.option(
+    "--intlist/--no-intlist",
+    default=False,
+    help="If loading other file type, also load `intlist` file  for titles")
+@click.option("--db/--no-db",
+              help="Use dB scale for images (default false)",
+              default=False)
 @click.option("--vmax", type=float, help="Maximum value for imshow")
 @click.option("--vmin", type=float, help="Minimum value for imshow")
 @click.pass_obj
-def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db, vmin, vmax):
+def animate(context, pause, save, display, cmap, shifted, file_ext, intlist,
+            db, vmin, vmax):
     """Creates animation for 3D image stack.
 
     If deformation.npy and geolist.npy or .unw files are not in current directory,
@@ -218,10 +249,13 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
     Otherwise, use --file-ext "unw", for example, to grab all files
     """
     if file_ext:
-        stack = apertools.sario.load_stack(directory=context['path'], file_ext=file_ext)
-        titles = sorted(apertools.sario.find_files(context['path'], "*" + file_ext))
+        stack = apertools.sario.load_stack(directory=context['path'],
+                                           file_ext=file_ext)
+        titles = sorted(
+            apertools.sario.find_files(context['path'], "*" + file_ext))
     else:
-        geolist, deformation = apertools.sario.load_deformation(context['path'])
+        geolist, deformation = apertools.sario.load_deformation(
+            context['path'])
         stack = deformation
         titles = [d.strftime("%Y-%m-%d") for d in geolist]
 
@@ -261,19 +295,30 @@ def dem_rate(context, rsc_file):
     click.echo("%s has %.2f times the default spacing" % (rsc_file, uprate))
 
     default_spacing = 30.0
-    click.echo("This is equal to %.2f meter spacing between pixels" % (default_spacing / uprate))
+    click.echo("This is equal to %.2f meter spacing between pixels" %
+               (default_spacing / uprate))
 
 
 # COMMAND: overlaps
 @cli.command()
-@click.option("--sentinel-path", default=".", help="Path to directory containing .SAFE folders")
+@click.option("--sentinel-path",
+              default=".",
+              help="Path to directory containing .SAFE folders")
 @click.option("--filename",
               "-f",
               help="(full) path to the dem.rsc or .geojson file. If not "
-              "included, will output all files matching the path/date criteria")
-@click.option("--path-num", "-p", type=int, help="Select one orbit path number for overlaps")
-@click.option("--end-date", "-e", help="Cut off Sentinel files after this date (format: YYYYMMDD)")
-@click.option("--start-date", "-s", help="Cut off Sentinel files before this date")
+              "included, will output all files matching the path/date criteria"
+              )
+@click.option("--path-num",
+              "-p",
+              type=int,
+              help="Select one orbit path number for overlaps")
+@click.option("--end-date",
+              "-e",
+              help="Cut off Sentinel files after this date (format: YYYYMMDD)")
+@click.option("--start-date",
+              "-s",
+              help="Cut off Sentinel files before this date")
 def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     """List all Sentinel .SAFEs overlapping with area
 
@@ -318,13 +363,15 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
         logger.info("Filtering out files after %s" % end_date)
         sent_list = [s for s in sent_list if s.date <= _parse(end_date)]
 
-    logger.info("%d Sentinel .SAFE files overlap within specified date range" % len(sent_list))
+    logger.info("%d Sentinel .SAFE files overlap within specified date range" %
+                len(sent_list))
 
     if filename:
         logger.info("Searching %s for .rsc or .geojson file" % filename)
         area = apertools.sario.load(filename)
         sent_list = [s for s in sent_list if s.overlaps(area)]
-        logger.info("%d Sentinel .SAFE files overlap with area" % len(sent_list))
+        logger.info("%d Sentinel .SAFE files overlap with area" %
+                    len(sent_list))
 
     logger.info("Final path count:")
     _log_paths(sent_list)
@@ -342,7 +389,7 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
 @click.option("--band", help="The band number to use for the VRT")
 @click.option("--num-bands", help="Number of bands in file")
 def save_vrt(filename, rsc_file, cols, rows, dtype, band, num_bands):
-    """Save a GDAL .vrt file nary raster loading
+    """Save a GDAL .vrt file binary raster loading
     """
     apertools.sario.save_as_vrt(
         filename=filename,
