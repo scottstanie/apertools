@@ -302,7 +302,6 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
     if filename:
         directory = os.path.split(os.path.abspath(filename))[0]
     # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
-    print("HERE:", directory, filename)
     possible_rscs = find_files(directory, '*.rsc')
     if verbose:
         logger.info("Searching %s for rsc files", directory)
