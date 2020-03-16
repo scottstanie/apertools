@@ -53,8 +53,7 @@ UAVSAR_EXTS = [
     '.amp2.grd',
     '.amp.grd',
 ]
-ALOS_EXTS = ['.slc', '.cc', '.int', '.amp', '.unw',
-             '.unwflat']  # TODO: check these
+ALOS_EXTS = ['.slc', '.cc', '.int', '.amp', '.unw', '.unwflat']  # TODO: check these
 IMAGE_EXTS = ['.png', '.tif', '.tiff', '.jpg']
 
 # Notes: .grd, .mlc can be either real or complex for UAVSAR,
@@ -175,8 +174,7 @@ def load_file(filename,
 
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
-        return utils.take_looks(sardem.loading.load_elevation(filename),
-                                *looks)
+        return utils.take_looks(sardem.loading.load_elevation(filename), *looks)
     elif ext == '.rsc':
         return sardem.loading.load_dem_rsc(filename, **kwargs)
     elif ext == '.h5':
@@ -197,12 +195,10 @@ def load_file(filename,
         rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
     if ext in IMAGE_EXTS:
-        return np.array(
-            Image.open(filename).convert("L"))  # L for luminance == grayscale
+        return np.array(Image.open(filename).convert("L"))  # L for luminance == grayscale
 
     if ext in SENTINEL_EXTS or ext in BOOL_EXTS:
-        rsc_file = rsc_file if rsc_file else find_rsc_file(filename,
-                                                           verbose=verbose)
+        rsc_file = rsc_file if rsc_file else find_rsc_file(filename, verbose=verbose)
         if rsc_file:
             rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
@@ -226,9 +222,8 @@ def load_file(filename,
         raise ValueError("Need .rsc file or .ann file to load")
 
     if ext in BOOL_EXTS:
-        return utils.take_looks(
-            load_bool(filename, rsc_data=rsc_data, rows=rows, cols=cols),
-            *looks)
+        return utils.take_looks(load_bool(filename, rsc_data=rsc_data, rows=rows, cols=cols),
+                                *looks)
     elif ext in STACKED_FILES:
         stacked = load_stacked_img(filename,
                                    rsc_data=rsc_data,
@@ -240,18 +235,11 @@ def load_file(filename,
     # having rsc_data implies that this is not a UAVSAR file, so is complex
     elif rsc_data or is_complex(filename=filename, ext=ext):
         return utils.take_looks(
-            load_complex(filename,
-                         ann_info=ann_info,
-                         rsc_data=rsc_data,
-                         rows=rows,
-                         cols=cols), *looks)
+            load_complex(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols),
+            *looks)
     else:
         return utils.take_looks(
-            load_real(filename,
-                      ann_info=ann_info,
-                      rsc_data=rsc_data,
-                      rows=rows,
-                      cols=cols), *looks)
+            load_real(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols), *looks)
 
 
 # Make a shorter alias for load_file
@@ -272,8 +260,7 @@ def _get_file_dtype(filename=None, ext=None):
 
 
 def _get_full_grd_ext(filename):
-    if any(e in filename
-           for e in ('.int', '.unw', '.cor', '.cc', '.amp1', '.amp2', '.amp')):
+    if any(e in filename for e in ('.int', '.unw', '.cor', '.cc', '.amp1', '.amp2', '.amp')):
         ext = '.' + '.'.join(filename.split('.')[-2:])
         logger.info("Using %s for full grd extension" % ext)
         return ext
@@ -312,9 +299,8 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
         return None
         # raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
     elif len(possible_rscs) > 1:
-        raise ValueError(
-            "{} has multiple .rsc files in its directory: {}".format(
-                filename, possible_rscs))
+        raise ValueError("{} has multiple .rsc files in its directory: {}".format(
+            filename, possible_rscs))
     return utils.fullpath(possible_rscs[0])
 
 
@@ -323,9 +309,7 @@ def _get_file_rows_cols(rows=None, cols=None, ann_info=None, rsc_data=None):
     if rows is not None and cols is not None:
         return rows, cols
     elif (not rsc_data and not ann_info) or (rsc_data and ann_info):
-        raise ValueError(
-            "needs either ann_info or rsc_data (but not both) to find number of cols"
-        )
+        raise ValueError("needs either ann_info or rsc_data (but not both) to find number of cols")
     elif rsc_data:
         return rsc_data['file_length'], rsc_data['width']
     elif ann_info:
@@ -337,18 +321,12 @@ def _assert_valid_size(data, cols):
 
     Note that only width is considered- The number of rows is ignored
     """
-    error_str = "Invalid number of cols (%s) for file size %s." % (cols,
-                                                                   len(data))
+    error_str = "Invalid number of cols (%s) for file size %s." % (cols, len(data))
     # math.modf returns (fractional remainder, integer remainder)
     assert math.modf(float(len(data)) / cols)[0] == 0, error_str
 
 
-def load_real(filename,
-              rows=None,
-              cols=None,
-              ann_info=None,
-              rsc_data=None,
-              dtype=FLOAT_32_LE):
+def load_real(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
     """Reads in real 4-byte per pixel files""
 
     Valid filetypes: See sario.REAL_EXTS
@@ -365,20 +343,12 @@ def load_real(filename,
 
     """
     data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rows=rows,
-                                     cols=cols,
-                                     ann_info=ann_info,
-                                     rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
     return data.reshape([-1, cols])
 
 
-def load_complex(filename,
-                 rows=None,
-                 cols=None,
-                 ann_info=None,
-                 rsc_data=None,
-                 dtype=FLOAT_32_LE):
+def load_complex(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
     """Combines real and imaginary values from a filename to make complex image
 
     Valid filetypes: See sario.COMPLEX_EXTS
@@ -394,22 +364,14 @@ def load_complex(filename,
         ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
     data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rows=rows,
-                                     cols=cols,
-                                     ann_info=ann_info,
-                                     rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
 
     real_data, imag_data = parse_complex_data(data, cols)
     return combine_real_imag(real_data, imag_data)
 
 
-def load_bool(filename,
-              rows=None,
-              cols=None,
-              ann_info=None,
-              rsc_data=None,
-              dtype=np.bool):
+def load_bool(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=np.bool):
     """Load binary boolean image
 
     Args:
@@ -423,10 +385,7 @@ def load_bool(filename,
         ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
     data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rows=rows,
-                                     cols=cols,
-                                     ann_info=ann_info,
-                                     rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
     return data.reshape([-1, cols])
 
@@ -475,10 +434,7 @@ def load_stacked_img(filename,
     # Output: (8.011558, -2.6779003)
     """
     data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rows=rows,
-                                     cols=cols,
-                                     ann_info=ann_info,
-                                     rsc_data=rsc_data)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
 
     first = data.reshape((rows, 2 * cols))[:, :cols]
@@ -500,13 +456,11 @@ def is_complex(filename=None, ext=None):
 
     if ext not in COMPLEX_EXTS and ext not in REAL_EXTS:
         raise ValueError('Invalid filetype for load_file: %s\n '
-                         'Allowed types: %s' %
-                         (ext, ' '.join(COMPLEX_EXTS + REAL_EXTS)))
+                         'Allowed types: %s' % (ext, ' '.join(COMPLEX_EXTS + REAL_EXTS)))
 
     if ext in UAVSAR_POL_DEPENDENT:
         # Check if filename has one of the complex polarizations
-        return any(pol in filename
-                   for pol in apertools.parsers.Uavsar.COMPLEX_POLS)
+        return any(pol in filename for pol in apertools.parsers.Uavsar.COMPLEX_POLS)
     else:
         return ext in COMPLEX_EXTS
 
@@ -524,13 +478,7 @@ def combine_real_imag(real_data, imag_data):
     return real_data + 1j * imag_data
 
 
-def save(filename,
-         array,
-         normalize=True,
-         cmap="gray",
-         preview=False,
-         vmax=None,
-         vmin=None):
+def save(filename, array, normalize=True, cmap="gray", preview=False, vmax=None, vmin=None):
     """Save the numpy array in one of known formats
 
     Args:
@@ -574,17 +522,11 @@ def save(filename,
             plt.colorbar()
             plt.show(block=True)
 
-        plt.imsave(filename,
-                   array,
-                   cmap=cmap,
-                   vmin=vmin,
-                   vmax=vmax,
-                   format=ext.strip('.'))
+        plt.imsave(filename, array, cmap=cmap, vmin=vmin, vmax=vmax, format=ext.strip('.'))
 
     elif ext in BOOL_EXTS:
         array.tofile(filename)
-    elif (ext in COMPLEX_EXTS + REAL_EXTS +
-          ELEVATION_EXTS) and (ext not in STACKED_FILES):
+    elif (ext in COMPLEX_EXTS + REAL_EXTS + ELEVATION_EXTS) and (ext not in STACKED_FILES):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
         # TODO: Do we need to do this at all??
         if not _is_little_endian():
@@ -648,11 +590,7 @@ def get_full_path(directory=None, filename=None, full_path=None):
     return directory, filename, full_path
 
 
-def load_deformation(igram_path=".",
-                     filename='deformation.h5',
-                     full_path=None,
-                     n=None,
-                     dset=None):
+def load_deformation(igram_path=".", filename='deformation.h5', full_path=None, n=None, dset=None):
     """Loads a stack of deformation images from igram_path
 
     if using the "deformation.npy" version, igram_path must also contain
@@ -666,8 +604,7 @@ def load_deformation(igram_path=".",
     Returns:
         tuple[ndarray, ndarray]: geolist 1D array, deformation 3D array
     """
-    igram_path, filename, full_path = get_full_path(igram_path, filename,
-                                                    full_path)
+    igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
 
     if utils.get_file_ext(filename) == ".npy":
         return _load_deformation_npy(igram_path=igram_path,
@@ -684,13 +621,8 @@ def load_deformation(igram_path=".",
         raise ValueError("load_deformation only supported for .h5 or .npy")
 
 
-def _load_deformation_h5(igram_path=None,
-                         filename=None,
-                         full_path=None,
-                         n=None,
-                         dset=None):
-    igram_path, filename, full_path = get_full_path(igram_path, filename,
-                                                    full_path)
+def _load_deformation_h5(igram_path=None, filename=None, full_path=None, n=None, dset=None):
+    igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
     try:
         with h5py.File(full_path, "r") as f:
             if dset is None:
@@ -708,19 +640,14 @@ def _load_deformation_h5(igram_path=None,
     try:
         geolist = load_geolist_from_h5(full_path, dset=dset)
     except Exception as e:
-        logger.error("Can't load geolist from %s in path %s: %s", filename,
-                     igram_path, e)
+        logger.error("Can't load geolist from %s in path %s: %s", filename, igram_path, e)
         geolist = None
 
     return geolist, deformation
 
 
-def _load_deformation_npy(igram_path=None,
-                          filename=None,
-                          full_path=None,
-                          n=None):
-    igram_path, filename, full_path = get_full_path(igram_path, filename,
-                                                    full_path)
+def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None):
+    igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
 
     try:
         deformation = np.load(os.path.join(igram_path, filename))
@@ -731,8 +658,7 @@ def _load_deformation_npy(igram_path=None,
                           encoding='bytes',
                           allow_pickle=True)
     except (IOError, OSError):
-        logger.error("%s or geolist.npy not found in path %s", filename,
-                     igram_path)
+        logger.error("%s or geolist.npy not found in path %s", filename, igram_path)
         return None, None
 
     return geolist, deformation
@@ -804,10 +730,7 @@ def find_geos(directory=".", parse=True, filename=None):
     elif re.match(r'\d{8}', geolist[0]):  # YYYYmmdd , just a date string
         return sorted([_parse(geo) for geo in geolist])
     else:  # Full sentinel product name
-        return sorted([
-            apertools.parsers.Sentinel(geo).start_time.date()
-            for geo in geolist
-        ])
+        return sorted([apertools.parsers.Sentinel(geo).start_time.date() for geo in geolist])
 
 
 def _strip_geoname(name):
@@ -836,9 +759,7 @@ def find_igrams(directory=".", parse=True, filename=None):
 
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
-        date_pairs = [
-            intname.strip('.int').split('_')[:2] for intname in igram_fnames
-        ]
+        date_pairs = [intname.strip('.int').split('_')[:2] for intname in igram_fnames]
         return parse_intlist_strings(date_pairs)
     else:
         return igram_file_list
@@ -857,10 +778,7 @@ def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
         f[dset_name] = json.dumps(dem_rsc)
 
 
-def save_geolist_to_h5(igram_path=None,
-                       out_file=None,
-                       overwrite=False,
-                       geo_date_list=None):
+def save_geolist_to_h5(igram_path=None, out_file=None, overwrite=False, geo_date_list=None):
     if not check_dset(out_file, GEOLIST_DSET, overwrite):
         return
 
@@ -874,10 +792,7 @@ def save_geolist_to_h5(igram_path=None,
         f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
 
 
-def save_intlist_to_h5(igram_path=None,
-                       out_file=None,
-                       overwrite=False,
-                       int_date_list=None):
+def save_intlist_to_h5(igram_path=None, out_file=None, overwrite=False, int_date_list=None):
     if not check_dset(out_file, INTLIST_DSET, overwrite):
         return
 
@@ -908,27 +823,20 @@ def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
 
     if geolist_ignore_file is not None:
         ignore_filepath = os.path.join(directory, geolist_ignore_file)
-        geo_date_list, int_date_list = ignore_geo_dates(
-            geo_date_list,
-            int_date_list,
-            ignore_file=ignore_filepath,
-            parse=parse)
+        geo_date_list, int_date_list = ignore_geo_dates(geo_date_list,
+                                                        int_date_list,
+                                                        ignore_file=ignore_filepath,
+                                                        parse=parse)
     return geo_date_list, int_date_list
 
 
-def ignore_geo_dates(geo_date_list,
-                     int_date_list,
-                     ignore_file="geolist_missing.txt",
-                     parse=True):
+def ignore_geo_dates(geo_date_list, int_date_list, ignore_file="geolist_missing.txt", parse=True):
     """Read extra file to ignore certain dates of interferograms"""
     ignore_geos = set(find_geos(ignore_file, parse=parse))
     logger.info("Ignoreing the following .geo dates:")
     logger.info(sorted(ignore_geos))
     valid_geos = [g for g in geo_date_list if g not in ignore_geos]
-    valid_igrams = [
-        i for i in int_date_list
-        if i[0] not in ignore_geos and i[1] not in ignore_geos
-    ]
+    valid_igrams = [i for i in int_date_list if i[0] not in ignore_geos and i[1] not in ignore_geos]
     return valid_geos, valid_igrams
 
 
@@ -940,8 +848,7 @@ def check_dset(h5file, dset_name, overwrite):
     """
     with h5py.File(h5file, "a") as f:
         if dset_name in f:
-            logger.info("{dset} already exists in {file},".format(
-                dset=dset_name, file=h5file))
+            logger.info("{dset} already exists in {file},".format(dset=dset_name, file=h5file))
             if overwrite:
                 logger.info("Overwrite true: Deleting.")
                 del f[dset_name]
@@ -963,8 +870,7 @@ def load_mask(geo_date_list=None,
         return np.ma.nomask
 
     if directory is not None:
-        _, _, mask_full_path = get_full_path(directory=directory,
-                                             filename=mask_filename)
+        _, _, mask_full_path = get_full_path(directory=directory, filename=mask_filename)
     else:
         mask_full_path = mask_filename
     if not os.path.exists(mask_full_path):
@@ -975,10 +881,8 @@ def load_mask(geo_date_list=None,
     # instead of all possible dates stored in the mask stack
     if deformation_filename is not None:
         if directory is not None:
-            deformation_filename = os.path.join(directory,
-                                                deformation_filename)
-            geo_date_list = load_geolist_from_h5(deformation_filename,
-                                                 dset=dset)
+            deformation_filename = os.path.join(directory, deformation_filename)
+            geo_date_list = load_geolist_from_h5(deformation_filename, dset=dset)
 
     # Get the indices of the mask layers that were used in the deformation stack
     all_geo_dates = load_geolist_from_h5(mask_full_path)
@@ -1068,9 +972,7 @@ def save_as_vrt(filename=None,
         dtype = array.dtype
         rows, cols = array.shape[-2:]
     if rsc_data is not None:
-        rows, cols = _get_file_rows_cols(rows=rows,
-                                         cols=cols,
-                                         rsc_data=rsc_data)
+        rows, cols = _get_file_rows_cols(rows=rows, cols=cols, rsc_data=rsc_data)
     if dtype is None:
         dtype = _get_file_dtype(filename)
     if cols is not None:
@@ -1127,16 +1029,11 @@ def save_as_vrt(filename=None,
     return
 
 
-def create_derived_band(src_filename,
-                        outfile=None,
-                        src_dtype="CFloat32",
-                        desc=None,
-                        func="log10"):
+def create_derived_band(src_filename, outfile=None, src_dtype="CFloat32", desc=None, func="log10"):
     # For new outfile, only have one .vrt extension
     if outfile is None:
         outfile = "{}.{}.vrt".format(src_filename.replace(".vrt", ""), func)
-    desc = desc or "{func} of {filename}".format(func=func,
-                                                 filename=src_filename)
+    desc = desc or "{func} of {filename}".format(func=func, filename=src_filename)
     srs = gdal.osr.SpatialReference()
     srs.SetWellKnownGeogCS("WGS84")
     srs_string = srs.ExportToWkt()
@@ -1193,8 +1090,7 @@ def get_interleave(filename):
     elif ext in BIP_FILES:
         interleave, num_bands = "BIP", 1
     else:
-        raise ValueError(
-            "Unknown band interleave format (BIP/BIL) for {}".format(filename))
+        raise ValueError("Unknown band interleave format (BIP/BIL) for {}".format(filename))
     return interleave, num_bands
 
 
@@ -1251,18 +1147,13 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None):
 
     rows, cols = array.shape
     if rows != rsc_data["file_length"] or cols != rsc_data["width"]:
-        raise ValueError(
-            "rsc_data ({}, {}) does not match array shape: ({}, {})".format(
-                (rsc_data["file_length"], rsc_data["width"], rows, cols)))
+        raise ValueError("rsc_data ({}, {}) does not match array shape: ({}, {})".format(
+            (rsc_data["file_length"], rsc_data["width"], rows, cols)))
 
     driver = gdal.GetDriverByName('GTiff')
 
     gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
-    out_raster = driver.Create(outfile,
-                               xsize=cols,
-                               ysize=rows,
-                               bands=1,
-                               eType=gdal_dtype)
+    out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
 
     # Set geotransform (based on rsc data) and projection
     out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
@@ -1276,6 +1167,14 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None):
     band.FlushCache()
     band = None
     out_raster = None
+
+
+def set_unit(filename, unit="centimeters"):
+    go = gdal.Open(filename)
+    b1 = go.GetRasterBand(1)
+    b1.SetUnitType(unit)
+    b1 = None
+    go = None
 
 
 def cmy_colors():
@@ -1300,10 +1199,8 @@ def cmy_colors():
     rgbs[255, 1] = 255
     rgbs[255, 2] = 255
 
-    rgbs = np.roll(rgbs, int(256 / 2 - 214),
-                   axis=0)  # shift green to the center
-    rgbs = np.flipud(
-        rgbs)  # flip up-down so that orange is in the later half (positive)
+    rgbs = np.roll(rgbs, int(256 / 2 - 214), axis=0)  # shift green to the center
+    rgbs = np.flipud(rgbs)  # flip up-down so that orange is in the later half (positive)
     return rgbs
 
 
@@ -1312,9 +1209,7 @@ def make_cmy_colortable():
     colors = gdal.ColorTable()
 
     rgbs = cmy_colors()
-    rgbs = [
-        rgbs[0], rgbs[42], rgbs[84], rgbs[126], rgbs[168], rgbs[200], rgbs[255]
-    ]
+    rgbs = [rgbs[0], rgbs[42], rgbs[84], rgbs[126], rgbs[168], rgbs[200], rgbs[255]]
     vals = np.linspace(-np.pi, np.pi, len(rgbs))
     # set color for each value
     # out = "<ColorTable>\n"
