@@ -98,8 +98,7 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False):
     if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype('float')
 
-    return np.mean(arr.reshape(new_rows, row_looks, new_cols, col_looks),
-                   axis=(3, 1))
+    return np.mean(arr.reshape(new_rows, row_looks, new_cols, col_looks), axis=(3, 1))
 
 
 def clip(image):
@@ -162,11 +161,9 @@ def find_looks_taken(igram_path,
     if geo_path is None:
         geo_path = os.path.dirname(os.path.abspath(igram_path))
 
-    geo_dem_rsc = sardem.loading.load_dem_rsc(
-        os.path.join(geo_path, geo_dem_file))
+    geo_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(geo_path, geo_dem_file))
 
-    igram_dem_rsc = sardem.loading.load_dem_rsc(
-        os.path.join(igram_path, igram_dem_file))
+    igram_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(igram_path, igram_dem_file))
 
     row_looks = geo_dem_rsc['file_length'] // igram_dem_rsc['file_length']
     col_looks = geo_dem_rsc['width'] // igram_dem_rsc['width']
@@ -190,7 +187,7 @@ def calc_upsample_rate(rsc_filename=None):
         TypeError: if neither (or both) rsc_filename and rsc_dict are given
 
     """
-    rsc_dict = sardem.loading.load_dem_rsc(rsc_filename=rsc_filename)
+    rsc_dict = sardem.loading.load_dem_rsc(filename=rsc_filename)
     default_spacing = 1.0 / 3600  # NASA SRTM uses 3600 pixels for 1 degree, or 30 m
     x_spacing = abs(rsc_dict['x_step'])
     y_spacing = abs(rsc_dict['y_step'])
@@ -262,11 +259,9 @@ def sliding_window_view(x, shape, step=None):
         raise TypeError('`shape` must be a sequence of integer')
     else:
         if shape.ndim > 1:
-            raise ValueError(
-                '`shape` must be one-dimensional sequence of integer')
+            raise ValueError('`shape` must be one-dimensional sequence of integer')
         if len(x.shape) != len(shape):
-            raise ValueError(
-                "`shape` length doesn't match with input array dimensions")
+            raise ValueError("`shape` length doesn't match with input array dimensions")
         if np.any(shape <= 0):
             raise ValueError('`shape` cannot contain non-positive value')
 
@@ -279,11 +274,9 @@ def sliding_window_view(x, shape, step=None):
             raise TypeError('`step` must be a sequence of integer')
         else:
             if step.ndim > 1:
-                raise ValueError(
-                    '`step` must be one-dimensional sequence of integer')
+                raise ValueError('`step` must be one-dimensional sequence of integer')
             if len(x.shape) != len(step):
-                raise ValueError(
-                    "`step` length doesn't match with input array dimensions")
+                raise ValueError("`step` length doesn't match with input array dimensions")
             if np.any(step <= 0):
                 raise ValueError('`step` cannot contain non-positive value')
 
@@ -296,10 +289,7 @@ def sliding_window_view(x, shape, step=None):
 
     view_shape = np.concatenate((o, shape), axis=0)
     view_strides = np.concatenate((view_strides, strides), axis=0)
-    view = np.lib.stride_tricks.as_strided(x,
-                                           view_shape,
-                                           view_strides,
-                                           writeable=False)
+    view = np.lib.stride_tricks.as_strided(x, view_shape, view_strides, writeable=False)
 
     return view
 
@@ -322,16 +312,14 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
     """
     window_size = window_size or 1
     if not isinstance(window_size, int) or window_size < 1:
-        raise ValueError("Invalid window_size %s: must be odd positive int" %
-                         window_size)
+        raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
     elif row > stack.shape[1] or col > stack.shape[2]:
         raise ValueError("(%s, %s) out of bounds reference for stack size %s" %
                          (row, col, stack.shape))
 
     if window_size % 2 == 0:
         window_size -= 1
-        print("Making window_size an odd number (%s) to get square" %
-              window_size)
+        print("Making window_size an odd number (%s) to get square" % window_size)
 
     win_size = window_size // 2
     return func(stack[:,
@@ -340,11 +328,7 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
 
 
 # Randoms using the sentinelapi
-def find_slc_products(api,
-                      gj_obj,
-                      date_start,
-                      date_end,
-                      area_relation='contains'):
+def find_slc_products(api, gj_obj, date_start, date_end, area_relation='contains'):
     """Query for Sentinel 1 SCL products with common options
 
     from sentinelsat import SentinelAPI, read_geojson, geojson_to_wkt
@@ -445,8 +429,7 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
     if force_posix:
         path = os.path.join(os.path.expanduser('~/.' + app_name))
     if sys.platform == 'darwin':
-        path = os.path.join(
-            os.path.expanduser('~/Library/Application Support'), app_name)
+        path = os.path.join(os.path.expanduser('~/Library/Application Support'), app_name)
     path = os.path.join(
         os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.cache')),
         app_name,
