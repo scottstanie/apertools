@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import sardem
 import gdal
-from osgeo import gdal_array
+from osgeo import gdal_array, gdalconst
 
 from apertools import utils
 import apertools.parsers
@@ -1173,8 +1173,8 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None):
     out_raster = None
 
 
-def set_unit(filename, unit="centimeters"):
-    go = gdal.Open(filename)
+def set_unit(filename, unit="cm"):
+    go = gdal.Open(filename, gdalconst.GA_Update)
     b1 = go.GetRasterBand(1)
     b1.SetUnitType(unit)
     b1 = None
