@@ -525,17 +525,17 @@ def combine_real_imag(real_data, imag_data):
 
 
 def save(filename,
-         array,
+         data,
          normalize=True,
          cmap="gray",
          preview=False,
          vmax=None,
          vmin=None):
-    """Save the numpy array in one of known formats
+    """Save data in one of the known formats
 
     Args:
         filename (str): Output path to save file in
-        array (ndarray): matrix to save
+        data (ndarray): matrix to save
         normalize (bool): scale array to [-1, 1]
         cmap (str, matplotlib.cmap): colormap (if output is png/jpg and will be plotted)
         preview (bool): for png/jpg, display the image before saving
@@ -558,45 +558,49 @@ def save(filename,
             return arr
 
     ext = utils.get_file_ext(filename)
+    if ext == ".rsc":
+        with open(filename, "w") as f:
+            f.write(sardem.loading.format_dem_rsc(data))
+        return
     if ext == '.grd':
         ext = _get_full_grd_ext(filename)
     if ext == '.png':  # TODO: or ext == '.jpg':
         # Normalize to be between 0 and 1
         if normalize:
-            array = array / np.max(np.abs(array))
+            data = data / np.max(np.abs(data))
             vmin, vmax = -1, 1
         logger.info("previewing with (vmin, vmax) = (%s, %s)" % (vmin, vmax))
         # from PIL import Image
-        # im = Image.fromarray(array)
+        # im = Image.fromarray(data)
         # im.save(filename)
         if preview:
-            plt.imshow(array, cmap=cmap, vmin=vmin, vmax=vmax)
+            plt.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax)
             plt.colorbar()
             plt.show(block=True)
 
         plt.imsave(filename,
-                   array,
+                   data,
                    cmap=cmap,
                    vmin=vmin,
                    vmax=vmax,
                    format=ext.strip('.'))
 
     elif ext in BOOL_EXTS:
-        array.tofile(filename)
+        data.tofile(filename)
     elif (ext in COMPLEX_EXTS + REAL_EXTS +
           ELEVATION_EXTS) and (ext not in STACKED_FILES):
         # If machine order is big endian, need to byteswap (TODO: test on big-endian)
         # TODO: Do we need to do this at all??
         if not _is_little_endian():
-            array.byteswap(inplace=True)
+            data.byteswap(inplace=True)
 
-        _force_float32(array).tofile(filename)
+        _force_float32(data).tofile(filename)
     elif ext in STACKED_FILES:
-        if array.ndim != 3:
+        if data.ndim != 3:
             raise ValueError("Need 3D stack ([amp, data]) to save.")
         # first = data.reshape((rows, 2 * cols))[:, :cols]
         # second = data.reshape((rows, 2 * cols))[:, cols:]
-        np.hstack((array[0], array[1])).astype(FLOAT_32_LE).tofile(filename)
+        np.hstack((data[0], data[1])).astype(FLOAT_32_LE).tofile(filename)
 
     else:
         raise NotImplementedError("{} saving not implemented.".format(ext))
