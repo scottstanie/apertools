@@ -299,8 +299,13 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
         return None
         # raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
     elif len(possible_rscs) > 1:
-        raise ValueError("{} has multiple .rsc files in its directory: {}".format(
-            filename, possible_rscs))
+        fileonly = os.path.split(os.path.abspath(filename))[1]
+        rscbases = [os.path.split(r)[1] for r in possible_rscs]
+        if any(r.startswith(fileonly) for r in rscbases):  # Matching name
+            return [r for r in rscbases if r.startswith(fileonly)][0]
+        else:
+            raise ValueError("{} has multiple .rsc files in its directory: {}".format(
+                filename, possible_rscs))
     return utils.fullpath(possible_rscs[0])
 
 
