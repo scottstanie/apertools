@@ -7,7 +7,6 @@ import json
 import click
 from collections import Counter
 import apertools
-import sardem
 import numpy as np
 import h5py
 from datetime import datetime
@@ -81,7 +80,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end,
     if rowcol:
         rsc_data = None
     else:
-        rsc_data = sardem.loading.load_dem_rsc(
+        rsc_data = apertools.sario.load(
             os.path.join(context['path'], 'dem.rsc'))
 
     deformation = apertools.latlon.LatlonImage(data=deformation,
@@ -290,7 +289,7 @@ def dem_rate(context, rsc_file):
     # full_file = os.path.join(context['path'], rsc_file)
     if rsc_file is None:
         rsc_file = apertools.sario.find_rsc_file(directory=context['path'])
-    uprate = sardem.utils.calc_upsample_rate(rsc_filename=rsc_file)
+    uprate = apertools.utils.calc_upsample_rate(rsc_filename=rsc_file)
 
     click.echo("%s has %.2f times the default spacing" % (rsc_file, uprate))
 
