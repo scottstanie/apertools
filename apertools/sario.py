@@ -306,7 +306,7 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
         fileonly = os.path.split(os.path.abspath(filename))[1]
         rscbases = [os.path.split(r)[1] for r in possible_rscs]
         if any(r.startswith(fileonly) for r in rscbases):  # Matching name
-            possible_rscs = [r for r in rscbases if r.startswith(fileonly)][0]
+            possible_rscs = [r for r in rscbases if r.startswith(fileonly)]
         else:
             raise ValueError(errmsg)
     return utils.fullpath(possible_rscs[0])
