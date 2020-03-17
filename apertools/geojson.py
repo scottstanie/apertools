@@ -9,6 +9,11 @@ Bounding box order is  (left, bottom, right, top) (floats)
 """
 from __future__ import division, print_function
 import itertools
+import shapely.geometry
+
+
+def geojson_to_wkt(gj):
+    return shapely.geometry.shape(gj).wkt
 
 
 def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None):

@@ -73,9 +73,7 @@ def form_url(
         platform=platform,
         beamMode=beamMode,
     )
-    print(params)
     params = {k: v for k, v in params.items() if v is not None}
-    print(params)
     base_url = "https://api.daac.asf.alaska.edu/services/search/param?{params}"
     return base_url.format(params=urlencode(params))
 
@@ -185,7 +183,6 @@ if __name__ == "__main__":
         ullr = get_ullr(args.dem)
         arg_dict["ullr"] = ullr
     arg_dict["bbox"] = ullr_to_bbox(arg_dict["ullr"])
-    print(arg_dict)
 
     if args.query_only:
         query_only(**vars(args))
