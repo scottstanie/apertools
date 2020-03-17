@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 import subprocess
+import os
 import re
 import gdal
 from apertools import geojson, latlon
@@ -231,3 +232,28 @@ def create_geotiff(rsc_data=None, kml_file=None, img_filename=None, shape='box',
     print('Running:')
     print(cmd)
     subprocess.check_call(cmd, shell=True)
+
+
+def extract_raster_outline(filename, outfile=None, band=1):
+    """Takes a raster and finds the outline, ignoring nodata (assumed 0), saves as .shp
+
+    https://gis.stackexchange.com/q/120994
+    """
+    if outfile is None:
+        outfile = filename + ".shp"
+    print("Writing to %s" % outfile)
+
+    # First, make into a binary image
+    outtmp = "tmp.binary.tif"
+    calc_cmd = """gdal_calc.py --outfile={outtmp} -A {fin} --NoDataValue=0 --calc="A>0" """.format(
+        outtmp=outtmp, fin=filename)
+    print("Finding nodata outline:")
+    print(calc_cmd)
+    subprocess.check_call(calc_cmd, shell=True)
+
+    # Then extract polygon: -8 means 8-connected, -b 1 is use band #1
+    poly_cmd = """gdal_polygonize.py -8 {tmp} -b 1 {out} """.format(tmp=outtmp, out=outfile)
+    print("Extracting polygon with command:")
+    print(poly_cmd)
+    subprocess.check_call(poly_cmd.split())
+    os.remove(outtmp)
