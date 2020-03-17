@@ -111,7 +111,7 @@ def _find_look_outsize(shape, row_looks, col_looks):
     return new_rows, new_cols
 
 
-def take_looks_gdal(outname, src_filename, row_looks, col_looks):
+def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC"):
     """Downsample an array on disk using gdal_translate
 
     Cuts off values if the size isn't divisible by num looks
@@ -141,16 +141,17 @@ def take_looks_gdal(outname, src_filename, row_looks, col_looks):
                           in_ds,
                           height=new_rows,
                           width=new_cols,
+                          format=format,
                           resampleAlg=gdalconst.GRIORA_Average)
 
 
-def crossmul_gdal(outfile, file1, file2, row_looks, col_looks):
+def crossmul_gdal(outfile, file1, file2, row_looks, col_looks, format="ROI_PAC"):
     """Uses gdal_calc.py to multiply, then gdal_translate for looks"""
     tmp = "tmp.tif"
-    cmd = """ gdal_calc.py -A {f1} -B {f1} --outfile={tmp} --calc="A * np.conj(B)" """.format(
-        f1=file1, f2=file2, tmp=tmp)
+    cmd = """gdal_calc.py -A {f1} -B {f1} --outfile={tmp} \
+            --calc="A * conj(B)" --NoDataValue=0 """.format(f1=file1, f2=file2, tmp=tmp)
     subprocess.check_call(cmd, shell=True)
-    take_looks_gdal(outfile, tmp, row_looks, col_looks)
+    take_looks_gdal(outfile, tmp, row_looks, col_looks, format=format)
     os.remove(tmp)
 
 
