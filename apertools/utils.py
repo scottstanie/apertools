@@ -7,7 +7,10 @@ from __future__ import division, print_function
 import errno
 import sys
 import os
+import subprocess
 import numpy as np
+import gdal
+from osgeo import gdalconst
 
 import sardem
 from apertools.log import get_log
@@ -86,19 +89,69 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False):
         phase_looked = take_looks(np.angle(arr), row_looks, col_looks)
         return mag_looked * np.exp(1j * phase_looked)
 
+    new_rows, new_cols = _find_look_outsize(arr.shape, row_looks, col_looks)
+
     nrows, ncols = arr.shape
     row_cutoff = nrows % row_looks
     col_cutoff = ncols % col_looks
+
     if row_cutoff != 0:
         arr = arr[:-row_cutoff, :]
     if col_cutoff != 0:
         arr = arr[:, :-col_cutoff]
-
-    new_rows, new_cols = arr.shape[0] // row_looks, arr.shape[1] // col_looks
     if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype('float')
 
     return np.mean(arr.reshape(new_rows, row_looks, new_cols, col_looks), axis=(3, 1))
+
+
+def _find_look_outsize(shape, row_looks, col_looks):
+    nrows, ncols = shape
+    new_rows, new_cols = shape[0] // row_looks, shape[1] // col_looks
+    return new_rows, new_cols
+
+
+def take_looks_gdal(outname, src_filename, row_looks, col_looks):
+    """Downsample an array on disk using gdal_translate
+
+    Cuts off values if the size isn't divisible by num looks
+
+    NOTE: For complex data, looks on the magnitude are done separately
+    from looks on the phase
+
+    See https://github.com/OSGeo/gdal/blob/master/gdal/swig/python/osgeo/gdal.py#L328
+    for options
+
+    Args:
+        outname (string): output/destination filename
+        filename (string) Name of gdal-compatible input raster file
+        row_looks (int) the reduction rate in row direction
+        col_looks (int) the reduction rate in col direction
+
+    Returns:
+        ndarray, size = ceil(rows / row_looks, cols / col_looks)
+        values at each pixel are averaged from input array
+    """
+    if row_looks == 1 and col_looks == 1:
+        raise ValueError("Must take looks for file on disk")
+    in_ds = gdal.Open(src_filename)
+    shape = (in_ds.RasterYSize, in_ds.RasterXSize)  # (rows, cols)
+    new_rows, new_cols = _find_look_outsize(shape, row_looks, col_looks)
+    return gdal.Translate(outname,
+                          in_ds,
+                          height=new_rows,
+                          width=new_cols,
+                          resampleAlg=gdalconst.GRIORA_Average)
+
+
+def crossmul_gdal(outfile, file1, file2, row_looks, col_looks):
+    """Uses gdal_calc.py to multiply, then gdal_translate for looks"""
+    tmp = "tmp.tif"
+    cmd = """ gdal_calc.py -A {f1} -B {f1} --outfile={tmp} --calc="A * np.conj(B)" """.format(
+        f1=file1, f2=file2, tmp=tmp)
+    subprocess.check_call(cmd, shell=True)
+    take_looks_gdal(outfile, tmp, row_looks, col_looks)
+    os.remove(tmp)
 
 
 def clip(image):

@@ -1151,11 +1151,11 @@ def rsc_to_geotransform(rsc_data):
     return (X0, x_step, 0.0, Y0, 0.0, y_step)
 
 
-def save_as_geotiff(outfile=None, array=None, rsc_data=None):
+def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
     """ Ref: https://gdal.org/tutorials/raster_api_tut.html#using-create"""
 
     rows, cols = array.shape
-    if rows != rsc_data["file_length"] or cols != rsc_data["width"]:
+    if rsc_data is not None and (rows != rsc_data["file_length"] or cols != rsc_data["width"]):
         raise ValueError("rsc_data ({}, {}) does not match array shape: ({}, {})".format(
             (rsc_data["file_length"], rsc_data["width"], rows, cols)))
 
@@ -1164,15 +1164,16 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None):
     gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
     out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
 
-    # Set geotransform (based on rsc data) and projection
-    out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
+    if rsc_data is not None:
+        # Set geotransform (based on rsc data) and projection
+        out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
     srs = gdal.osr.SpatialReference()
     srs.SetWellKnownGeogCS("WGS84")
     out_raster.SetProjection(srs.ExportToWkt())
 
     band = out_raster.GetRasterBand(1)
     band.WriteArray(array)
-    band.SetNoDataValue(0.0)
+    band.SetNoDataValue(nodata)
     band.FlushCache()
     band = None
     out_raster = None
