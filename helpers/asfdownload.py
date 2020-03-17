@@ -1,19 +1,21 @@
 """
 Script for downloading through https://asf.alaska.edu/api/
 
-Parts taken from
+Base taken from
 https://github.com/scottyhq/isce_notes/blob/master/BatchProcessing.md
 
-# 1) Get polygon for region of interest (in WKT)
 
+To download, you need aria2
+yum install -y aria2
 
-export PLATFORM=S1
-export POLYGON="POLYGON((-76.59221649169922+42.51 ..."
-export OUTPUT=kml
-#also csv,json,metalink
-curl https://api.daac.asf.alaska.edu/services/search/param?intersectsWith=$POLYGON& ...
+and either a .netrc:
 
-3) Download all available IW SLCS orRAW data
+# cat ~/.netrc
+machine urs.earthdata.nasa.gov
+    login CHANGE
+    password CHANGE
+
+or, an aria2 conf file
 
 # $HOME/.aria2/asf.conf
 http-user=CHANGE
@@ -51,7 +53,8 @@ def form_url(
     output="geojson",
     platform="S1",
     beamMode="IW",
-    **kwargs):
+    **kwargs,
+):
     """
     bbox(tuple): lower left lon, lat, upper right format
         e.g. bbox=(-150.2,65.0,-150.1,65.5)
@@ -112,9 +115,9 @@ def get_ullr(filename):
 
 def ullr_to_bbox(ullr_tuple):
     """Convert gdal's ullr tuple to ASF bbox ( lower left lon, lat, upper right format
-        
+
         Examples:
-        >>> ullr=(-150.2, 65.5, -150.0, 65.0) 
+        >>> ullr=(-150.2, 65.5, -150.0, 65.0)
         >>> print(ullr_to_bbox(ullr))
         (-150.2, 65.0, -150.0, 65.5)
     """
