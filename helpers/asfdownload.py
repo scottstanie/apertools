@@ -158,7 +158,7 @@ if __name__ == "__main__":
         help="Name of output dem file (default=elevation.dem)",
     )
     p.add_argument(
-        "--processingLeve",
+        "--processingLevel",
         choices=["RAW", "SLC"],
         default="RAW",
         help="Level or product to download",
