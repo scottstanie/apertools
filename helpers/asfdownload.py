@@ -82,8 +82,10 @@ def form_url(
 
 
 def query_only(output="geojson", **kwargs):
+    # Save files into correct output type:
+    outname = "asfquery.{}".format(output.lower())
+
     url = form_url(output=output, **kwargs)
-    outname = "query.{}".format(output.lower())
     data_cmd = """ curl "{url}" > {outname} """.format(url=url, outname=outname)
     print("Running command:")
     print(data_cmd)
