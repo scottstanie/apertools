@@ -1254,6 +1254,42 @@ def make_cmy_colortable():
 #                 immap = immap[band, :, :]
 #         return immap
 
+# GDAL to numpy dtypes
+bool_ = 'bool'
+ubyte = uint8 = 'uint8'
+sbyte = int8 = 'int8'
+uint16 = 'uint16'
+int16 = 'int16'
+uint32 = 'uint32'
+int32 = 'int32'
+float32 = 'float32'
+float64 = 'float64'
+complex_ = 'complex'
+complex64 = 'complex64'
+complex128 = 'complex128'
+
+# Not supported:
+#  GDT_CInt16 = 8, GDT_CInt32 = 9, GDT_CFloat32 = 10, GDT_CFloat64 = 11
+
+dtype_fwd = {
+    0: None,  # GDT_Unknown
+    1: ubyte,  # GDT_Byte
+    2: uint16,  # GDT_UInt16
+    3: int16,  # GDT_Int16
+    4: uint32,  # GDT_UInt32
+    5: int32,  # GDT_Int32
+    6: float32,  # GDT_Float32
+    7: float64,  # GDT_Float64
+    8: complex_,  # GDT_CInt16
+    9: complex_,  # GDT_CInt32
+    10: complex64,  # GDT_CFloat32
+    11: complex128
+}  # GDT_CFloat64
+
+
+def get_numpy_dtype(ds):
+    return dtype_fwd[ds.DataType]
+
 
 def testt(fn):
     ds = gdal.Open(fn, 1)

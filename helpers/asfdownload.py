@@ -160,7 +160,7 @@ if __name__ == "__main__":
         "--output",
         "-o",
         default="kml",
-        help="Name of output dem file (default=elevation.dem)",
+        help="Type of output file to save query to (default=kml)",
     )
     p.add_argument(
         "--processingLevel",
