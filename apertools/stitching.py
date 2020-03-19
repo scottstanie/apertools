@@ -68,11 +68,6 @@ def stitch_geos(date, geolist, reverse, output_path, overwrite=False, verbose=Tr
         for g in geolist:
             print('image:', g.filename, g.start_time)
 
-    # TODO: load as blocks, not all at once
-    # stitched_img = combine_complex([sario.load(g.filename) for g in geolist])
-    stitched_img = combine_complex([g.filename for g in geolist])
-
-    g = geolist[0]
     new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
     new_name = os.path.join(output_path, new_name)
     if os.path.exists(new_name):
@@ -82,6 +77,12 @@ def stitch_geos(date, geolist, reverse, output_path, overwrite=False, verbose=Tr
         else:
             print(" %s exists, not overwriting. skipping" % new_name)
             return
+
+    # TODO: load as blocks, not all at once
+    # stitched_img = combine_complex([sario.load(g.filename) for g in geolist])
+    stitched_img = combine_complex([g.filename for g in geolist])
+
+    g = geolist[0]
 
     print("Saving stitched to %s" % new_name)
     # Remove any file with same name before saving
