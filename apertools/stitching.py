@@ -8,7 +8,7 @@ import glob
 import os
 import numpy as np
 
-from apertools import parsers, sario, utils
+from apertools import parsers, sario
 
 
 def stitch_same_dates(geo_path=".", output_path=".", reverse=True, verbose=True):
@@ -20,8 +20,8 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True, verbose=True)
     """
     grouped_geos = group_geos_by_date(geo_path, reverse=reverse)
 
-    for date, geolist in grouped_geos:
-        stitch_geos(date, geolist, reverse, output_path, verbose)
+    for _, geolist in grouped_geos:
+        stitch_geos(geolist, reverse, output_path, verbose)
 
     return grouped_geos
 
@@ -56,18 +56,20 @@ def group_geos_by_date(geo_path, reverse=True):
                               key=lambda g: g.start_time,
                               reverse=reverse)
 
+    # Now collapse into groups, sorted by the date
     grouped_geos = _make_groupby(double_geo_files)
     return grouped_geos
 
 
-def stitch_geos(date, geolist, reverse, output_path, overwrite=False, verbose=True):
+def stitch_geos(geolist, reverse, output_path, overwrite=False, verbose=True):
     """Combines multiple .geo files of the same date into one image"""
     if verbose:
-        print("Stitching geos for %s" % date)
+        print("Stitching geos for %s" % geolist[0].date)
         print('reverse=', reverse)
         for g in geolist:
             print('image:', g.filename, g.start_time)
 
+    g = geolist[0]
     new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
     new_name = os.path.join(output_path, new_name)
     if os.path.exists(new_name):
@@ -82,15 +84,13 @@ def stitch_geos(date, geolist, reverse, output_path, overwrite=False, verbose=Tr
     # stitched_img = combine_complex([sario.load(g.filename) for g in geolist])
     stitched_img = combine_complex([g.filename for g in geolist])
 
-    g = geolist[0]
-
     print("Saving stitched to %s" % new_name)
     # Remove any file with same name before saving
     # This prevents symlink overwriting old files
     sario.save(new_name, stitched_img)
 
 
-def combine_complex(img_list):
+def combine_complex(img_list, verbose=True):
     """Combine multiple complex images which partially overlap
 
     Used for SLCs/.geos of adjacent Sentinel frames
@@ -107,17 +107,26 @@ def combine_complex(img_list):
     img1 = img_list[0] if isinstance(img_list[0], np.ndarray) else sario.load(img_list[0])
     img_shape = img1.shape
 
+    total = len(img_list)
+    print("processing image 1 of %s" % (total))
+
     img_out = np.copy(img1)
-    for next_img in img_list[1:]:
+    for (idx, next_img) in enumerate(img_list[1:]):
+        if verbose:
+            print("processing image %s of %s" % (idx + 2, total))
         if not isinstance(next_img, np.ndarray):
             next_img = sario.load(next_img)
 
         if next_img.shape != img_shape:
             raise ValueError("All images must have same size. Sizes: %s, %s" %
                              (img_shape, next_img.shape))
-        img_out += next_img
+        nonzero_mask = next_img != 0
+        img_out[nonzero_mask] = next_img[nonzero_mask]
+
+        # OLD WAY:
+        # img_out += next_img
         # Now only on overlap, take the previous's pixels
-        overlap_idxs = (img_out != 0) & (next_img != 0)
-        img_out[overlap_idxs] = next_img[overlap_idxs]
+        # overlap_idxs = (img_out != 0) & (next_img != 0)
+        # img_out[overlap_idxs] = next_img[overlap_idxs]
 
     return img_out
