@@ -385,9 +385,10 @@ def smallslc(
             rsc_file=rsc_file,
         )
         cmd = """gdal_translate -of ROI_PAC {src} {dest} -outsize {px}% {py}% """.format(
-            src=f,
+            src=f + ".vrt",
             dest=dest,
             px=pct_x,
             py=pct_y,
         )
-        subprocess.check_call(cmd)
+        logger.info(cmd)
+        subprocess.check_call(cmd, shell=True)
