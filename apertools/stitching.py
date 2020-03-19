@@ -117,6 +117,6 @@ def combine_complex(img_list):
         img_out += next_img
         # Now only on overlap, take the previous's pixels
         overlap_idxs = (img_out != 0) & (next_img != 0)
-        img_out[overlap_idxs] = img_out[overlap_idxs]
+        img_out[overlap_idxs] = next_img[overlap_idxs]
 
     return img_out

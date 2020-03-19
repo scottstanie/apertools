@@ -1164,7 +1164,7 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
 
     driver = gdal.GetDriverByName('GTiff')
 
-    gdal_dtype = gdal_array.NumericTypeCodeToGDALTypeCode(array.dtype)
+    gdal_dtype = numpy_to_gdal_type(array.dtype)
     out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
 
     if rsc_data is not None:
