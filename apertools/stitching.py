@@ -60,7 +60,7 @@ def group_geos_by_date(geo_path, reverse=True):
     return grouped_geos
 
 
-def stitch_geos(date, geolist, reverse, output_path, verbose=True):
+def stitch_geos(date, geolist, reverse, output_path, overwrite=False, verbose=True):
     """Combines multiple .geo files of the same date into one image"""
     if verbose:
         print("Stitching geos for %s" % date)
@@ -68,17 +68,24 @@ def stitch_geos(date, geolist, reverse, output_path, verbose=True):
         for g in geolist:
             print('image:', g.filename, g.start_time)
 
-    # TODO: load in parallel
-    # TODO: stitch in paralle;
-    stitched_img = combine_complex([sario.load(g.filename) for g in geolist])
+    # TODO: load as blocks, not all at once
+    # stitched_img = combine_complex([sario.load(g.filename) for g in geolist])
+    stitched_img = combine_complex([g.filename for g in geolist])
 
     g = geolist[0]
     new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
     new_name = os.path.join(output_path, new_name)
+    if os.path.exists(new_name):
+        if os.path.islink(new_name) or overwrite:  # real file
+            os.remove(new_name)
+            print("Removing %s" % new_name)
+        else:
+            print(" %s exists, not overwriting. skipping" % new_name)
+            return
+
     print("Saving stitched to %s" % new_name)
     # Remove any file with same name before saving
     # This prevents symlink overwriting old files
-    utils.rm_if_exists(new_name)
     sario.save(new_name, stitched_img)
 
 
@@ -88,20 +95,25 @@ def combine_complex(img_list):
     Used for SLCs/.geos of adjacent Sentinel frames
 
     Args:
-        img_list (ndarray): list of complex images (.geo files)
+        img_list: list of complex images (.geo files)
+            can be filenames or preloaded arrays
     Returns:
         ndarray: Same size as each, with pixels combined
     """
     if len(img_list) < 2:
         raise ValueError("Must pass more than 1 image to combine")
-    img_shapes = set([img.shape for img in img_list])
-    if len(img_shapes) > 1:
-        raise ValueError("All images must have same size. Sizes: %s" % ','.join(img_shapes))
     # Start with each one where the other is nonzero
-    img1 = img_list[0]
+    img1 = img_list[0] if isinstance(img_list[0], np.ndarray) else sario.load(img_list[0])
+    img_shape = img1.shape
 
     img_out = np.copy(img1)
     for next_img in img_list[1:]:
+        if not isinstance(next_img, np.ndarray):
+            next_img = sario.load(next_img)
+
+        if next_img.shape != img_shape:
+            raise ValueError("All images must have same size. Sizes: %s, %s" %
+                             (img_shape, next_img.shape))
         img_out += next_img
         # Now only on overlap, take the previous's pixels
         overlap_idxs = (img_out != 0) & (next_img != 0)
