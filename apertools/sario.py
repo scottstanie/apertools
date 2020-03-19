@@ -1287,8 +1287,8 @@ dtype_fwd = {
 }  # GDT_CFloat64
 
 
-def get_numpy_dtype(ds):
-    return dtype_fwd[ds.DataType]
+def get_numpy_dtype(band):
+    return dtype_fwd[band.DataType]
 
 
 def testt(fn):
