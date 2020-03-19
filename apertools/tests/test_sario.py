@@ -103,24 +103,24 @@ class TestLoading(unittest.TestCase):
         assert_array_almost_equal(expected_dem, loaded_dem)
 
     def test_save_elevation(self):
-        loaded_dem = sario.load_file(self.dem_path)
-        save_path = self.dem_path.replace('.dem', '_test.dem')
+        try:
+            loaded_dem = sario.load_file(self.dem_path)
+            save_path = self.dem_path.replace('.dem', '_test.dem')
 
-        # Must copy the .dem.rsc as well
-        old_dem_rsc = self.dem_path + '.rsc'
-        new_dem_rsc = old_dem_rsc.replace('.dem', '_test.dem')
-        shutil.copyfile(old_dem_rsc, new_dem_rsc)
+            # Must copy the .dem.rsc as well
+            old_dem_rsc = self.dem_path + '.rsc'
+            new_dem_rsc = old_dem_rsc.replace('.dem', '_test.dem')
+            shutil.copyfile(old_dem_rsc, new_dem_rsc)
 
-        sario.save(save_path, loaded_dem)
-        self.assertTrue(exists(save_path))
+            sario.save(save_path, loaded_dem)
+            self.assertTrue(exists(save_path))
 
-        reloaded_dem = sario.load_file(save_path)
-        assert_array_almost_equal(reloaded_dem, loaded_dem)
+            reloaded_dem = sario.load_file(save_path)
+            assert_array_almost_equal(reloaded_dem, loaded_dem)
 
-        os.remove(new_dem_rsc)
-        os.remove(save_path)
-        self.assertFalse(exists(save_path))
-        self.assertFalse(exists(new_dem_rsc))
+        finally:
+            os.remove(new_dem_rsc)
+            os.remove(save_path)
 
     def test_load_uavsar(self):
         try:

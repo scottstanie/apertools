@@ -486,7 +486,7 @@ def combine_real_imag(real_data, imag_data):
     return real_data + 1j * imag_data
 
 
-def save(filename, array, normalize=True, cmap="gray", preview=False, vmax=None, vmin=None):
+def save(filename, data, normalize=True, cmap="gray", preview=False, vmax=None, vmin=None):
     """Save the numpy array in one of known formats
 
     Args:

@@ -39,8 +39,12 @@ def find_enu_coeffs(lon, lat, geo_path=None, los_map_file=None, verbose=False):
     los_file = os.path.realpath(os.path.join(geo_path, 'los_vector_%s_%s.txt' % (lon, lat)))
     if not os.path.exists(los_file):
         db_path = _find_db_path(geo_path)
-        record_xyz_los_vector(
-            lon, lat, db_path=db_path, outfile=los_file, clear=True, verbose=verbose)
+        record_xyz_los_vector(lon,
+                              lat,
+                              db_path=db_path,
+                              outfile=los_file,
+                              clear=True,
+                              verbose=verbose)
 
     enu_coeffs = los_to_enu(los_file)
 
@@ -200,7 +204,6 @@ def read_los_output(los_file, dedupe=True):
         lat_lon_list (list[tuple]): (lat, lon) tuples of points in file
         xyz_list (list[tuple]): (x, y, z) components of line of sight
     """
-
     def _line_to_floats(line, split_char=None):
         return tuple(map(float, line.split(split_char)))
 
@@ -277,9 +280,6 @@ def rotate_xyz_to_enu(xyz, lat, lon):
     Reference: https://gssc.esa.int/navipedia/index.php/\
 Transformations_between_ECEF_and_ENU_coordinates
 
-    Example:
-    >>> rotate_xyz_to_enu([-2, -3, 1], 0, 0)
-    array([ 1.,  2.,  3.])
     """
     # Rotate about axis 3 with longitude, then axis 1 with latitude
     R3 = rot(90 + lon, 3, in_degrees=True)
@@ -336,10 +336,6 @@ def rotate_enu_to_xyz(enu, lat, lon):
     Reference: https://gssc.esa.int/navipedia/index.php/\
 Transformations_between_ECEF_and_ENU_coordinates
 
-    Example:
-    >>> rotate_enu_to_xyz([1,2,3], 0, 0)
-    array([-2., -3.,  1.])
-
 
     test_xyz = [-0.127341338217677e7, -0.529776534925940e7,  0.330588991387726e7]
     test_enu = [-1489.929802,   3477268.994159 ,  769.948314]
@@ -373,12 +369,12 @@ def project_enu_to_los(enu, los_vec=None, lat=None, lon=None, enu_coeffs=None):
         ndarray: magnitudes same length as enu input, (k, 1)
 
     Examples:
-    >>> print('%.2f' % project_enu_to_los([1,2,3],[1, 0, 0], 0, 0))
-    -2.00
-    >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 1, 0], 0, 0))
-    -3.00
-    >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 0, 1], 0, 0))
-    1.00
+    # >>> print('%.2f' % project_enu_to_los([1,2,3],[1, 0, 0], 0, 0))
+    # -2.00
+    # >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 1, 0], 0, 0))
+    # -3.00
+    # >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 0, 1], 0, 0))
+    # 1.00
     """
     if enu_coeffs is None:
         los_hat = los_vec / np.linalg.norm(los_vec)
@@ -514,8 +510,10 @@ def create_los_map(geo_path, downsample=100, verbose=False, savename="los_enu_ma
     logger.info("Finding LOS vector for %s points total" % (len(lats) * len(lons)))
     for rowidx, lat in enumerate(lats.reshape(-1)):
         for colidx, lon in enumerate(lons.reshape(-1)):
-            up_img[:, rowidx, colidx] = find_enu_coeffs(
-                lon, lat, geo_path=geo_path, verbose=verbose)
+            up_img[:, rowidx, colidx] = find_enu_coeffs(lon,
+                                                        lat,
+                                                        geo_path=geo_path,
+                                                        verbose=verbose)
 
     enu_ll = latlon.LatlonImage(data=up_img, dem_rsc=down_rsc)
     if savename:
