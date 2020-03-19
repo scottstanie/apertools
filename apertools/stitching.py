@@ -11,7 +11,7 @@ import numpy as np
 from apertools import parsers, sario
 
 
-def stitch_same_dates(geo_path=".", output_path=".", reverse=True, verbose=True):
+def stitch_same_dates(geo_path=".", output_path=".", reverse=True, overwrite=False, verbose=True):
     """Combines .geo files of the same date in one directory
 
     The reverse argument is to specify which order the geos get sorted.
@@ -21,7 +21,13 @@ def stitch_same_dates(geo_path=".", output_path=".", reverse=True, verbose=True)
     grouped_geos = group_geos_by_date(geo_path, reverse=reverse)
 
     for _, geolist in grouped_geos:
-        stitch_geos(geolist, reverse, output_path, verbose)
+        stitch_geos(
+            geolist,
+            reverse,
+            output_path,
+            overwrite=overwrite,
+            verbose=verbose,
+        )
 
     return grouped_geos
 
@@ -73,9 +79,12 @@ def stitch_geos(geolist, reverse, output_path, overwrite=False, verbose=True):
     new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
     new_name = os.path.join(output_path, new_name)
     if os.path.exists(new_name):
-        if os.path.islink(new_name) or overwrite:  # real file
+        if os.path.islink(new_name):
+            print("Removing symlink %s" % new_name)
             os.remove(new_name)
-            print("Removing %s" % new_name)
+        elif overwrite:  # real file
+            print("Overwrite=True: Removing %s" % new_name)
+            os.remove(new_name)
         else:
             print(" %s exists, not overwriting. skipping" % new_name)
             return
