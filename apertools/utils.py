@@ -413,15 +413,22 @@ def fullpath(path):
 
 def force_symlink(src, dest):
     """python equivalent to 'ln -f -s': force overwrite """
+    if os.path.exists(fullpath(dest)) and os.path.islink(fullpath(dest)):
+        os.remove(fullpath(dest))
+
     try:
         os.symlink(fullpath(src), fullpath(dest))
     except OSError as e:
         if e.errno == errno.EEXIST:
-            os.remove(fullpath(dest))
-            os.symlink(fullpath(src), fullpath(dest))
+            raise ValueError("Non-symlink file exists: %s" % fullpath(dest))
+        else:
+            raise
+            # os.remove(fullpath(dest))
+            # os.symlink(fullpath(src), fullpath(dest))
 
 
 def rm_if_exists(filename):
+    # os.path.islink(path)  # Test for symlink
     try:
         os.remove(filename)
     except OSError as e:

@@ -5,6 +5,7 @@ import os
 import glob
 import json
 import click
+import subprocess
 from collections import Counter
 import apertools
 import numpy as np
@@ -242,25 +243,26 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 
 # COMMAND: dem-rate
 @cli.command('dem-rate')
-@click.option("--rsc-file", help="name of .rsc file")
-@click.pass_obj
-def dem_rate(context, rsc_file):
+@click.option("--rsc_file", help="name of .rsc file")
+def dem_rate(rsc_file):
     """Print the upsample rate of a dem
 
-    If file is not in the current directory, use the --path option:
-
-        aper --path /path/to/igrams dem-rate
+        aper dem-rate   # Looks in current folder for one .rsc file
+        aper dem-rate /path/to/dem.rsc
 
     """
     # full_file = os.path.join(context['path'], rsc_file)
     if rsc_file is None:
-        rsc_file = apertools.sario.find_rsc_file(directory=context['path'])
-    uprate = apertools.utils.calc_upsample_rate(rsc_filename=rsc_file)
+        rsc_file = apertools.sario.find_rsc_file(directory=".")
 
-    click.echo("%s has %.2f times the default spacing" % (rsc_file, uprate))
+    x_uprate, y_uprate = apertools.utils.calc_upsample_rate(rsc_filename=rsc_file)
+
+    click.echo("%s has (%.5f, %.5f) times the default spacing in (x, y)" %
+               (rsc_file, x_uprate, y_uprate))
 
     default_spacing = 30.0
-    click.echo("This is equal to %.2f meter spacing between pixels" % (default_spacing / uprate))
+    click.echo("This is equal to (%.2f, %.2f) meter spacing between pixels" %
+               (default_spacing / x_uprate, default_spacing / y_uprate))
 
 
 # COMMAND: overlaps
@@ -355,3 +357,38 @@ def save_vrt(filenames, rsc_file, cols, rows, dtype, band, num_bands):
             band=band,
             num_bands=num_bands,
         )
+
+
+# COMMAND: save-vrt
+@cli.command("smallslc")
+@click.argument("filenames", nargs=-1)
+@click.option("--rsc-file", help="If exists, the .rsc file of data")
+@click.option("--downrate", default=10, help="Downsampling beyond the 30m SRTM resolution")
+def smallslc(
+    filenames,
+    rsc_file,
+    downrate,
+):
+    """Save complex binary .geo/.slc as small version for quick look in dismph
+
+    List as many filenames with the same rsc as necessary
+    """
+    x_uprate, y_uprate = apertools.utils.calc_upsample_rate(rsc_filename=rsc_file)
+    pct_x = int(100 / x_uprate / downrate)
+    pct_y = int(100 / y_uprate / downrate)
+    for f in filenames:
+        dest = "small_" + f
+        # For ROI_PAC driver, it only recognizes .slc, not .geo
+        dest = dest.replace(".geo", ".slc")
+        apertools.sario.save_as_vrt(
+            filename=f,
+            rsc_file=rsc_file,
+        )
+        cmd = """gdal_translate -of ROI_PAC {src} {dest} -outsize {px}% {py}% """.format(
+            src=f + ".vrt",
+            dest=dest,
+            px=pct_x,
+            py=pct_y,
+        )
+        logger.info(cmd)
+        subprocess.check_call(cmd, shell=True)

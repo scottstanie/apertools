@@ -10,3 +10,5 @@ python-dateutil>=2.5.1
 requests>=2.20.0
 sardem>=0.1
 scipy>=0.16.0
+shapely>=1.7.0
+gdal==3.0.4
