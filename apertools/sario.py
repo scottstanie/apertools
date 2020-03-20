@@ -1292,6 +1292,7 @@ def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=
         unw_filelist = glob.glob(os.path.join(directory, "*" + ext))
 
     gdal.BuildVRT(output, unw_filelist, separate=True, srcNodata="nan 0.0")
+    # But we want the 2nd band (not an option on build for some reason)
     with fileinput.FileInput(output, inplace=True) as f:
         for line in f:
             print(line.replace("<SourceBand>1</SourceBand>", "<SourceBand>2</SourceBand>"), end='')
