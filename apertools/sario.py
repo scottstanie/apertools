@@ -6,6 +6,7 @@ Email: scott.stanie@utexas.edu
 
 from __future__ import division, print_function
 import datetime
+import fileinput
 import glob
 import math
 import json
@@ -1266,6 +1267,7 @@ def gdal_to_numpy_type(gdal_dtype=None, band=None):
     return gdal_array.GDALTypeCodeToNumericTypeCode(gdal_dtype)
 
 
+# TODO: this dont work to add a colorbar to grayscale tif...
 def testt(fn):
     ds = gdal.Open(fn, 1)
     band = ds.GetRasterBand(1)
@@ -1283,3 +1285,13 @@ def testt(fn):
     # set color table and color interpretation
     band.SetRasterColorTable(colors)
     band.SetRasterColorInterpretation(gdal.GCI_PaletteIndex)
+
+
+def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=".unw"):
+    if unw_filelist is None:
+        unw_filelist = glob.glob(os.path.join(directory, "*" + ext))
+
+    gdal.BuildVRT(output, unw_filelist, separate=True, srcNodata="nan 0.0")
+    with fileinput.FileInput(output, inplace=True) as f:
+        for line in f:
+            print(line.replace("<SourceBand>1</SourceBand>", "<SourceBand>2</SourceBand>"), end='')
