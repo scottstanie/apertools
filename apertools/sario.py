@@ -306,8 +306,11 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
 
         fileonly = os.path.split(os.path.abspath(filename))[1]
         rscbases = [os.path.split(r)[1] for r in possible_rscs]
+        rscdirs = [os.path.split(r)[0] for r in possible_rscs]
         if any(r.startswith(fileonly) for r in rscbases):  # Matching name
-            possible_rscs = [r for r in rscbases if r.startswith(fileonly)]
+            possible_rscs = [
+                os.path.join(b, r) for (b, r) in zip(rscdirs, rscbases) if r.startswith(fileonly)
+            ]
         else:
             raise ValueError(errmsg)
     return utils.fullpath(possible_rscs[0])
@@ -940,6 +943,37 @@ def load_single_mask(int_date_string=None,
 # ######### GDAL FUNCTIONS ##############
 
 
+def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
+    """Save an array to a GeoTIFF using gdal
+
+    Ref: https://gdal.org/tutorials/raster_api_tut.html#using-create
+    """
+
+    rows, cols = array.shape
+    if rsc_data is not None and (rows != rsc_data["file_length"] or cols != rsc_data["width"]):
+        raise ValueError("rsc_data ({}, {}) does not match array shape: ({}, {})".format(
+            (rsc_data["file_length"], rsc_data["width"], rows, cols)))
+
+    driver = gdal.GetDriverByName('GTiff')
+
+    gdal_dtype = numpy_to_gdal_type(array.dtype)
+    out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
+
+    if rsc_data is not None:
+        # Set geotransform (based on rsc data) and projection
+        out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
+    srs = gdal.osr.SpatialReference()
+    srs.SetWellKnownGeogCS("WGS84")
+    out_raster.SetProjection(srs.ExportToWkt())
+
+    band = out_raster.GetRasterBand(1)
+    band.WriteArray(array)
+    band.SetNoDataValue(nodata)
+    band.FlushCache()
+    band = None
+    out_raster = None
+
+
 def save_as_vrt(filename=None,
                 array=None,
                 rows=None,
@@ -1024,7 +1058,8 @@ def save_as_vrt(filename=None,
     )
     options = [
         'subClass=VRTRawRasterBand',
-        'SourceFilename={}'.format(filename),
+        # split, since relative to file, so remove directory name
+        'SourceFilename={}'.format(os.path.split(filename)[1]),
         'relativeToVRT=1',  # location of file: make it relative to the VRT file
         'ImageOffset={}'.format(image_offset),
         'PixelOffset={}'.format(pixel_offset),
@@ -1155,34 +1190,6 @@ def rsc_to_geotransform(rsc_data):
     return (X0, x_step, 0.0, Y0, 0.0, y_step)
 
 
-def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
-    """ Ref: https://gdal.org/tutorials/raster_api_tut.html#using-create"""
-
-    rows, cols = array.shape
-    if rsc_data is not None and (rows != rsc_data["file_length"] or cols != rsc_data["width"]):
-        raise ValueError("rsc_data ({}, {}) does not match array shape: ({}, {})".format(
-            (rsc_data["file_length"], rsc_data["width"], rows, cols)))
-
-    driver = gdal.GetDriverByName('GTiff')
-
-    gdal_dtype = numpy_to_gdal_type(array.dtype)
-    out_raster = driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
-
-    if rsc_data is not None:
-        # Set geotransform (based on rsc data) and projection
-        out_raster.SetGeoTransform(rsc_to_geotransform(rsc_data))
-    srs = gdal.osr.SpatialReference()
-    srs.SetWellKnownGeogCS("WGS84")
-    out_raster.SetProjection(srs.ExportToWkt())
-
-    band = out_raster.GetRasterBand(1)
-    band.WriteArray(array)
-    band.SetNoDataValue(nodata)
-    band.FlushCache()
-    band = None
-    out_raster = None
-
-
 def set_unit(filename, unit="cm"):
     go = gdal.Open(filename, gdalconst.GA_Update)
     b1 = go.GetRasterBand(1)
@@ -1257,6 +1264,8 @@ def make_cmy_colortable():
 
 
 def numpy_to_gdal_type(np_dtype):
+    if np.issubdtype(bool, np_dtype):
+        return gdalconst.GDT_Byte
     # Wrap in np.dtype in case string is passed
     return gdal_array.NumericTypeCodeToGDALTypeCode(np.dtype(np_dtype))
 

@@ -243,7 +243,7 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 
 # COMMAND: dem-rate
 @cli.command('dem-rate')
-@click.option("--rsc_file", help="name of .rsc file")
+@click.option("--rsc-file", help="name of .rsc file")
 def dem_rate(rsc_file):
     """Print the upsample rate of a dem
 
