@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Script for downloading through https://asf.alaska.edu/api/
 
@@ -160,13 +161,13 @@ if __name__ == "__main__":
         "--output",
         "-o",
         default="kml",
-        help="Type of output file to save query to (default=kml)",
+        help="Type of output file to save query to (default=%(default)s)",
     )
     p.add_argument(
         "--processingLevel",
         choices=["RAW", "SLC"],
         default="RAW",
-        help="Level or product to download",
+        help="Level or product to download (default=%(default)s)",
     )
     p.add_argument(
         "--relativeOrbit",
@@ -177,7 +178,7 @@ if __name__ == "__main__":
         "--maxResults",
         type=int,
         default=2000,
-        help="Limit of number of products to downlaod",
+        help="Limit of number of products to downlodd (default=%(default)s)",
     )
     args = p.parse_args()
     if args.ullr is None and args.dem is None:
