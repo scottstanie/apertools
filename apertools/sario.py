@@ -643,7 +643,6 @@ def _load_deformation_h5(igram_path=None, filename=None, full_path=None, n=None,
         with h5py.File(full_path, "r") as f:
             if dset is None:
                 dset = list(f)[0]
-            # TODO: get rid of these strings not as constants
             if n is not None and n > 1:
                 deformation = f[dset][-n:]
             else:

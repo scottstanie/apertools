@@ -151,11 +151,11 @@ if __name__ == "__main__":
     )
     p.add_argument(
         "--start",
-        help="Starting date for query",
+        help="Starting date for query (recommended: YYYY-MM-DD)",
     )
     p.add_argument(
         "--end",
-        help="Ending date for query",
+        help="Ending date for query (recommended: YYYY-MM-DD)",
     )
     p.add_argument(
         "--output",
@@ -178,7 +178,7 @@ if __name__ == "__main__":
         "--maxResults",
         type=int,
         default=2000,
-        help="Limit of number of products to downlodd (default=%(default)s)",
+        help="Limit of number of products to download (default=%(default)s)",
     )
     args = p.parse_args()
     if args.ullr is None and args.dem is None:
