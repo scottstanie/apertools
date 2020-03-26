@@ -55,8 +55,11 @@ UAVSAR_EXTS = [
     '.amp.grd',
 ]
 ALOS_EXTS = ['.slc', '.cc', '.int', '.amp', '.unw', '.unwflat']  # TODO: check these
+BOOL_EXTS = ['.mask']
+ROI_PAC_EXTS = ['.phs']
 IMAGE_EXTS = ['.png', '.tif', '.tiff', '.jpg']
 
+# phs?
 # Notes: .grd, .mlc can be either real or complex for UAVSAR,
 # .amp files are real only for UAVSAR, complex for sentinel processing
 # However, we label them as real here since we can tell .amp files
@@ -80,11 +83,12 @@ REAL_EXTS = [
     '.cor.grd',
     '.amp1.grd',
     '.amp2.grd',
+    '.phs',  # GACOS, ROI_PAC?
+    '.ztd',  # GACOS
 ]  # NOTE: .cor might only be real for UAVSAR
 # Note about UAVSAR Multi-look products:
 # Will end with `_ML5X5.grd`, e.g., for 5x5 downsampled
 
-BOOL_EXTS = ['.mask']
 ELEVATION_EXTS = ['.dem', '.hgt']
 
 # These file types are not simple complex matrices: see load_stacked_img for detail
@@ -198,10 +202,14 @@ def load_file(filename,
     if ext in IMAGE_EXTS:
         return np.array(Image.open(filename).convert("L"))  # L for luminance == grayscale
 
-    if ext in SENTINEL_EXTS or ext in BOOL_EXTS:
-        rsc_file = rsc_file if rsc_file else find_rsc_file(filename, verbose=verbose)
-        if rsc_file:
-            rsc_data = sardem.loading.load_dem_rsc(rsc_file)
+    if not rsc_file and os.path.exists(filename + ".rsc"):
+        rsc_file = filename + ".rsc"
+    elif ext in SENTINEL_EXTS or ext in ROI_PAC_EXTS or ext in BOOL_EXTS:
+        # Try harder for .rsc
+        rsc_file = find_rsc_file(filename, verbose=verbose)
+
+    if rsc_file:
+        rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
     if ext == '.grd':
         ext = _get_full_grd_ext(filename)
@@ -233,8 +241,7 @@ def load_file(filename,
                                    cols=cols,
                                    **kwargs)
         return stacked[..., ::downsample, ::downsample]
-    # having rsc_data implies that this is not a UAVSAR file, so is complex
-    elif rsc_data or is_complex(filename=filename, ext=ext):
+    elif is_complex(filename=filename, ext=ext):
         return utils.take_looks(
             load_complex(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols),
             *looks)
@@ -1001,7 +1008,7 @@ def save_as_vrt(filename=None,
 
     Ref: https://gdal.org/drivers/raster/vrt.html#vrt-descriptions-for-raw-files
     """
-    outfile = outfile or filename + ".vrt"
+    outfile = outfile or (filename + ".vrt")
     if outfile is None:
         raise ValueError("Need outfile or filename to save")
 
@@ -1017,15 +1024,19 @@ def save_as_vrt(filename=None,
     if array is not None:
         dtype = array.dtype
         rows, cols = array.shape[-2:]
+
     if rsc_data is not None:
-        rows, cols = _get_file_rows_cols(rows=rows, cols=cols, rsc_data=rsc_data)
+        rows, cols = _get_file_rows_cols(rsc_data=rsc_data)
+        if array is not None:
+            assert (rows, cols) == array.shape[-2:]
+
     if dtype is None:
         dtype = _get_file_dtype(filename)
-    if cols is not None:
-        bytes_per_pix = np.dtype(dtype).itemsize
-        total_bytes = os.path.getsize(filename)
-        rows = int(total_bytes / bytes_per_pix / cols)
-        assert total_bytes == bytes_per_pix * rows * cols
+
+    bytes_per_pix = np.dtype(dtype).itemsize
+    total_bytes = os.path.getsize(filename)
+    assert rows == int(total_bytes / bytes_per_pix / cols)
+    # assert total_bytes == bytes_per_pix * rows * cols
 
     vrt_driver = gdal.GetDriverByName("VRT")
 
@@ -1043,7 +1054,7 @@ def save_as_vrt(filename=None,
     out_raster.SetProjection(srs.ExportToWkt())
 
     if interleave is None or num_bands is None:
-        interleave, num_bands = get_interleave(filename)
+        interleave, num_bands = get_interleave(filename, num_bands=num_bands)
     if band is None:
         band = 2 if utils.get_file_ext(filename) in STACKED_FILES else 1
 
@@ -1128,8 +1139,12 @@ def create_derived_band(src_filename, outfile=None, src_dtype="CFloat32", desc=N
     return
 
 
-def get_interleave(filename):
+def get_interleave(filename, num_bands=None):
     """Returns band interleave format, and number of bands"""
+    if num_bands == 1:
+        # 1 band is always same: its just all pixels in a row
+        return "BIP", 1
+
     ext = utils.get_file_ext(filename)
     if ext in BIL_FILES:
         interleave, num_bands = "BIL", 2
