@@ -33,7 +33,8 @@ import argparse
 import os
 import subprocess
 # import apertools.geojson
-import gdal
+# import gdal
+import rasterio as rio
 
 # python 2: urllib.urlencode
 from urllib.parse import urlencode
@@ -108,25 +109,6 @@ def downlaod_data(output="metalink", **kwargs):
     subprocess.check_call(download_cmd, shell=True)
 
 
-def get_ullr(filename):
-    infodict = gdal.Info(filename, format="json")
-    cc = infodict["cornerCoordinates"]
-    ulx, uly = cc["upperLeft"]
-    lrx, lry = cc["lowerRight"]
-    return ulx, uly, lrx, lry
-
-
-def ullr_to_bbox(ullr_tuple):
-    """Convert gdal's ullr tuple to ASF bbox ( lower left lon, lat, upper right format
-
-        Examples:
-        >>> ullr=(-150.2, 65.5, -150.0, 65.0)
-        >>> print(ullr_to_bbox(ullr))
-        (-150.2, 65.0, -150.0, 65.5)
-    """
-    return ullr_tuple[0], ullr_tuple[3], ullr_tuple[2], ullr_tuple[1]
-
-
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     # Only care for now about platform="S1",
@@ -137,13 +119,12 @@ if __name__ == "__main__":
         help="display available data in format of --output, no download",
     )
     p.add_argument(
-        "--ullr",
+        "--box",
         nargs=4,
-        metavar=("ulx", "uly", "lrx", "lry"),
+        metavar=("left", "bottom", "right", "top"),
         type=float,
-        help="Upper left, lower right coords "
-        " (e.g. --ullr -106.1 33.1 -103.1, 30.1 ). "
-        " Can be from gdalinfo on existing DEM.",
+        help="Bounding box of area of interest "
+        " (e.g. --box -106.1 30.1 -103.1 33.1 ). ",
     )
     p.add_argument(
         "--dem",
@@ -186,9 +167,9 @@ if __name__ == "__main__":
 
     arg_dict = vars(args)
     if args.dem:
-        ullr = get_ullr(args.dem)
-        arg_dict["ullr"] = ullr
-    arg_dict["bbox"] = ullr_to_bbox(arg_dict["ullr"])
+        with rio.open(args.dem) as ds:
+            # left, bottom, right, top = ds.bounds
+            arg_dict["box"] = ds.bounds
 
     if args.query_only:
         query_only(**vars(args))
