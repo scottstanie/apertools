@@ -340,8 +340,8 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
 @click.option("--cols", type=int, help="Number of columns (width) in file")
 @click.option("--rows", type=int, help="Number of rows (file_length) in file")
 @click.option("--dtype", help="Optional number dtype string")
-@click.option("--band", help="The band number to use for the VRT")
-@click.option("--num-bands", help="Number of bands in file")
+@click.option("--band", type=int, help="The band number to use for the VRT")
+@click.option("--num-bands", type=int, help="Number of bands in file")
 def save_vrt(filenames, rsc_file, cols, rows, dtype, band, num_bands):
     """Save GDAL .vrt file binary raster loading
 
