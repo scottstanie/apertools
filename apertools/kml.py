@@ -2,7 +2,7 @@ from __future__ import division, print_function
 import subprocess
 import os
 import re
-import gdal
+import rasterio as rio
 from apertools import geojson, latlon
 
 # TODO: GEOTiff stuff with gdal!
@@ -94,6 +94,7 @@ quad_template = """\
 """
 
 
+# TODO: this may be wrong? might be 1 pixel width shy
 def rsc_nsew(rsc_data):
     """return tuple of (north, south, east, west) from rsc data"""
 
@@ -178,7 +179,13 @@ def create_kml(rsc_data=None,
     return output
 
 
-def create_geotiff(rsc_data=None, kml_file=None, img_filename=None, shape='box', outfile='out.tif'):
+def create_geotiff(
+    rsc_data=None,
+    kml_file=None,
+    img_filename=None,
+    shape='box',
+    outfile='out.tif',
+):
     """Create geotiff from rsc_data and image file
 
     Args:
@@ -205,15 +212,10 @@ def create_geotiff(rsc_data=None, kml_file=None, img_filename=None, shape='box',
         #  (-102.552689, 31.481976),
         #  (-102.181068, 33.105865)]
 
-        # gdalinfo output:
-        # Driver: PNG/Portable Network Graphics
-        # Files: quick-look-1.png
-        # Size is 1482, 2186
-        output = subprocess.check_output("gdalinfo %s" % img_filename, shell=True)
-        size_line = output.decode('utf-8').splitlines()[2]
-        ncols, nrows = re.match(r'Size is (\d+), (\d+)', size_line).groups()
-        # Out[17]: ('1482', '2186')
+        with rio.open(img_filename) as ds:
+            ncols, nrows = ds.width, ds.height
 
+        # TODO: prob gettable through gdal/rasterio too
         ll, ul, lr, ur = sorted(latlon.map_overlay_coords(kml_file),
                                 key=lambda tup: (tup[0], -tup[1]))
         ul = '%s %s' % ul
