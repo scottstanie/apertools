@@ -323,19 +323,19 @@ def _abs_max(img):
 
 
 def view_stack(
-        stack,
-        display_img,
-        geolist=None,
-        label="Centimeters",
-        cmap='seismic_wide',
-        perform_shift=False,
-        title='',
-        vmin=None,
-        vmax=None,
-        legend_loc="upper left",
-        lat_lon=False,
-        line_plot_kwargs=None,
-        timeline_callback=None,
+    stack,
+    display_img,
+    geolist=None,
+    label="Centimeters",
+    cmap='seismic_wide',
+    perform_shift=False,
+    title='',
+    vmin=None,
+    vmax=None,
+    legend_loc="upper left",
+    lat_lon=False,
+    line_plot_kwargs=None,
+    timeline_callback=None,
 ):
     """Displays an image from a stack, allows you to click for timeseries
 
@@ -577,3 +577,28 @@ def plotcompare(fnames, dset="velos", vmax=25, vmin=-25, cmap="seismic_wide"):
     fig.colorbar(axim)
     [f.close() for f in files]
     return fig, axes
+
+
+def cmap_to_qgis(cmap_rgba_arr):
+    # TODO: add the xml stuff
+    stops = np.linspace(1 / 257, 256 / 257, len(cmap_rgba_arr))
+    rows = []
+    for s, rgb in zip(stops, cmap_rgba_arr):
+        ss = "%.6f" % s
+        rows.append(ss + ';' + ','.join(rgb.astype(int)))
+    return ':'.join(rows)
+
+
+# <!DOCTYPE qgis_style>
+# <qgis_style version="1">
+#   <symbols/>
+#   <colorramps>
+#     <colorramp type="gradient" name="seismic_wide_y" favorite="1">
+#       <prop k="color1" v="0,0,178,255"/>
+#       <prop k="color2" v="178,0,0,255"/>
+#       <prop k="discrete" v="0"/>
+#       <prop k="rampType" v="gradient"/>
+#       <prop k="stops" v="0.003891;0,0,178,255:0.074764;0,..."/>
+#     </colorramp>
+#   </colorramps>
+# </qgis_style>

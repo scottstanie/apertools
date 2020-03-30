@@ -20,8 +20,6 @@ import h5py
 import matplotlib.pyplot as plt
 from PIL import Image
 import sardem
-import gdal
-from osgeo import gdal_array, gdalconst
 
 from apertools import utils
 import apertools.parsers
@@ -954,7 +952,7 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
 
     Ref: https://gdal.org/tutorials/raster_api_tut.html#using-create
     """
-
+    import gdal
     rows, cols = array.shape
     if rsc_data is not None and (rows != rsc_data["file_length"] or cols != rsc_data["width"]):
         raise ValueError("rsc_data ({}, {}) does not match array shape: ({}, {})".format(
@@ -1008,6 +1006,7 @@ def save_as_vrt(filename=None,
 
     Ref: https://gdal.org/drivers/raster/vrt.html#vrt-descriptions-for-raw-files
     """
+    import gdal
     outfile = outfile or (filename + ".vrt")
     if outfile is None:
         raise ValueError("Need outfile or filename to save")
@@ -1088,6 +1087,7 @@ def save_as_vrt(filename=None,
 
 
 def create_derived_band(src_filename, outfile=None, src_dtype="CFloat32", desc=None, func="log10"):
+    import gdal
     # For new outfile, only have one .vrt extension
     if outfile is None:
         outfile = "{}.{}.vrt".format(src_filename.replace(".vrt", ""), func)
@@ -1205,6 +1205,8 @@ def rsc_to_geotransform(rsc_data):
 
 
 def set_unit(filename, unit="cm"):
+    from osgeo import gdalconst
+    import gdal
     go = gdal.Open(filename, gdalconst.GA_Update)
     b1 = go.GetRasterBand(1)
     b1.SetUnitType(unit)
@@ -1240,6 +1242,7 @@ def cmy_colors():
 
 
 def make_cmy_colortable():
+    import gdal
     # create color table
     colors = gdal.ColorTable()
 
@@ -1278,6 +1281,7 @@ def make_cmy_colortable():
 
 
 def numpy_to_gdal_type(np_dtype):
+    from osgeo import gdal_array, gdalconst
     if np.issubdtype(bool, np_dtype):
         return gdalconst.GDT_Byte
     # Wrap in np.dtype in case string is passed
@@ -1285,6 +1289,7 @@ def numpy_to_gdal_type(np_dtype):
 
 
 def gdal_to_numpy_type(gdal_dtype=None, band=None):
+    from osgeo import gdal_array
     if gdal_dtype is None:
         gdal_dtype = band.DataType
     return gdal_array.GDALTypeCodeToNumericTypeCode(gdal_dtype)
@@ -1292,6 +1297,7 @@ def gdal_to_numpy_type(gdal_dtype=None, band=None):
 
 # TODO: this dont work to add a colorbar to grayscale tif...
 def testt(fn):
+    import gdal
     ds = gdal.Open(fn, 1)
     band = ds.GetRasterBand(1)
 
@@ -1311,6 +1317,7 @@ def testt(fn):
 
 
 def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=".unw"):
+    import gdal
     if unw_filelist is None:
         unw_filelist = glob.glob(os.path.join(directory, "*" + ext))
 

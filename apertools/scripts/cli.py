@@ -7,12 +7,11 @@ import json
 import click
 import subprocess
 from collections import Counter
-import apertools
-import numpy as np
+# import apertools
 import h5py
 from datetime import datetime
-from .plot_insar import plot_image
 
+import apertools.log
 logger = apertools.log.get_log()
 
 
@@ -59,6 +58,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
         aper --path /path/to/igrams view_stack
 
     """
+    import numpy as np
     if filename.endswith(".h5"):
         h_file = h5py.File(filename, "r")
         deformation = h_file["deformation"]
@@ -112,6 +112,7 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
         aper --path /path/to/igrams <filename>
 
     """
+    from .plot_insar import plot_image
     img = apertools.sario.load(filename, downsample=downsample)
     plot_image(img, title=title, colorbar=colorbar, alpha=alpha)
 
@@ -217,6 +218,8 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
     Note: Default is to load 3D stack named deformation.npy
     Otherwise, use --file-ext "unw", for example, to grab all files
     """
+    import apertools.plotting
+    import apertools.sario
     if file_ext:
         stack = apertools.sario.load_stack(directory=context['path'], file_ext=file_ext)
         titles = sorted(apertools.sario.find_files(context['path'], "*" + file_ext))
@@ -251,6 +254,8 @@ def dem_rate(rsc_file):
         aper dem-rate /path/to/dem.rsc
 
     """
+    import apertools.sario
+    import apertools.utils
     # full_file = os.path.join(context['path'], rsc_file)
     if rsc_file is None:
         rsc_file = apertools.sario.find_rsc_file(directory=".")
@@ -289,6 +294,9 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
 
         aper overlaps --filename box.geojson > overlap_files.txt
     """
+    import apertools.parsers
+    import apertools.sario
+
     def _parse(date_string):
         return datetime.strptime(date_string, "%Y%m%d").date()
 
@@ -347,6 +355,7 @@ def save_vrt(filenames, rsc_file, cols, rows, dtype, band, num_bands):
 
     List as many filenames with the same rsc as necessary
     """
+    import apertools.sario
     for f in filenames:
         apertools.sario.save_as_vrt(
             filename=f,
@@ -373,6 +382,8 @@ def smallslc(
 
     List as many filenames with the same rsc as necessary
     """
+    import apertools.sario
+    import apertools.utils
     x_uprate, y_uprate = apertools.utils.calc_upsample_rate(rsc_filename=rsc_file)
     pct_x = int(100 / x_uprate / downrate)
     pct_y = int(100 / y_uprate / downrate)
@@ -402,6 +413,9 @@ def smallslc(
 @click.option("--nodata", default="0")
 @click.option("--outtype", default="Float32")
 def geotiff(infile, rsc, output, dset, nodata, outtype):
+    import apertools.sario
+    import apertools.utils
+    import apertools.kml
 
     if rsc:
         rsc_data = apertools.sario.load(rsc)

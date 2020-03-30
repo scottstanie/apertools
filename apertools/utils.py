@@ -9,8 +9,6 @@ import sys
 import os
 import subprocess
 import numpy as np
-import gdal
-from osgeo import gdalconst
 
 import sardem
 from apertools.log import get_log
@@ -132,6 +130,8 @@ def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC
         ndarray, size = ceil(rows / row_looks, cols / col_looks)
         values at each pixel are averaged from input array
     """
+    import gdal
+    from osgeo import gdalconst
     if row_looks == 1 and col_looks == 1:
         raise ValueError("Must take looks for file on disk")
     in_ds = gdal.Open(src_filename)
