@@ -9,19 +9,43 @@ from math import floor, sqrt
 import os
 import argparse
 import subprocess
+import apertools.sario
 import rasterio as rio
 import glob
 
 
-def _translate(vf, out, new_width, new_height):
-    cmd = "gdal_translate -quiet -outsize {w} {h} {inp} {out} -of ROI_PAC".format(
+def _translate(vf, out, new_width, new_height, outformat):
+    cmd = "gdal_translate -quiet -outsize {w} {h} {inp} {out} -of {of}".format(
         w=new_width,
         h=new_height,
         inp=vf,
         out=out,
+        of=outformat,
     )
     print("Running ", cmd)
     subprocess.run(cmd, shell=True)
+
+
+def convert(vrtlist, new_width, new_height, outformat="ROI_PAC", outext=".slc"):
+    outfilelist = [f.replace(".geo.vrt", outext) for f in vrtlist]
+    with open("filelist.txt", "w") as fl:
+        fl.write("\n".join(outfilelist) + "\n")
+
+    # TODO: check remaining files not existing?
+    vleft, oleft = [], []
+    for (vf, out) in zip(vrtlist, outfilelist):
+        if not os.path.exists(out):
+            vleft.append(vf)
+            oleft.append(out)
+
+    max_jobs = 4
+    pool = multiprocessing.Pool(max_jobs)
+    results = [
+        pool.apply_async(_translate, args=(vf, out, new_width, new_height, outformat))
+        for (vf, out) in zip(vleft, oleft)
+    ]
+    [res.get() for res in results]
+    return outfilelist
 
 
 if __name__ == "__main__":
@@ -38,14 +62,22 @@ if __name__ == "__main__":
         help="pct size of original igrams (default=%(default)s)",
     )
     p.add_argument(
-        "--num_tiles_across",
+        "--num-tiles-across",
         type=int,
         help="Number of tiles across for display (default = approx square)",
     )
+    p.add_argument(
+        "--rsc-file",
+        default="elevation.dem.rsc",
+        help="File with geo transform information (default=%(default)s)",
+    )
     args = p.parse_args()
 
+    # First, make sure we've save all the binarys as vrts
+    [apertools.sario.save_as_vrt(filename=f, rsc_file=args.rsc_file) for f in glob.glob("*.geo")]
+
+    vrtlist = sorted(glob.glob("*.geo.vrt"))
     # gdal_translate -outsize 2% 2% S1B_20190325.geo.vrt looked_S1B_20190325.geo.tif
-    vrtlist = glob.glob("*.geo.vrt")
 
     num_tiles_across = int(floor(sqrt(len(vrtlist))))
 
@@ -54,25 +86,10 @@ if __name__ == "__main__":
     factor = int(100 / args.out_pct)
     new_width, new_height = orig_width // factor, orig_height // factor
 
-    outfilelist = [f.replace(".geo.vrt", ".slc") for f in vrtlist]  # ROI_PAC slc format
-    with open("filelist.txt", "w") as fl:
-        fl.write("\n".join(outfilelist) + "\n")
+    # ROI_PAC slc format
+    outfilelist = convert(vrtlist, new_width, new_height, outformat="ROI_PAC", outext=".slc")
 
-    # TODO: check remaining files not existing?
-    vleft, oleft = [], []
-    for (vf, out) in zip(vrtlist, outfilelist):
-        if not os.path.exists(out):
-            vleft.append(vf)
-            oleft.append(out)
-
-    max_jobs = 4
-    pool = multiprocessing.Pool(max_jobs)
-    results = [
-        pool.apply_async(_translate, args=(vf, out, new_width, new_height))
-        for (vf, out) in zip(vleft, oleft)
-    ]
-    [res.get() for res in results]
-
+    # Now convert the small binary slcs into one tile file
     stack_file = "stackfile"
     # usage: makestackfile filelist stackfile length nigrams
     cmd = "makestackfile filelist.txt {stack} {w} {N}".format(
