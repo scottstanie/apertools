@@ -92,6 +92,7 @@ class Sentinel(Base):
     R: Resolution class: F, H, M, or _ (N/A)
     L: Processing Level: 0, 1, 2
     F: Product class: S (standard), A (annotation, only used internally)
+        - we only care about standard
     PP: Polarization: SH (single HH), SV (single VV), DH (dual HH+HV), DV (dual VV+VH)
     Start date + time (date/time separated by T)
     Stop date + time
@@ -105,11 +106,21 @@ class Sentinel(Base):
     Attributes:
         filename (str) name of the sentinel data product
     """
-    FILE_REGEX = r'(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_(\d)([SA])([SDHV]{2})_([T\d]{15})_([T\d]{15})_(\d{6})_([\d\w]{6})_([\d\w]{4})'
+    FILE_REGEX = r'(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_([012])S([SDHV]{2})_([T\d]{15})_([T\d]{15})_(\d{6})_([\d\w]{6})_([\d\w]{4})'
     TIME_FMT = '%Y%m%dT%H%M%S'
-    _FIELD_MEANINGS = ('mission', 'beam', 'product type', 'resolution class', 'product level',
-                       'product class', 'polarization', 'start datetime', 'stop datetime',
-                       'orbit number', 'data-take identified', 'product unique id')
+    _FIELD_MEANINGS = (
+        'mission',
+        'beam',
+        'product type',
+        'resolution class',
+        'product level',
+        'polarization',
+        'start datetime',
+        'stop datetime',
+        'orbit number',
+        'data-take identified',
+        'product unique id',
+    )
 
     def __init__(self, filename, **kwargs):
         super(Sentinel, self).__init__(filename, **kwargs)
@@ -380,10 +391,15 @@ class SentinelOrbit(Base):
         super(SentinelOrbit, self).__init__(filename, **kwargs)
 
     def __str__(self):
-        return "{} from {} to {}".format(self.__class__.__name__, self.start_time, self.end_time)
+        return "{} {} from {} to {}".format(self.orbit_type, self.__class__.__name__,
+                                            self.start_time, self.stop_time)
 
     def __lt__(self, other):
         return (self.start_time, self.filename) < (other.start_time, other.filename)
+
+    def __contains__(self, dt):
+        """Checks if a datetime lies within the validity window"""
+        return self.start_time < dt < self.stop_time
 
     @property
     def start_time(self):
