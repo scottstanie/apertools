@@ -342,6 +342,8 @@ class SentinelOrbit(Base):
     https://sentinel.esa.int/documents/247904/351187/GMES_Sentinels_POD_Service_File_Format_Specification
         section 2
     https://qc.sentinel1.eo.esa.int/doc/api/
+    https://sentinels.copernicus.eu/documents/247904/3372484/Copernicus-POD-Regular-Service-Review-Jun-Sep-2018.pdf
+        see here (section 3.6) for differences in orbit accuracy)
 
     Example:
         S1A_OPER_AUX_PREORB_OPOD_20200325T131800_V20200325T121452_20200325T184952.EOF
