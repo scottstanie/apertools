@@ -119,12 +119,12 @@ if __name__ == "__main__":
         help="display available data in format of --output, no download",
     )
     p.add_argument(
-        "--box",
+        "--bbox",
         nargs=4,
         metavar=("left", "bottom", "right", "top"),
         type=float,
         help="Bounding box of area of interest "
-        " (e.g. --box -106.1 30.1 -103.1 33.1 ). ",
+        " (e.g. --bbox -106.1 30.1 -103.1 33.1 ). ",
     )
     p.add_argument(
         "--dem",
@@ -162,14 +162,14 @@ if __name__ == "__main__":
         help="Limit of number of products to download (default=%(default)s)",
     )
     args = p.parse_args()
-    if args.ullr is None and args.dem is None:
-        raise ValueError("Need either --ullr or --dem options")
+    if args.bbox is None and args.dem is None:
+        raise ValueError("Need either --bbox or --dem options")
 
     arg_dict = vars(args)
     if args.dem:
         with rio.open(args.dem) as ds:
             # left, bottom, right, top = ds.bounds
-            arg_dict["box"] = ds.bounds
+            arg_dict["bbox"] = ds.bounds
 
     if args.query_only:
         query_only(**vars(args))
