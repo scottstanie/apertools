@@ -13,7 +13,7 @@ import apertools.utils
 from apertools.log import get_log
 logger = get_log()
 
-__all__ = ['Sentinel', 'Uavsar']
+__all__ = ['Sentinel', 'Uavsar', 'SentinelOrbit']
 
 
 class Base(object):
@@ -215,6 +215,22 @@ class Sentinel(Base):
         return self._get_field('polarization')
 
     @property
+    def product_type(self):
+        """Returns product type/level
+
+        Example:
+            >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
+            >>> print(s.product_type)
+            SLC
+        """
+        return self._get_field('product type')
+
+    @property
+    def level(self):
+        """Alias for product type/level """
+        return self.product_type
+
+    @property
     def mission(self):
         """Returns satellite/mission of product (S1A/S1B)
 
@@ -318,6 +334,135 @@ class Sentinel(Base):
         except ValueError:
             raise ValueError("Need either valid geojson or dem_rsc_data")
         return self.overlaps_geojson(geojson_or_rsc)
+
+
+class SentinelOrbit(Base):
+    """
+    Sentinel 1 orbit reference:
+    https://sentinel.esa.int/documents/247904/351187/GMES_Sentinels_POD_Service_File_Format_Specification
+        section 2
+    https://qc.sentinel1.eo.esa.int/doc/api/
+
+    Example:
+        S1A_OPER_AUX_PREORB_OPOD_20200325T131800_V20200325T121452_20200325T184952.EOF
+
+    The filename must comply with the following pattern:
+        MMM_CCCC_TTTTTTTTTT_<instance_id>.EOF
+
+    MMM = mission, S1A or S1B
+    CCCC =  File Class, we only want OPER = routine operational
+    TTTTTTTTTT = File type
+     = FFFF DDDDDD
+        FFFF = file category, we want AUX_:auxiliary data files;
+        DDDDDD = Semantic Descriptor
+        most common = POEORB: Precise Orbit Ephemerides (POE) Orbit File
+            (available after 1-2 weeks)
+        also, RESORB: Restituted orbit file
+            (covers 6 hour windows, less accurate, more immediate)
+        TODO: do I ever want to deal with the AUX antenna files?
+
+    <instance id> has a couple:
+    ssss_yyyymmddThhmmsswhere:
+        ssss is the Site Centre of the file originator (OPOD for S-1 and S-2)
+        and a validity start/stop, same date format
+
+    Attributes:
+        filename (str) name of the sentinel data product
+    """
+    FILE_REGEX = r'(S1A|S1B)_OPER_AUX_([\w_]{6})_OPOD_([T\d]{15})_V([T\d]{15})_([T\d]{15}).EOF'
+    TIME_FMT = '%Y%m%dT%H%M%S'
+    _FIELD_MEANINGS = ('mission', 'orbit type', 'created datetime', 'start datetime',
+                       'stop datetime')
+
+    def __init__(self, filename, **kwargs):
+        super(SentinelOrbit, self).__init__(filename, **kwargs)
+
+    def __str__(self):
+        return "{} from {} to {}".format(self.__class__.__name__, self.start_time, self.end_time)
+
+    def __lt__(self, other):
+        return (self.start_time, self.filename) < (other.start_time, other.filename)
+
+    @property
+    def start_time(self):
+        """Returns start datetime of an orbit
+
+        Args:
+            filename (str): filename of a sentinel 1 EOF file
+
+        Returns:
+            datetime: start datetime of mission
+
+        Example:
+            >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
+            >>> print(s.start_time)
+            2019-12-31 22:59:42
+        """
+        start_time_str = self._get_field('start datetime')
+        return datetime.strptime(start_time_str, self.TIME_FMT)
+
+    @property
+    def stop_time(self):
+        """Returns stop datetime from a sentinel file name
+
+        Args:
+            filename (str): filename of a sentinel 1 product
+
+        Returns:
+            datetime: stop datetime
+
+        Example:
+            >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
+            >>> print(s.stop_time)
+            2020-01-02 00:59:42
+        """
+        stop_time_str = self._get_field('stop datetime')
+        return datetime.strptime(stop_time_str, self.TIME_FMT)
+
+    @property
+    def created_time(self):
+        """Returns created datetime from a orbit file name
+
+        Args:
+            filename (str): filename of a sentinel 1 product
+
+        Returns:
+            datetime: created datetime
+
+        Example:
+            >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
+            >>> print(s.created_time)
+            2020-01-21 12:06:54
+        """
+        stop_time_str = self._get_field('created datetime')
+        return datetime.strptime(stop_time_str, self.TIME_FMT)
+
+    @property
+    def orbit_type(self):
+        """Type of orbit file (previse, restituted)
+
+        Example:
+        >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
+        >>> print(s.orbit_type)
+        precise
+        >>> s = SentinelOrbit('S1B_OPER_AUX_RESORB_OPOD_20200325T151938_V20200325T112442_20200325T144212.EOF')
+        >>> print(s.orbit_type)
+        restituted
+        """
+        o = self._get_field('orbit type')
+        if o == 'POEORB':
+            return 'precise'
+        elif o == 'RESORB':
+            return 'restituted'
+        elif o == 'PREORB':
+            return 'predicted'
+        else:
+            raise ValueError("unknown orbit type: %s" % self.filename)
+
+    @property
+    def date(self):
+        """Date of acquisition: shortcut for start_time.date()"""
+        return self.start_time.date()
 
 
 class Uavsar(Base):
