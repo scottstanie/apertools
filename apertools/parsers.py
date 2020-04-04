@@ -401,6 +401,30 @@ class SentinelOrbit(Base):
         """Checks if a datetime lies within the validity window"""
         return self.start_time < dt < self.stop_time
 
+    def __eq__(self, other):
+        return (
+            self.mission,
+            self.start_time,
+            self.stop_time,
+            self.orbit_type,
+        ) == (
+            other.mission,
+            other.start_time,
+            other.stop_time,
+            other.orbit_type,
+        )
+
+    @property
+    def mission(self):
+        """Returns satellite/mission of product (S1A/S1B)
+
+        Example:
+            >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
+            >>> print(s.mission)
+            S1A
+        """
+        return self._get_field('mission')
+
     @property
     def start_time(self):
         """Returns start datetime of an orbit

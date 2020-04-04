@@ -829,8 +829,17 @@ def _geolist_to_str(geo_date_list):
 
 
 def _intlist_to_str(int_date_list):
+    """Date pairs to Nx2 numpy array or strings"""
     return np.array([(a.strftime(DATE_FMT), b.strftime(DATE_FMT))
                      for a, b in int_date_list]).astype("S")
+
+
+def intlist_to_filenames(int_date_list, ext=".int"):
+    """Convert date pairs to list of string filenames"""
+    return [
+        "{}_{}{ext}".format(a.strftime(DATE_FMT), b.strftime(DATE_FMT), ext=ext)
+        for a, b in int_date_list
+    ]
 
 
 def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):

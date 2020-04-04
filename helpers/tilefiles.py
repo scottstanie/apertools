@@ -75,6 +75,8 @@ if __name__ == "__main__":
 
     # First, make sure we've save all the binarys as vrts
     [apertools.sario.save_as_vrt(filename=f, rsc_file=args.rsc_file) for f in glob.glob("*.geo")]
+    # Also, add .rsc files for them for after we've saved new ones with the gdal driver
+    [apertools.utils.force_symlink(args.rsc_file, f + ".rsc") for f in glob.glob("*.geo")]
 
     vrtlist = sorted(glob.glob("*.geo.vrt"))
     # gdal_translate -outsize 2% 2% S1B_20190325.geo.vrt looked_S1B_20190325.geo.tif
