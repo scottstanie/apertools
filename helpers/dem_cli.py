@@ -31,82 +31,73 @@ def positive_small_int(argstring):
     return intval
 
 
-# Note: overriding this to show the positionals first
-USAGE = """%(prog)s { left top dlon dlat | --geojson GEOJSON }
-                 [-h] [--rate RATE=1] [--output OUTPUT=elevation.dem]
-                 """
+DESCRIPTION = """Form a cropped (upsampled) DEM from SRTM GL1
 
-DESCRIPTION = """Stiches SRTM .hgt files to make (upsampled) DEM
+    Uses SRTM from sdsc.edu opentopography
 
-    Pick a lat/lon bounding box for a DEM, and it will download
-    the necessary SRTM1 tiles, stitch together, then upsample.
+    GDAL downloads and crops/upsamples/translates to ENVI format
 
     Usage Examples:
         createdem -156.0 20.2 1 2 --rate 2  # Makes a box 1 degree wide, 2 deg high
-        createdem -156.0 20.2 0.5 0.5 -r 10 -o my_elevation.dem
-        createdem --geojson dem_area.geojson -r 10
+        createdem -156.0 20.2 -154.5 21.4 -o my_elevation.dem
+        createdem --geojson ../aoi.geojson --xrate 2 --yrate 2
+        createdem --wkt "POLYGON((-104.8 31.2,-103.4 31.2,-103.4 32.2,-104.8 32.2,-104.8 31.2))"
 
-    Default out is elevation.dem for the final upsampled DEM.
-    Also creates elevation.dem.rsc with start lat/lon, stride, and other info."""
+"""
 
 
 def cli():
-    parser = ArgumentParser(prog='createdem',
-                            description=DESCRIPTION,
-                            usage=USAGE,
-                            formatter_class=RawTextHelpFormatter)
-    parser.add_argument("left",
-                        nargs='?',
-                        type=float,
-                        help="Left (western) most longitude of DEM box (degrees, west=negative)")
-    parser.add_argument("bottom",
-                        nargs='?',
-                        type=float,
-                        help="Bottom (southern) most latitude of DEM box (degrees)")
-    parser.add_argument("right",
-                        nargs='?',
-                        type=float,
-                        help="Right (western) most longitude of DEM box (degrees, west=negative)")
-    parser.add_argument("top",
-                        nargs='?',
-                        type=float,
-                        help="Top (northern) most latitude of DEM box (degrees)")
-    parser.add_argument("--geojson",
-                        "-g",
-                        type=FileType(),
-                        help="Alternate to bbox specification: \n"
-                        "File containing the geojson object for DEM bounds")
-    parser.add_argument("--wkt",
-                        help="Alternate to bbox specification: \n"
-                        "String of well known text (WKT) for DEM area")
-    parser.add_argument("--xrate",
-                        "-x",
-                        default=1,
-                        type=positive_small_int,
-                        help="Upsample DEM in x (range) direction (default=%(default)s)")
-    parser.add_argument("--yrate",
-                        "-y",
-                        default=1,
-                        type=positive_small_int,
-                        help="Upsample DEM in x (range) direction (default=%(default)s)")
-    parser.add_argument("--output",
-                        "-o",
-                        default="elevation.dem",
-                        help="Name of output dem file (default=%(default)s)")
+    parser = ArgumentParser(prog='createdem', description=DESCRIPTION)
+    p.add_argument(
+        "--bbox",
+        nargs=4,
+        metavar=("left", "bottom", "right", "top"),
+        type=float,
+        help="Bounding box of area of interest "
+        " (e.g. --bbox -106.1 30.1 -103.1 33.1 ). ",
+    )
+    parser.add_argument(
+        "--geojson",
+        "-g",
+        type=FileType(),
+        help="Alternate to bbox specification: \n"
+        "File containing the geojson object for DEM bounds",
+    )
+    parser.add_argument(
+        "--wkt",
+        help="Alternate to bbox specification: \n"
+        "String of well known text (WKT) for DEM area",
+    )
+    parser.add_argument(
+        "--xrate",
+        "-x",
+        default=1,
+        type=positive_small_int,
+        help="Upsample DEM in x (range) direction (default=%(default)s)",
+    )
+    parser.add_argument(
+        "--yrate",
+        "-y",
+        default=1,
+        type=positive_small_int,
+        help="Upsample DEM in x (range) direction (default=%(default)s)",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        default="elevation.dem",
+        help="Name of output dem file (default=%(default)s)",
+    )
 
     args = parser.parse_args()
-    if args.left and args.geojson:
-        raise ArgumentError(
-            args.geojson, "Can't use both positional arguments "
-            "(left top dlon dlat) and --geojson")
-    # Need all 4 positionals, or the --geosjon
-    elif any(a is None for a in (args.left, args.bottom, args.right,
-                                 args.top)) and not args.geojson and not args.wkt:
+    if args.bbox and args.geojson:
+        raise ArgumentError(args.geojson, "Can only specify one area type")
+    elif not args.bbox and not args.geojson and not args.wkt:
         parser.print_usage(sys.stderr)
         sys.exit(1)
 
-    if all(a for a in (args.left, args.bottom, args.right, args.top)):
-        left, bottom, right, top = args.left, args.bottom, args.right, args.top
+    if args.bbox is not None:
+        left, bottom, right, top = args.bbox
     elif args.geojson is not None:
         left, bottom, right, top = rasterio.features.bounds(json.load(args.geojson))
     elif args.wkt is not None:

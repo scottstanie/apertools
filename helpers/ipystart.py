@@ -6,6 +6,7 @@ get_ipython().run_line_magic('autoreload', '2')
 import apertools.sario as sario
 import apertools.plotting as plotting
 import apertools.utils as utils
+import apertools.parsers as parsers
 import apertools.gps as gps
 import apertools.latlon as latlon
 # from apertools.scripts import *

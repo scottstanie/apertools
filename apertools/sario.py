@@ -191,22 +191,19 @@ def load_file(filename,
             else:
                 return f[list(f)[0]][:]
 
-    # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
-    if rows is not None and cols is not None:
-        rsc_data = {"rows": rows, "cols": cols, "width": cols, "height": rows}
-    elif rsc_data is None and rsc_file:
-        rsc_data = sardem.loading.load_dem_rsc(rsc_file)
-
     if ext in IMAGE_EXTS:
         return np.array(Image.open(filename).convert("L"))  # L for luminance == grayscale
 
-    if not rsc_file and os.path.exists(filename + ".rsc"):
+    # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
+    if rows is not None and cols is not None:
+        rsc_data = {"rows": rows, "cols": cols, "width": cols, "height": rows}
+    elif not rsc_file and os.path.exists(filename + ".rsc"):
         rsc_file = filename + ".rsc"
-    elif ext in SENTINEL_EXTS or ext in ROI_PAC_EXTS or ext in BOOL_EXTS:
+    elif not rsc_file and (ext in SENTINEL_EXTS or ext in ROI_PAC_EXTS or ext in BOOL_EXTS):
         # Try harder for .rsc
         rsc_file = find_rsc_file(filename, verbose=verbose)
 
-    if rsc_file:
+    if rsc_file and rsc_data is None:
         rsc_data = sardem.loading.load_dem_rsc(rsc_file)
 
     if ext == '.grd':
@@ -305,7 +302,7 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
         return None
         # raise ValueError("{} needs a .rsc file with it for width info.".format(filename))
     elif len(possible_rscs) > 1:
-        errmsg = "multiple .rsc files directory: {}".format(possible_rscs)
+        errmsg = "multiple .rsc files directory: {}".format(possible_rscs[:5])
         if filename is None:
             raise ValueError(errmsg)
 
@@ -748,7 +745,7 @@ def find_geos(directory=".", parse=True, filename=None):
     if re.match(r'S1[AB]_\d{8}\.geo', geolist[0]):  # S1A_YYYYmmdd.geo
         return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
     elif re.match(r'\d{8}', geolist[0]):  # YYYYmmdd , just a date string
-        return sorted([_parse(geo) for geo in geolist])
+        return sorted([_parse(geo) for geo in geolist if geo])
     else:  # Full sentinel product name
         return sorted([apertools.parsers.Sentinel(geo).start_time.date() for geo in geolist])
 
