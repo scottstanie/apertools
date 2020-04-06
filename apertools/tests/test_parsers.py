@@ -19,7 +19,6 @@ class TestSentinel(unittest.TestCase):
                            '021371', '024C9B', '1B70')
 
         self.assertEqual(self.parser.full_parse(), expected_output)
-        self.assertEqual(len(self.parser.full_parse()), 12)
 
     def test_path_parse(self):
         path_filename = '/some/path/' + self.filename
