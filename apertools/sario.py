@@ -1484,3 +1484,44 @@ def load_elevation(filename):
         dem_img[dem_img < min_valid] = 0
 
     return dem_img
+
+
+def find_looks_taken(igram_path,
+                     geo_path=None,
+                     igram_dem_file="dem.rsc",
+                     geo_dem_file="elevation.dem.rsc"):
+    """Calculates how many looks from .geo files to .int files"""
+    if geo_path is None:
+        geo_path = os.path.dirname(os.path.abspath(igram_path))
+
+    geo_dem_rsc = load_dem_rsc(os.path.join(geo_path, geo_dem_file))
+
+    igram_dem_rsc = load_dem_rsc(os.path.join(igram_path, igram_dem_file))
+
+    row_looks = geo_dem_rsc['file_length'] // igram_dem_rsc['file_length']
+    col_looks = geo_dem_rsc['width'] // igram_dem_rsc['width']
+    return row_looks, col_looks
+
+
+def calc_upsample_rate(rsc_filename=None):
+    """Find the rate of upsampling on an rsc file
+
+    Args:
+        rate (int): rate by which to upsample the DEM
+        rsc_dict (str): Optional, the rsc data from Stitcher.create_dem_rsc()
+        filepath (str): Optional, location of .dem.rsc file
+
+    Note: Must supply only one of rsc_dict or rsc_filename
+
+    Returns:
+        tuple(float, float): (x spacing, y spacing)
+
+    Raises:
+        TypeError: if neither (or both) rsc_filename and rsc_dict are given
+
+    """
+    rsc_dict = load_dem_rsc(filename=rsc_filename)
+    default_spacing = 1.0 / 3600  # NASA SRTM uses 3600 pixels for 1 degree, or 30 m
+    x_spacing = abs(rsc_dict['x_step'])
+    y_spacing = abs(rsc_dict['y_step'])
+    return default_spacing / x_spacing, default_spacing / y_spacing
