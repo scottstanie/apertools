@@ -3,7 +3,7 @@
 # Apertools: tools for InSAR (Interferometric Synthetic Aperture Radar)
 
 
-Other helping tools: [sardem](https://github.com/scottstanie/sardem) for creating DEMs from NASA's SRTM, and [sentineleof](https://github.com/scottstanie/sentineleof) for downloading Sentinel 1 EOF precise orbit files.
+Other helping tools: [sentineleof](https://github.com/scottstanie/sentineleof) for downloading Sentinel 1 EOF precise orbit files.
 
 
 ## Setup and installation

@@ -247,11 +247,13 @@ def animate(context, pause, save, display, cmap, shifted, file_ext, intlist, db,
 # COMMAND: dem-rate
 @cli.command('dem-rate')
 @click.option("--rsc-file", help="name of .rsc file")
-def dem_rate(rsc_file):
+@click.option("--orig-rsc-file", help="name of original bigger (pre-looked) .rsc file")
+def dem_rate(rsc_file, orig_rsc_file):
     """Print the upsample rate of a dem
 
         aper dem-rate   # Looks in current folder for one .rsc file
         aper dem-rate /path/to/dem.rsc
+        aper dem-rate /path/to/dem.rsc /path/to/big_elevation.dem.rsc  # prints num looks
 
     """
     import apertools.sario
@@ -268,6 +270,11 @@ def dem_rate(rsc_file):
     default_spacing = 30.0
     click.echo("This is equal to (%.2f, %.2f) meter spacing between pixels" %
                (default_spacing / x_uprate, default_spacing / y_uprate))
+    if orig_rsc_file is not None:
+        orig_x_uprate, orig_y_uprate = apertools.utils.calc_upsample_rate(
+            rsc_filename=orig_rsc_file)
+        click.echo("(%d, %d) looks were taken on %s to get %s" %
+                   (orig_x_uprate / x_uprate, orig_y_uprate / y_uprate, orig_rsc_file, rsc_file))
 
 
 # COMMAND: overlaps

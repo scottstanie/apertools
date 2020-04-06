@@ -5,6 +5,7 @@ Email: scott.stanie@utexas.edu
 """
 
 from __future__ import division, print_function
+import collections
 import datetime
 import fileinput
 import glob
@@ -19,9 +20,8 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 import h5py
 import matplotlib.pyplot as plt
 from PIL import Image
-import sardem
 
-from apertools import utils
+import apertools.utils
 import apertools.parsers
 from apertools.log import get_log
 logger = get_log()
@@ -32,8 +32,12 @@ try:
 except NameError:
     basestring = str
 
+_take_looks = apertools.utils.take_looks
+
 FLOAT_32_LE = np.dtype('<f4')
 COMPLEX_64_LE = np.dtype('<c8')
+INT_16_LE = np.dtype('<i2')
+INT_16_BE = np.dtype('>i2')
 
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw', '.unwflat']
 UAVSAR_EXTS = [
@@ -123,6 +127,30 @@ DEM_RSC_DSET = "dem_rsc"
 GEOLIST_DSET = "geo_dates"
 INTLIST_DSET = "int_dates"
 
+RSC_KEY_TYPES = [
+    ('width', int),
+    ('file_length', int),
+    ('x_first', float),
+    ('y_first', float),
+    ('x_step', float),
+    ('y_step', float),
+    ('x_unit', str),
+    ('y_unit', str),
+    ('z_offset', int),
+    ('z_scale', int),
+    ('projection', str),
+]
+RSC_KEYS = [tup[0] for tup in RSC_KEY_TYPES]
+
+# in case only speciying rows/cols/steps, these always seem to be same
+DEFAULT_KEYS = {
+    'x_unit': 'degrees',
+    'y_unit': 'degrees',
+    'z_offset': 0,
+    'z_scale': 1,
+    'projection': 'LL',
+}
+
 
 def load_file(filename,
               downsample=None,
@@ -166,10 +194,10 @@ def load_file(filename,
     else:
         looks = (1, 1)
 
-    ext = utils.get_file_ext(filename)
+    ext = apertools.utils.get_file_ext(filename)
     # Pass through numpy files to np.load
     if ext == '.npy':
-        return utils.take_looks(np.load(filename), *looks)
+        return _take_looks(np.load(filename), *looks)
 
     if ext == '.geojson':
         with open(filename) as f:
@@ -177,9 +205,9 @@ def load_file(filename,
 
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
-        return utils.take_looks(sardem.loading.load_elevation(filename), *looks)
+        return _take_looks(load_elevation(filename), *looks)
     elif ext == '.rsc':
-        return sardem.loading.load_dem_rsc(filename, **kwargs)
+        return load_dem_rsc(filename, **kwargs)
     elif ext == '.h5':
         with h5py.File(filename, "r") as f:
             if len(f.keys()) > 1:
@@ -204,7 +232,7 @@ def load_file(filename,
         rsc_file = find_rsc_file(filename, verbose=verbose)
 
     if rsc_file and rsc_data is None:
-        rsc_data = sardem.loading.load_dem_rsc(rsc_file)
+        rsc_data = load_dem_rsc(rsc_file)
 
     if ext == '.grd':
         ext = _get_full_grd_ext(filename)
@@ -226,8 +254,7 @@ def load_file(filename,
         raise ValueError("Need .rsc file or .ann file to load")
 
     if ext in BOOL_EXTS:
-        return utils.take_looks(load_bool(filename, rsc_data=rsc_data, rows=rows, cols=cols),
-                                *looks)
+        return _take_looks(load_bool(filename, rsc_data=rsc_data, rows=rows, cols=cols), *looks)
     elif ext in STACKED_FILES:
         stacked = load_stacked_img(filename,
                                    rsc_data=rsc_data,
@@ -237,11 +264,11 @@ def load_file(filename,
                                    **kwargs)
         return stacked[..., ::downsample, ::downsample]
     elif is_complex(filename=filename, ext=ext):
-        return utils.take_looks(
+        return _take_looks(
             load_complex(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols),
             *looks)
     else:
-        return utils.take_looks(
+        return _take_looks(
             load_real(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols), *looks)
 
 
@@ -251,7 +278,7 @@ load = load_file
 
 def _get_file_dtype(filename=None, ext=None):
     if ext is None:
-        ext = utils.get_file_ext(filename)
+        ext = apertools.utils.get_file_ext(filename)
     if ext in ELEVATION_EXTS:
         return np.int16
     elif ext in COMPLEX_EXTS:
@@ -315,7 +342,7 @@ def find_rsc_file(filename=None, directory=None, verbose=False):
             ]
         else:
             raise ValueError(errmsg)
-    return utils.fullpath(possible_rscs[0])
+    return apertools.utils.fullpath(possible_rscs[0])
 
 
 def _get_file_rows_cols(rows=None, cols=None, ann_info=None, rsc_data=None):
@@ -466,7 +493,7 @@ def is_complex(filename=None, ext=None):
     Note: differences between 3 polarizations for .mlc files: half real, half complex
     """
     if ext is None:
-        ext = utils.get_file_ext(filename)
+        ext = apertools.utils.get_file_ext(filename)
 
     if ext not in COMPLEX_EXTS and ext not in REAL_EXTS:
         raise ValueError('Invalid filetype for load_file: %s\n '
@@ -519,10 +546,10 @@ def save(filename, data, normalize=True, cmap="gray", preview=False, vmax=None, 
         else:
             return arr
 
-    ext = utils.get_file_ext(filename)
+    ext = apertools.utils.get_file_ext(filename)
     if ext == ".rsc":
         with open(filename, "w") as f:
-            f.write(sardem.loading.format_dem_rsc(data))
+            f.write(format_dem_rsc(data))
         return
     if ext == '.grd':
         ext = _get_full_grd_ext(filename)
@@ -624,12 +651,12 @@ def load_deformation(igram_path=".", filename='deformation.h5', full_path=None, 
     """
     igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
 
-    if utils.get_file_ext(filename) == ".npy":
+    if apertools.utils.get_file_ext(filename) == ".npy":
         return _load_deformation_npy(igram_path=igram_path,
                                      filename=filename,
                                      full_path=full_path,
                                      n=n)
-    elif utils.get_file_ext(filename) in (".h5", "hdf5"):
+    elif apertools.utils.get_file_ext(filename) in (".h5", "hdf5"):
         return _load_deformation_h5(igram_path=igram_path,
                                     filename=filename,
                                     full_path=full_path,
@@ -845,7 +872,7 @@ def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
     Assumes that the .geo files are one diretory up from the igrams
     """
     int_date_list = find_igrams(directory, parse=parse)
-    geo_date_list = find_geos(utils.get_parent_dir(directory), parse=parse)
+    geo_date_list = find_geos(apertools.utils.get_parent_dir(directory), parse=parse)
 
     if geolist_ignore_file is not None:
         ignore_filepath = os.path.join(directory, geolist_ignore_file)
@@ -1061,7 +1088,7 @@ def save_as_vrt(filename=None,
     if interleave is None or num_bands is None:
         interleave, num_bands = get_interleave(filename, num_bands=num_bands)
     if band is None:
-        band = 2 if utils.get_file_ext(filename) in STACKED_FILES else 1
+        band = 2 if apertools.utils.get_file_ext(filename) in STACKED_FILES else 1
 
     image_offset, pixel_offset, line_offset = get_offsets(
         dtype,
@@ -1151,7 +1178,7 @@ def get_interleave(filename, num_bands=None):
         # 1 band is always same: its just all pixels in a row
         return "BIP", 1
 
-    ext = utils.get_file_ext(filename)
+    ext = apertools.utils.get_file_ext(filename)
     if ext in BIL_FILES:
         interleave, num_bands = "BIL", 2
     # TODO: the .amp files are actually BIP with 2 bands...
@@ -1332,3 +1359,128 @@ def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=
     with fileinput.FileInput(output, inplace=True) as f:
         for line in f:
             print(line.replace("<SourceBand>1</SourceBand>", "<SourceBand>2</SourceBand>"), end='')
+
+
+def load_dem_rsc(filename, lower=False, **kwargs):
+    """Loads and parses the .dem.rsc file
+
+    Args:
+        filename (str) path to either the .dem or .dem.rsc file.
+            Function will add .rsc to path if passed .dem file
+        lower (bool): make keys of the dict lowercase
+
+    Returns:
+        dict: dem.rsc file parsed out, keys are all caps
+
+    example file:
+    WIDTH         10801
+    FILE_LENGTH   7201
+    X_FIRST       -157.0
+    Y_FIRST       21.0
+    X_STEP        0.000277777777
+    Y_STEP        -0.000277777777
+    X_UNIT        degrees
+    Y_UNIT        degrees
+    Z_OFFSET      0
+    Z_SCALE       1
+    PROJECTION    LL
+    """
+
+    # Use OrderedDict so that upsample_dem_rsc creates with same ordering as old
+    output_data = collections.OrderedDict()
+    # Second part in tuple is used to cast string to correct type
+
+    rsc_filename = '{}.rsc'.format(filename) if not filename.endswith('.rsc') else filename
+    with open(rsc_filename, 'r') as f:
+        for line in f.readlines():
+            for field, num_type in RSC_KEY_TYPES:
+                if line.startswith(field.upper()):
+                    output_data[field] = num_type(line.split()[1])
+
+    if lower:
+        output_data = {k.lower(): d for k, d in output_data.items()}
+    return output_data
+
+
+def format_dem_rsc(rsc_dict):
+    """Creates the .dem.rsc file string from key/value pairs of an OrderedDict
+
+    Output of function can be written to a file as follows
+        with open('my.dem.rsc', 'w') as f:
+            f.write(outstring)
+
+    Args:
+        rsc_dict (OrderedDict): data about dem in ordered key/value format
+            See `load_dem_rsc` output for example
+
+    Returns:
+        outstring (str) formatting string to be written to .dem.rsc
+
+    """
+    outstring = ""
+    rsc_dict = {k.lower(): v for k, v in rsc_dict.items()}
+    # for field, value in rsc_dict.items():
+    for field in RSC_KEYS:
+        # Make sure to skip extra keys that might be in the dict
+        if field not in RSC_KEYS:
+            continue
+
+        value = rsc_dict.get(field, DEFAULT_KEYS.get(field))
+        if value is None:
+            raise ValueError("%s is necessary for .rsc file: missing from dict" % field)
+
+        # Files seemed to be left justified with 14 spaces? Not sure why 14
+        # Apparently it was an old fortran format, where they use "read(15)"
+        if field in ('x_step', 'y_step'):
+            # give step floats proper sig figs to not output scientific notation
+            outstring += "{field:<14s}{val:0.12f}\n".format(field=field.upper(), val=value)
+        else:
+            outstring += "{field:<14s}{val}\n".format(field=field.upper(), val=value)
+
+    return outstring
+
+
+# TODO: see if this should be folded in, or just gdal loaded
+def load_elevation(filename):
+    """Loads a digital elevation map from either .hgt file or .dem
+
+    .hgt is the NASA SRTM files given. Documentation on format here:
+    https://dds.cr.usgs.gov/srtm/version2_1/Documentation/SRTM_Topo.pdf
+    Key point: Big-endian 2 byte (16-bit) integers
+
+    .dem is format used by Zebker geo-coded and ROI-PAC SAR software
+    Only difference is data is stored little-endian (like other SAR data)
+
+    Note on both formats: gaps in coverage are given by INT_MIN -32768,
+    so either manually set data(data == np.min(data)) = 0,
+        data = np.clip(data, 0, None), or when plotting, plt.imshow(data, vmin=0)
+    """
+    ext = os.path.splitext(filename)[1]
+    data_type = INT_16_LE if ext == '.dem' else INT_16_BE
+    data = np.fromfile(filename, dtype=data_type)
+    # Make sure we're working with little endian
+    if data_type == INT_16_BE:
+        data = data.astype(INT_16_LE)
+
+    # Reshape to correct size.
+    # Either get info from .dem.rsc
+    if ext == '.dem':
+        info = load_dem_rsc(filename)
+        dem_img = data.reshape((info['file_length'], info['width']))
+
+    # Or check if we are using STRM1 (3601x3601) or SRTM3 (1201x1201)
+    else:
+        if (data.shape[0] / 3601) == 3601:
+            # STRM1- 1 arc second data, 30 meter data
+            dem_img = data.reshape((3601, 3601))
+        elif (data.shape[0] / 1201) == 1201:
+            # STRM3- 3 arc second data, 90 meter data
+            dem_img = data.reshape((1201, 1201))
+        else:
+            raise ValueError("Invalid .hgt data size: must be square size 1201 or 3601")
+        # TODO: Verify that the min real value will be above -1000
+        min_valid = -1000
+        # Set NaN values to 0
+        dem_img[dem_img < min_valid] = 0
+
+    return dem_img

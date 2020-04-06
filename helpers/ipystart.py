@@ -10,7 +10,6 @@ import apertools.parsers as parsers
 import apertools.gps as gps
 import apertools.latlon as latlon
 # from apertools.scripts import *
-import sardem
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt

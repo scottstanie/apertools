@@ -8,7 +8,6 @@ from numpy import sin, cos
 import h5py
 import subprocess
 # from scipy import interpolate
-import sardem.loading
 
 from apertools import latlon, sario
 
@@ -92,9 +91,7 @@ def find_east_up_coeffs(geo_path):
     """
     # TODO: make something to adjust 'params' file in case we moved it
     geo_path = os.path.realpath(geo_path)
-    # Are we doing this in the .geo folder, or the igram folder?
-    # rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'dem.rsc'), lower=True)
-    rsc_data = sardem.loading.load_dem_rsc(os.path.join(geo_path, 'elevation.dem.rsc'), lower=True)
+    rsc_data = sario.load_dem_rsc(os.path.join(geo_path, 'elevation.dem.rsc'), lower=True)
 
     midpoint = latlon.grid_midpoint(**rsc_data)
     # The path to each orbit's .db files assumed in same directory as elevation.dem.rsc
@@ -522,7 +519,7 @@ def create_los_map(geo_path, downsample=100, verbose=False, savename="los_enu_ma
         dem_rsc_file = savename + "_dem.rsc"
         logger.info("Saving dem_rsc to %s" % dem_rsc_file)
         with open(dem_rsc_file, "w") as f:
-            f.write(sardem.loading.format_dem_rsc(enu_ll.dem_rsc))
+            f.write(sario.format_dem_rsc(enu_ll.dem_rsc))
 
     return enu_ll
 

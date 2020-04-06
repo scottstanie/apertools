@@ -10,7 +10,7 @@ import os
 import subprocess
 import numpy as np
 
-import sardem
+import apertools.sario
 from apertools.log import get_log
 
 logger = get_log()
@@ -215,9 +215,9 @@ def find_looks_taken(igram_path,
     if geo_path is None:
         geo_path = os.path.dirname(os.path.abspath(igram_path))
 
-    geo_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(geo_path, geo_dem_file))
+    geo_dem_rsc = apertools.sario.load_dem_rsc(os.path.join(geo_path, geo_dem_file))
 
-    igram_dem_rsc = sardem.loading.load_dem_rsc(os.path.join(igram_path, igram_dem_file))
+    igram_dem_rsc = apertools.sario.load_dem_rsc(os.path.join(igram_path, igram_dem_file))
 
     row_looks = geo_dem_rsc['file_length'] // igram_dem_rsc['file_length']
     col_looks = geo_dem_rsc['width'] // igram_dem_rsc['width']
@@ -241,7 +241,7 @@ def calc_upsample_rate(rsc_filename=None):
         TypeError: if neither (or both) rsc_filename and rsc_dict are given
 
     """
-    rsc_dict = sardem.loading.load_dem_rsc(filename=rsc_filename)
+    rsc_dict = apertools.sario.load_dem_rsc(filename=rsc_filename)
     default_spacing = 1.0 / 3600  # NASA SRTM uses 3600 pixels for 1 degree, or 30 m
     x_spacing = abs(rsc_dict['x_step'])
     y_spacing = abs(rsc_dict['y_step'])
