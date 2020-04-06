@@ -109,7 +109,7 @@ def downlaod_data(output="metalink", **kwargs):
     subprocess.check_call(download_cmd, shell=True)
 
 
-if __name__ == "__main__":
+def cli():
     p = argparse.ArgumentParser()
     # Only care for now about platform="S1",
     # Only care for now about beamMode="IW",
@@ -175,3 +175,7 @@ if __name__ == "__main__":
         query_only(**vars(args))
     else:
         downlaod_data(**vars(args))
+
+
+if __name__ == "__main__":
+    cli()

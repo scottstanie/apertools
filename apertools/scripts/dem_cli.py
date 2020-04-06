@@ -6,6 +6,7 @@ import sys
 import glob
 import os
 import json
+import argparse
 from argparse import (
     ArgumentError,
     ArgumentParser,
@@ -37,7 +38,9 @@ DESCRIPTION = """Form a cropped (upsampled) DEM from SRTM GL1
 
     GDAL downloads and crops/upsamples/translates to ENVI format
 
+
     Usage Examples:
+
         createdem -156.0 20.2 1 2 --rate 2  # Makes a box 1 degree wide, 2 deg high
         createdem -156.0 20.2 -154.5 21.4 -o my_elevation.dem
         createdem --geojson ../aoi.geojson --xrate 2 --yrate 2
@@ -47,8 +50,12 @@ DESCRIPTION = """Form a cropped (upsampled) DEM from SRTM GL1
 
 
 def cli():
-    parser = ArgumentParser(prog='createdem', description=DESCRIPTION)
-    p.add_argument(
+    parser = ArgumentParser(
+        prog='createdem',
+        description=DESCRIPTION,
+        formatter_class=RawTextHelpFormatter,
+    )
+    parser.add_argument(
         "--bbox",
         nargs=4,
         metavar=("left", "bottom", "right", "top"),
