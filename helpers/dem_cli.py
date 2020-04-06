@@ -3,6 +3,7 @@
 Command line interface for running createdem
 """
 import sys
+import glob
 import os
 import json
 from argparse import (
@@ -105,7 +106,7 @@ def cli():
         sys.exit(1)
 
     if all(a for a in (args.left, args.bottom, args.right, args.top)):
-        args.left, args.bottom, args.right, args.top
+        left, bottom, right, top = args.left, args.bottom, args.right, args.top
     elif args.geojson is not None:
         left, bottom, right, top = rasterio.features.bounds(json.load(args.geojson))
     elif args.wkt is not None:
@@ -135,19 +136,29 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     #  -tr <xres> <yres> set target resolution in georeferenced units
     # -r resampling method
     # -projwin <ulx> <uly> <lrx> <lry> Selects a subwindow from the source image for copying
-    command = "gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -r bilinear -projwin {left} {top} {right} {bottom} {url} {outname}"  # noqa
-    command = command.format(xres=xres,
-                             yres=yres,
-                             left=left,
-                             bottom=bottom,
-                             right=right,
-                             top=top,
-                             url=vsi_url,
-                             outname=outname)
+    command = "gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -a_nodata -32768 \
+-r bilinear -projwin {left} {top} {right} {bottom} {url} elevation_tmp.dem"
+
+    command = command.format(
+        xres=xres,
+        yres=yres,
+        left=left,
+        bottom=bottom,
+        right=right,
+        top=top,
+        url=vsi_url,
+    )
     print(command)
     subprocess.check_call(command, shell=True)
 
-    #  make a rsc file for processing
+    # Set nodata (-32768) to 0
+    command = """gdal_calc.py --quiet --NoDataValue=0 --calc="A*(A!=-32768)" \
+-A elevation_tmp.dem --outfile={} --format=ENVI""".format(outname)
+    print(command)
+    subprocess.check_call(command, shell=True)
+
+    for f in glob.glob("elevation_tmp*"):
+        os.remove(f)
 
     # ds = gdal.Open('elevation.dem')
     # trans = ds.GetGeoTransform()
@@ -178,7 +189,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     Y0 = y_edge + .5 * y_step
     print(X0, Y0, width, length)
 
-    # TODO: use my read/writing
+    #  make a rsc file for processing
     fd = open('elevation.dem.rsc', 'w')
     fd.write('WIDTH         ' + str(width) + "\n")
     fd.write('FILE_LENGTH   ' + str(length) + "\n")
@@ -193,11 +204,6 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     fd.write('PROJECTION    LL\n')
 
     fd.close()
-
-    #  patch invalid holes
-    command = os.path.join(PATH, "patchinvalid") + " " + outname
-    print(command)
-    subprocess.check_call(command, shell=True)
 
 
 if __name__ == "__main__":
