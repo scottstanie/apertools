@@ -464,9 +464,10 @@ def geotiff(infile, rsc, output, dset, nodata, outtype):
         subprocess.check_call(cmd2, shell=True)
         subprocess.check_call("rm tmp_out*.tif", shell=True)
     else:
+        instring = ''' HDF5:"{}"://{} '''.format(infile, dset)
         cmd1 = cmd.format(
             ullr=ullr_string,
-            input=infile,
+            input=instring,
             out=output,
             nodata=nodata,
         )

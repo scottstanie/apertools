@@ -718,6 +718,11 @@ def grid_to_rsc(lons, lats):
     )
 
 
+def from_grid(lons, lats):
+    """Alias for grid_to_rsc"""
+    return grid_to_rsc(lons, lats)
+
+
 def grid_extent(rows=None,
                 cols=None,
                 y_step=None,
