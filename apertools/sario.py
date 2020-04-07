@@ -19,7 +19,6 @@ import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 import h5py
 import matplotlib.pyplot as plt
-from PIL import Image
 
 import apertools.utils
 import apertools.parsers
@@ -220,6 +219,11 @@ def load_file(filename,
                 return f[list(f)[0]][:]
 
     if ext in IMAGE_EXTS:
+        try:
+            from PIL import Image
+        except ImportError:
+            print("Need PIL installed to save as image. `pip install pillow`")
+            raise
         return np.array(Image.open(filename).convert("L"))  # L for luminance == grayscale
 
     # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
@@ -559,9 +563,6 @@ def save(filename, data, normalize=True, cmap="gray", preview=False, vmax=None, 
             data = data / np.max(np.abs(data))
             vmin, vmax = -1, 1
         logger.info("previewing with (vmin, vmax) = (%s, %s)" % (vmin, vmax))
-        # from PIL import Image
-        # im = Image.fromarray(data)
-        # im.save(filename)
         if preview:
             plt.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax)
             plt.colorbar()
