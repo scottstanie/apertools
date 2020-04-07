@@ -8,3 +8,6 @@ sphinx
 m2r
 sphinx_rtd_theme
 backports.tempfile
+scipy>=0.16.0
+mat4py
+pillow>=5.0
