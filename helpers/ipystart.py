@@ -18,4 +18,5 @@ import os
 import glob
 import requests
 import datetime
+import h5py
 import rasterio as rio
