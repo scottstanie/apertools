@@ -262,7 +262,7 @@ def dem_rate(rsc_file, orig_rsc_file):
     if rsc_file is None:
         rsc_file = apertools.sario.find_rsc_file(directory=".")
 
-    x_uprate, y_uprate = apertools.utils.calc_upsample_rate(rsc_filename=rsc_file)
+    x_uprate, y_uprate = apertools.sario.calc_upsample_rate(rsc_filename=rsc_file)
 
     click.echo("%s has (%.5f, %.5f) times the default spacing in (x, y)" %
                (rsc_file, x_uprate, y_uprate))
@@ -271,7 +271,7 @@ def dem_rate(rsc_file, orig_rsc_file):
     click.echo("This is equal to (%.2f, %.2f) meter spacing between pixels" %
                (default_spacing / x_uprate, default_spacing / y_uprate))
     if orig_rsc_file is not None:
-        orig_x_uprate, orig_y_uprate = apertools.utils.calc_upsample_rate(
+        orig_x_uprate, orig_y_uprate = apertools.sario.calc_upsample_rate(
             rsc_filename=orig_rsc_file)
         click.echo("(%d, %d) looks were taken on %s to get %s" %
                    (orig_x_uprate / x_uprate, orig_y_uprate / y_uprate, orig_rsc_file, rsc_file))
