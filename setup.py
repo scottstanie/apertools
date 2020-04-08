@@ -41,7 +41,7 @@ setuptools.setup(
         "console_scripts": [
             "aper=apertools.scripts.cli:cli",
             "createdem=apertools.scripts.dem_cli:cli",
-            "asfdownlaod=apertools.scripts.asfdownlaod:cli",
+            "asfdownload=apertools.scripts.asfdownload:cli",
         ],
     },
     zip_safe=False,
