@@ -16,17 +16,21 @@ import difflib  # For station name misspelling checks
 import datetime
 import requests
 import h5py
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm
 import matplotlib.dates as mdates
 
-from scipy.ndimage.filters import uniform_filter1d
+# from scipy.ndimage.filters import uniform_filter1d
 try:
     from functools import lru_cache
 except ImportError:
     from backports.functools_lru_cache import lru_cache
+try:
+    import pandas as pd
+except ImportError:
+    print("Warning: pandas not installed. apertools.gps will fail")
+    print(" to use gps module, pip install pandas")
 
 import apertools
 import apertools.utils
@@ -464,7 +468,8 @@ def moving_average(arr, window_size=7):
     """Takes a 1D array and returns the running average of same size"""
     if not window_size:
         return arr
-    return uniform_filter1d(arr, size=window_size, mode='nearest')
+    # return uniform_filter1d(arr, size=window_size, mode='nearest')
+    return pd.Series(arr).rolling(window_size).mean()
 
 
 def find_insar_ts(defo_filename='deformation.h5', station_name_list=[], window_size=1):
