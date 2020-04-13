@@ -1068,7 +1068,9 @@ def save_as_vrt(filename=None,
 
     bytes_per_pix = np.dtype(dtype).itemsize
     total_bytes = os.path.getsize(filename)
-    assert rows == int(total_bytes / bytes_per_pix / cols)
+    assert rows == int(total_bytes / bytes_per_pix /
+                       cols), (f"rows = total_bytes / bytes_per_pix / cols : "
+                               f"{rows} = {total_bytes} / {bytes_per_pix} / {cols} ")
     # assert total_bytes == bytes_per_pix * rows * cols
 
     vrt_driver = gdal.GetDriverByName("VRT")
