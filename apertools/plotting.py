@@ -566,16 +566,25 @@ def plot_shapefile(filename, fig=None, ax=None, z=None):
         plt.show()
 
 
-def plotcompare(fnames, dset="velos", vmax=25, vmin=-25, cmap="seismic_wide"):
+# def plotcompare(fnames, dset="velos", vmax=25, vmin=-25, cmap="seismic_wide", **kwargs):
+def plot_img_diff(arrays=None,
+                  dset="velos",
+                  vmax=25,
+                  vmin=-25,
+                  cmap="seismic_wide",
+                  show=True,
+                  **kwargs):
     """Rough tool to compare several plots at once"""
-    import h5py
-    n = len(fnames)
+    # if arrays is None:
+    #     arrays = [sario.load(f, **kwargs) for f in fnames]
+    n = len(arrays)
     fig, axes = plt.subplots(1, n, sharex=True, sharey=True)
-    files = [h5py.File(f) if isinstance(f, str) else f for f in fnames]
     for ii in range(n):
-        axim = axes[ii].imshow(files[ii][dset], cmap=cmap, vmax=vmax, vmin=vmin)
+        axim = axes[ii].imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
     fig.colorbar(axim)
-    [f.close() for f in files]
+    # [f.close() for f in files]
+    if show:
+        plt.show(block=False)
     return fig, axes
 
 
