@@ -1,5 +1,22 @@
 get_ipython().run_line_magic('load_ext', 'autoreload')
 get_ipython().run_line_magic('autoreload', '2')
+import os
+
+
+def in_screen():
+    """Checks if we are currently running in a screen
+    If so, just use agg backend for matplotlib
+    (suggestion from https://stackoverflow.com/a/3054314)
+    # Answer from: https://stackoverflow.com/a/5392681
+    """
+    return os.environ.get("STY") is not None
+
+
+import matplotlib
+if in_screen():
+    matplotlib.use("agg")
+import matplotlib.pyplot as plt
+
 # get_ipython().run_line_magic('matplotlib', 'tk')
 
 # import apertools
@@ -12,7 +29,6 @@ import apertools.latlon as latlon
 # from apertools.scripts import *
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import sys
 import os
 import glob
