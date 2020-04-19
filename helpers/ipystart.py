@@ -14,6 +14,7 @@ def in_screen():
 
 import matplotlib
 if in_screen():
+    print("Currently in screen, using agg backend")
     matplotlib.use("agg")
 import matplotlib.pyplot as plt
 

@@ -709,21 +709,27 @@ def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None
     return geolist, deformation
 
 
-def load_geolist_from_h5(h5file, dset=None):
+def load_geolist_from_h5(h5file, dset=None, parse=True):
     with h5py.File(h5file, "r") as f:
         if dset is None:
             geolist_str = f[GEOLIST_DSET][()].astype(str)
         else:
             geolist_str = f[dset].attrs[GEOLIST_DSET][()].astype(str)
 
-    return parse_geolist_strings(geolist_str)
+    if parse:
+        return parse_geolist_strings(geolist_str)
+    else:
+        return geolist_str
 
 
-def load_intlist_from_h5(h5file, dset=None):
+def load_intlist_from_h5(h5file, dset=None, parse=True):
     with h5py.File(h5file, "r") as f:
         date_pair_strs = f[INTLIST_DSET][:].astype(str)
 
-    return parse_intlist_strings(date_pair_strs)
+    if parse:
+        return parse_intlist_strings(date_pair_strs)
+    else:
+        return date_pair_strs
 
 
 def parse_geolist_strings(geolist_str):
@@ -1024,7 +1030,6 @@ def save_as_vrt(filename=None,
                 band=None,
                 num_bands=None):
     """
-
     VRT options:
     SourceFilename: The name of the raw file containing the data for this band.
         The relativeToVRT attribute can be used to indicate if the
@@ -1068,9 +1073,10 @@ def save_as_vrt(filename=None,
 
     bytes_per_pix = np.dtype(dtype).itemsize
     total_bytes = os.path.getsize(filename)
-    assert rows == int(total_bytes / bytes_per_pix /
-                       cols), (f"rows = total_bytes / bytes_per_pix / cols : "
-                               f"{rows} = {total_bytes} / {bytes_per_pix} / {cols} ")
+    assert rows == int(
+        total_bytes / bytes_per_pix / cols /
+        num_bands), (f"rows = total_bytes / bytes_per_pix / cols / num_bands : "
+                     f"{rows} = {total_bytes} / {bytes_per_pix} / {cols} / {num_bands} ")
     # assert total_bytes == bytes_per_pix * rows * cols
 
     vrt_driver = gdal.GetDriverByName("VRT")
@@ -1091,7 +1097,8 @@ def save_as_vrt(filename=None,
     if interleave is None or num_bands is None:
         interleave, num_bands = get_interleave(filename, num_bands=num_bands)
     if band is None:
-        band = 2 if apertools.utils.get_file_ext(filename) in STACKED_FILES else 1
+        # This will offset the start- only making the vrt point to phase
+        band = 1 if apertools.utils.get_file_ext(filename) in STACKED_FILES else 0
 
     image_offset, pixel_offset, line_offset = get_offsets(
         dtype,
@@ -1199,7 +1206,7 @@ def get_offsets(dtype, interleave, band, width, length, num_bands):
     bytes_per_pix = np.dtype(dtype).itemsize
     if interleave == "BIL":
         return (
-            band * width * bytes_per_pix,  # ImageOFfset
+            band * width * bytes_per_pix,  # ImageOffset
             bytes_per_pix,  # PixelOffset
             num_bands * width * bytes_per_pix,  # LineOffset
         )
