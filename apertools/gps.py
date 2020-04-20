@@ -41,7 +41,10 @@ from apertools.log import get_log
 logger = get_log()
 
 # URL for ascii file of 24-hour final GPS solutions in east-north-vertical (NA12)
-GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/NA12/{station}.NA12.tenv3"
+# GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/NA12/{station}.NA12.tenv3"
+# UPDATE 4/20/20: noticed they changed it to
+GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/plates/NA/{station}.NA.tenv3"
+GPS_FILE = GPS_BASE_URL.split("/")[-1]
 
 # Assuming the master station list is in the
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
@@ -140,14 +143,21 @@ def load_station_enu(station,
                      end_date=None,
                      to_cm=True,
                      zero_mean=True,
-                     zero_start=False):
+                     zero_start=False,
+                     force_download=False):
     """Loads one gps station's ENU data since start_date until end_date
     as separate Series items
 
     Will scale to cm by default, and center the first data point
     to 0
     """
-    station_df = load_station_data(station, to_cm=to_cm, start_date=start_date, end_date=end_date)
+    station_df = load_station_data(
+        station,
+        to_cm=to_cm,
+        start_date=start_date,
+        end_date=end_date,
+        force_download=force_download,
+    )
 
     if zero_start:
         start_val = station_df[['east', 'north', 'up']].iloc[:10].mean()
@@ -164,6 +174,7 @@ def load_station_data(station_name,
                       start_date=START_DATE,
                       end_date=None,
                       download_if_missing=True,
+                      force_download=False,
                       to_cm=True):
     """Loads one gps station's ENU data since start_date until end_date as a dataframe
 
@@ -173,14 +184,22 @@ def load_station_data(station_name,
         start_date (datetime), default 2014-11-1, cutoff for beginning of GPS data
         end_date (datetime): default None, cut off for end of GPS data
         download_if_missing (bool): default True
+        force_download (bool): default False
     """
     station_name = station_name.upper()
-    gps_data_file = os.path.join(GPS_DIR, '%s.NA12.tenv3' % station_name)
+    gps_data_file = os.path.join(GPS_DIR, GPS_FILE.format(station=station_name))
+    if force_download:
+        try:
+            os.remove(gps_data_file)
+            logger.info(f"force removed {gps_data_file}")
+        except FileNotFoundError:
+            pass
     if not os.path.exists(gps_data_file):
-        logger.warning("%s does not exist.", gps_data_file)
         if download_if_missing:
-            logger.info("Downloading %s", station_name)
+            logger.info(f"Downloading {station_name} to {gps_data_file}")
             download_station_data(station_name)
+        else:
+            raise ValueError("{gps_data_file} does not exist, download_if_missing = False")
 
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
     clean_df = _clean_gps_df(df, start_date, end_date)
@@ -347,9 +366,8 @@ def download_station_data(station_name):
     url = GPS_BASE_URL.format(station=station_name)
     response = requests.get(url)
 
-    stationfile = url.split("/")[-1]  # Just blah.NA12.tenv3
-    filename = "{}/{}".format(GPS_DIR, stationfile)
-    logger.info("Saving to {}".format(filename))
+    filename = "{}/{}".format(GPS_DIR, GPS_FILE.format(station=station_name))
+    logger.info(f"Saving {url} to {filename}")
 
     with open(filename, "w") as f:
         f.write(response.text)
@@ -359,12 +377,16 @@ def station_std(station, to_cm=True, start_date=START_DATE, end_date=None):
     """Calculates the sum of east, north, and vertical stds of gps"""
     dts, enu_df = load_station_enu(station, start_date=start_date, end_date=end_date, to_cm=to_cm)
     if enu_df.empty:
-        logger.warning("%s gps data returned an empty dataframe")
+        logger.warning(f"{station} gps data returned an empty dataframe")
         return np.nan
     return np.sum(enu_df.std())
 
 
-def plot_gps_enu(station=None, days_smooth=12, start_date=START_DATE, end_date=None):
+def plot_gps_enu(station=None,
+                 days_smooth=12,
+                 start_date=START_DATE,
+                 end_date=None,
+                 force_download=True):
     """Plot the east,north,up components of `station`"""
     def remove_xticks(ax):
         ax.tick_params(
@@ -374,7 +396,13 @@ def plot_gps_enu(station=None, days_smooth=12, start_date=START_DATE, end_date=N
             top=False,  # ticks along the top edge are off
             labelbottom=False)
 
-    dts, enu_df = load_station_enu(station, start_date=start_date, end_date=end_date, to_cm=True)
+    dts, enu_df = load_station_enu(
+        station,
+        start_date=start_date,
+        end_date=end_date,
+        to_cm=True,
+        force_download=force_download,
+    )
     (east_cm, north_cm, up_cm) = enu_df[['east', 'north', 'up']].T.values
 
     fig, axes = plt.subplots(3, 1)
@@ -398,6 +426,7 @@ def plot_gps_enu(station=None, days_smooth=12, start_date=START_DATE, end_date=N
     # remove_xticks(axes[2])
 
     fig.suptitle(station)
+    plt.show(block=False)
 
     return fig, axes
 
@@ -413,6 +442,7 @@ def load_gps_los_data(
     end_date=None,
     reference_station=None,
     enu_coeffs=None,
+    force_download=False,
 ):
     """Load the GPS timeseries of a station name
 
@@ -424,12 +454,20 @@ def load_gps_los_data(
     """
     if enu_coeffs is None:
         lon, lat = station_lonlat(station_name)
-        enu_coeffs = apertools.los.find_enu_coeffs(lon,
-                                                   lat,
-                                                   geo_path=geo_path,
-                                                   los_map_file=los_map_file)
+        enu_coeffs = apertools.los.find_enu_coeffs(
+            lon,
+            lat,
+            geo_path=geo_path,
+            los_map_file=los_map_file,
+        )
 
-    df = load_station_data(station_name, to_cm=to_cm, start_date=start_date, end_date=end_date)
+    df = load_station_data(
+        station_name,
+        to_cm=to_cm,
+        start_date=start_date,
+        end_date=end_date,
+        force_download=force_download,
+    )
     # See docstring about negative 1 so vertical up ground gives a positive value
     enu_data = -1 * df[['east', 'north', 'up']].T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
@@ -442,8 +480,17 @@ def load_gps_los_data(
         los_gps_data = los_gps_data - np.mean(los_gps_data)
 
     if reference_station is not None:
-        dt_ref, losref = load_gps_los_data(geo_path, los_map_file, reference_station, to_cm,
-                                           zero_mean, zero_start, start_date, end_date)
+        dt_ref, losref = load_gps_los_data(
+            geo_path,
+            los_map_file,
+            reference_station,
+            to_cm,
+            zero_mean,
+            zero_start,
+            start_date,
+            end_date,
+            force_download=force_download,
+        )
         return _merge_los(df['dt'], los_gps_data, dt_ref, losref)
 
     return df['dt'], los_gps_data
