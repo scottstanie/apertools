@@ -16,7 +16,7 @@ def geojson_to_wkt(gj):
     return shapely.geometry.shape(gj).wkt
 
 
-def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None):
+def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None, filename=None):
     """From a geojson object, compute bounding lon/lats
 
     Note: either geojson required, OR top_corner, dlon, dlat required
@@ -34,6 +34,11 @@ def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None):
     Returns:
         tuple[float]: the left,bottom,right,top coords of bounding box
     """
+
+    if filename:
+        import rasterio as rio  # only spend import if needed
+        with rio.open(filename, "r") as src:
+            return list(src.bounds)
 
     if not geojson:
         if not top_corner or not dlon or not dlat:

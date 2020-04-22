@@ -32,7 +32,7 @@ except ImportError:
     print("Warning: pandas not installed. apertools.gps will fail")
     print(" to use gps module, pip install pandas")
 
-import apertools
+import apertools.los
 import apertools.utils
 import apertools.sario
 import apertools.plotting
