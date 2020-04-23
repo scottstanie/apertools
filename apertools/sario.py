@@ -1320,25 +1320,6 @@ def make_cmy_colortable():
     # return out
 
 
-#     def memMap(self, mode='r', band=None):
-#         if self.scheme.lower() == 'bil':
-#             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
-#                             shape=(self.coord2.coordSize , self.bands, self.coord1.coordSize))
-#             if band is not None:
-#                 immap = immap[:, band, :]
-#         elif self.scheme.lower() == 'bip':
-#             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
-#                               shape=(self.coord2.coordSize, self.coord1.coordSize, self.bands))
-#             if band is not None:
-#                 immap = immap[:, :, band]
-#         elif self.scheme.lower() == 'bsq':
-#             immap = np.memmap(self.filename, self.toNumpyDataType(), mode,
-#                         shape=(self.bands, self.coord2.coordSize, self.coord1.coordSize))
-#             if band is not None:
-#                 immap = immap[band, :, :]
-#         return immap
-
-
 def numpy_to_gdal_type(np_dtype):
     from osgeo import gdal_array, gdalconst
     if np.issubdtype(bool, np_dtype):
@@ -1354,7 +1335,14 @@ def gdal_to_numpy_type(gdal_dtype=None, band=None):
     return gdal_array.GDALTypeCodeToNumericTypeCode(gdal_dtype)
 
 
-# TODO: this dont work to add a colorbar to grayscale tif...
+def read_window(fname, bounds, band=1, driver=None):
+    """Returns the window `bounds` (left, bot, right, top)"""
+    import rasterio as rio  # TODO: figure out if i want rio or gdal...
+    with rio.open(fname, driver=driver) as src:
+        return src.read(band, window=src.window(*bounds))
+
+
+# TODO: not quite working to add a colorbar to grayscale tif...
 def testt(fn):
     import gdal
     ds = gdal.Open(fn, 1)
