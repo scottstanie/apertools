@@ -829,7 +829,11 @@ def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
         f[dset_name] = json.dumps(dem_rsc)
 
 
-def save_geolist_to_h5(igram_path=None, out_file=None, overwrite=False, geo_date_list=None):
+def save_geolist_to_h5(out_file=None,
+                       dset_name=None,
+                       igram_path=None,
+                       geo_date_list=None,
+                       overwrite=False):
     if not check_dset(out_file, GEOLIST_DSET, overwrite):
         return
 
@@ -840,10 +844,19 @@ def save_geolist_to_h5(igram_path=None, out_file=None, overwrite=False, geo_date
     with h5py.File(out_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
         # f[GEOLIST_DSET] = json.dumps(_geolist_to_str(geo_date_list))
-        f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
+        if dset_name is not None:
+            f[dset_name].attrs[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
+        else:
+            f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
 
 
-def save_intlist_to_h5(igram_path=None, out_file=None, overwrite=False, int_date_list=None):
+def save_intlist_to_h5(
+    igram_path=None,
+    dset_name=None,
+    out_file=None,
+    overwrite=False,
+    int_date_list=None,
+):
     if not check_dset(out_file, INTLIST_DSET, overwrite):
         return
 
@@ -852,7 +865,10 @@ def save_intlist_to_h5(igram_path=None, out_file=None, overwrite=False, int_date
 
     logger.info("Saving igram dates to %s / %s" % (out_file, INTLIST_DSET))
     with h5py.File(out_file, "a") as f:
-        f[INTLIST_DSET] = _intlist_to_str(int_date_list)
+        if dset_name is not None:
+            f[dset_name].attrs[INTLIST_DSET] = _intlist_to_str(int_date_list)
+        else:
+            f[INTLIST_DSET] = _intlist_to_str(int_date_list)
 
 
 def _geolist_to_str(geo_date_list):
