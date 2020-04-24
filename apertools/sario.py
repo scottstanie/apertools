@@ -829,11 +829,13 @@ def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
         f[dset_name] = json.dumps(dem_rsc)
 
 
-def save_geolist_to_h5(out_file=None,
-                       dset_name=None,
-                       igram_path=None,
-                       geo_date_list=None,
-                       overwrite=False):
+def save_geolist_to_h5(
+    igram_path=None,
+    out_file=None,
+    dset_name=None,
+    geo_date_list=None,
+    overwrite=False,
+):
     if not check_dset(out_file, GEOLIST_DSET, overwrite):
         return
 
