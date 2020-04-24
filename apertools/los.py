@@ -14,15 +14,12 @@ import matplotlib.pyplot as plt
 logger = get_log()
 
 
-def find_enu_coeffs(lon, lat, geo_path=None, los_map_file=None, verbose=False):
+def find_enu_coeffs(lon, lat, los_map_file=None, verbose=False):
     """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
 
     Args:
         lon (float): longitude of point to get LOS vector
         lat (float): latitude of point
-        geo_path (str): path to the directory with the sentinel
-            timeseries inversion (contains line-of-sight deformation.npy, dem.rsc,
-            and has .db files one directory higher)
 
     Returns:
         ndarray: enu_coeffs, shape = (3,) array [alpha_e, alpha_n, alpha_up]
@@ -30,17 +27,17 @@ def find_enu_coeffs(lon, lat, geo_path=None, los_map_file=None, verbose=False):
         Can be used to project an ENU vector into the line of sight direction
     """
 
-    if los_map_file is not None:
-        return _read_los_map_file(los_map_file, lat, lon)
+    # if los_map_file is not None:
+    lats, lons, stack = read_los_map_file(los_map_file)
+    row = _find_nearest(lats, lat)
+    col = _find_nearest(lons, lon)
+    return stack[:, row, col]
 
 
-def _read_los_map_file(los_map_file, lat, lon):
-    with h5py.File(los_map_file) as f:
-        lats = f["lats"]
-        lons = f["lons"]
-        row = _find_nearest(lats, lat)
-        col = _find_nearest(lons, lon)
-        return f["stack"][:, row, col]
+def read_los_map_file(los_map_file):
+    """Returns the (lats, lons, ENU stack) from `los_map_file`"""
+    with h5py.File(los_map_file, "r") as f:
+        return f["lats"][:], f["lons"][:], f["stack"][:]
 
 
 def _find_nearest(array, value):
@@ -49,6 +46,7 @@ def _find_nearest(array, value):
     return array[idx]
 
 
+# TODO: fix this for having premade map
 def los_to_enu(los_file=None, lat_lons=None, xyz_los_vecs=None):
     """Converts Line of sight vectors from xyz to ENU
 
@@ -162,6 +160,41 @@ def project_enu_to_los(enu, los_vec=None, lat=None, lon=None, enu_coeffs=None):
         los_hat = los_vec / np.linalg.norm(los_vec)
         enu_coeffs = rotate_xyz_to_enu(los_hat, lat, lon)
     return np.dot(enu_coeffs, enu)
+
+
+def solve_east_up(
+    asc_enu_stack,
+    desc_enu_stack,
+    asc_img,
+    desc_img,
+    asc_dset="velos/1",
+    desc_dset="velos/1",
+):
+    if isinstance(asc_enu_stack, str):
+        asc_enu_stack = read_los_map_file(asc_enu_stack)
+    if isinstance(desc_enu_stack, str):
+        desc_enu_stack = read_los_map_file(desc_enu_stack)
+    if isinstance(asc_img, str):
+        with h5py.File(asc_img, "r") as f:
+            asc_img = f[asc_dset][:]
+    if isinstance(desc_img, str):
+        with h5py.File(desc_img, "r") as f:
+            desc_img = f[desc_dset][:]
+
+    # Form a (2, 2, npixels) array of system matrices A
+    # each (2,2) is [asc_east  asc_up; desc_east  desc_up]
+    asc_eu_vecs = asc_enu_stack.reshape((3, -1))[::2, :]  # just need E,U of ENU
+    desc_eu_vecs = desc_enu_stack.reshape((3, -1))[::2, :]
+    asc_desc_eu = np.stack((asc_eu_vecs, desc_eu_vecs), axis=0)
+
+    asc_desc_img = np.stack((asc_img, desc_img), axis=0).reshape((2, -1))
+
+    # Input: (..., M, N) stack of matrices to be pseudo-inverted.
+    # output: (..., N, M) after pseudo inverse
+    Apinv = np.linalg.pinv(np.moveaxis(asc_desc_eu, -1, 0))
+    # This einsum results in (npixel, 2), where each row is [east, up]
+    east_up_rows = np.einsum('ijk, ki -> ij', Apinv, asc_desc_img)
+    return east_up_rows[:, 0].reshape(asc_img.shape), east_up_rows[:, 1].reshape(asc_img.shape)
 
 
 def find_vertical_def(asc_path, desc_path):
