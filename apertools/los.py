@@ -171,9 +171,9 @@ def solve_east_up(
     desc_dset="velos/1",
 ):
     if isinstance(asc_enu_stack, str):
-        asc_enu_stack = read_los_map_file(asc_enu_stack)
+        _, _, asc_enu_stack, = read_los_map_file(asc_enu_stack)
     if isinstance(desc_enu_stack, str):
-        desc_enu_stack = read_los_map_file(desc_enu_stack)
+        _, _, desc_enu_stack = read_los_map_file(desc_enu_stack)
     if isinstance(asc_img, str):
         with h5py.File(asc_img, "r") as f:
             asc_img = f[asc_dset][:]
