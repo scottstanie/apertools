@@ -262,3 +262,23 @@ def plot_enu_maps(enu_ll, title=None, cmap='jet'):
     cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
     fig.colorbar(axim, cax=cbar_ax)
     fig.suptitle(title)
+
+
+def intersect_bounds(fname1, fname2):
+    import shapely.geometry
+    import rasterio as rio
+    with rio.open(fname1) as src1, rio.open(fname2) as src2:
+        b1 = shapely.geometry.box(*src1.bounds)
+        b2 = shapely.geometry.box(*src2.bounds)
+        return b1.intersection(b2).bounds
+
+
+def read_intersections(fname1, fname2, band1=None, band2=None):
+    import rasterio as rio
+    bounds = intersect_bounds(fname1, fname2)
+    with rio.open(fname1) as src1, rio.open(fname2) as src2:
+        w1 = src1.window(*bounds)
+        w2 = src2.window(*bounds)
+        r1 = np.stack([src1.read(n, window=w1) for n in range(1, src1.count + 1)], axis=0)
+        r2 = np.stack([src2.read(n, window=w2) for n in range(1, src2.count + 1)], axis=0)
+        return r1, r2
