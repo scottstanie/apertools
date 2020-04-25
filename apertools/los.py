@@ -1,16 +1,13 @@
 """Functions to deal with Line of sight vector computation
 """
 from __future__ import division, print_function
-import os
 import numpy as np
+import rasterio as rio
+import shapely.geometry
 from numpy import sin, cos
 import h5py
 # from scipy import interpolate
-
-from apertools import sario
-
 from apertools.log import get_log
-import matplotlib.pyplot as plt
 logger = get_log()
 
 
@@ -28,22 +25,71 @@ def find_enu_coeffs(lon, lat, los_map_file=None, verbose=False):
     """
 
     # if los_map_file is not None:
-    lats, lons, stack = read_los_map_file(los_map_file)
-    row = _find_nearest(lats, lat)
-    col = _find_nearest(lons, lon)
-    return stack[:, row, col]
+    if los_map_file.endswith(".h5"):
+        lats, lons, stack = read_los_map_file(los_map_file)
+        row = _find_nearest_idx(lats, lat)
+        col = _find_nearest_idx(lons, lon)
+        return stack[:, row, col]
+    elif los_map_file.endswith(".tif"):
+        with rio.open(los_map_file) as src:
+            # Note: https://github.com/mapbox/rasterio/blob/master/rasterio/sample.py#L42
+            # uses floor by default, so may be different
+            return list(src.sample([(lon, lat)]))
+
+
+def solve_east_up(
+    asc_enu_stack,
+    desc_enu_stack,
+    asc_img,
+    desc_img,
+    asc_band=1,
+    desc_band=1,
+    asc_dset="velos/1",
+    desc_dset="velos/1",
+):
+    if isinstance(asc_enu_stack, str) or isinstance(desc_enu_stack, str):
+        asc_enu_stack, desc_enu_stack = read_intersections(asc_enu_stack, desc_enu_stack)
+        # _, _, asc_enu_stack, = read_los_map_file(asc_enu_stack)
+        # _, _, desc_enu_stack = read_los_map_file(desc_enu_stack)
+    if asc_enu_stack.shape != desc_enu_stack.shape:
+        raise ValueError("asc_enu_stack not same shape as desc_enu_stack")
+
+    if isinstance(asc_img, str) or isinstance(desc_img, str):
+        asc_img, desc_img = read_intersections(asc_img, desc_img, asc_band, desc_band)
+        # with h5py.File(asc_img, "r") as f:
+        #     asc_img = f[asc_dset][:]
+    if asc_img.shape != desc_img.shape:
+        raise ValueError("asc_enu_stack not same shape as desc_enu_stack")
+
+    # Form a (2, 2, npixels) array of system matrices A
+    # each (2,2) is [asc_east  asc_up; desc_east  desc_up]
+    asc_eu_vecs = asc_enu_stack.reshape((3, -1))[::2, :]  # just need E,U of ENU
+    desc_eu_vecs = desc_enu_stack.reshape((3, -1))[::2, :]
+    asc_desc_eu = np.stack((asc_eu_vecs, desc_eu_vecs), axis=0)
+
+    asc_desc_img = np.stack((asc_img, desc_img), axis=0).reshape((2, -1))
+
+    # Input: (..., M, N) stack of matrices to be pseudo-inverted.
+    # output: (..., N, M) after pseudo inverse
+    Apinv = np.linalg.pinv(np.moveaxis(asc_desc_eu, -1, 0))
+    # This einsum results in (npixel, 2), where each row is [east, up]
+    east_up_rows = np.einsum('ijk, ki -> ij', Apinv, asc_desc_img)
+    return east_up_rows[:, 0].reshape(asc_img.shape), east_up_rows[:, 1].reshape(asc_img.shape)
 
 
 def read_los_map_file(los_map_file):
     """Returns the (lats, lons, ENU stack) from `los_map_file`"""
+    if los_map_file.endswith(".tif"):
+        with rio.open(los_map_file) as src:
+            return np.stack([src.read(i) for i in (1, 2, 3)], axis=0)
     with h5py.File(los_map_file, "r") as f:
         return f["lats"][:], f["lons"][:], f["stack"][:]
 
 
-def _find_nearest(array, value):
+def _find_nearest_idx(array, value):
     array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return array[idx]
+    return (np.abs(array - value)).argmin()
+    # return array[idx]
 
 
 # TODO: fix this for having premade map
@@ -162,82 +208,8 @@ def project_enu_to_los(enu, los_vec=None, lat=None, lon=None, enu_coeffs=None):
     return np.dot(enu_coeffs, enu)
 
 
-def solve_east_up(
-    asc_enu_stack,
-    desc_enu_stack,
-    asc_img,
-    desc_img,
-    asc_dset="velos/1",
-    desc_dset="velos/1",
-):
-    if isinstance(asc_enu_stack, str):
-        _, _, asc_enu_stack, = read_los_map_file(asc_enu_stack)
-    if isinstance(desc_enu_stack, str):
-        _, _, desc_enu_stack = read_los_map_file(desc_enu_stack)
-    if isinstance(asc_img, str):
-        with h5py.File(asc_img, "r") as f:
-            asc_img = f[asc_dset][:]
-    if isinstance(desc_img, str):
-        with h5py.File(desc_img, "r") as f:
-            desc_img = f[desc_dset][:]
-
-    # Form a (2, 2, npixels) array of system matrices A
-    # each (2,2) is [asc_east  asc_up; desc_east  desc_up]
-    asc_eu_vecs = asc_enu_stack.reshape((3, -1))[::2, :]  # just need E,U of ENU
-    desc_eu_vecs = desc_enu_stack.reshape((3, -1))[::2, :]
-    asc_desc_eu = np.stack((asc_eu_vecs, desc_eu_vecs), axis=0)
-
-    asc_desc_img = np.stack((asc_img, desc_img), axis=0).reshape((2, -1))
-
-    # Input: (..., M, N) stack of matrices to be pseudo-inverted.
-    # output: (..., N, M) after pseudo inverse
-    Apinv = np.linalg.pinv(np.moveaxis(asc_desc_eu, -1, 0))
-    # This einsum results in (npixel, 2), where each row is [east, up]
-    east_up_rows = np.einsum('ijk, ki -> ij', Apinv, asc_desc_img)
-    return east_up_rows[:, 0].reshape(asc_img.shape), east_up_rows[:, 1].reshape(asc_img.shape)
-
-
-def find_vertical_def(asc_path, desc_path):
-    """Calculates vertical deformation for all points in the LOS files
-
-    Args:
-        asc_path (str): path to the directory with the ascending sentinel files
-            Should contain elevation.dem.rsc, .db files, and igram folder
-        desc_path (str): same as asc_path but for descending orbit
-    Returns:
-        tuple[ndarray, ndarray]: def_east, def_vertical, the two matrices of
-            deformation separated by verticl and eastward motion
-    """
-    asc_path = os.path.realpath(asc_path)
-    desc_path = os.path.realpath(desc_path)
-
-    eu_asc = find_east_up_coeffs(asc_path)
-    eu_desc = find_east_up_coeffs(desc_path)
-
-    east_up_coeffs = np.vstack((eu_asc, eu_desc))
-    print("East-up asc and desc:")
-    print(east_up_coeffs)
-
-    asc_igram_path = os.path.join(asc_path, 'igrams')
-    desc_igram_path = os.path.join(desc_path, 'igrams')
-
-    asc_geolist, asc_deform = sario.load_deformation(asc_igram_path)
-    desc_geolist, desc_deform = sario.load_deformation(desc_igram_path)
-
-    print(asc_igram_path, asc_deform.shape)
-    print(desc_igram_path, desc_deform.shape)
-    assert asc_deform.shape == desc_deform.shape, 'Asc and desc def images not same size'
-    nlayers, nrows, ncols = asc_deform.shape
-    # Stack and solve for the East and Up deformation
-    d_asc_desc = np.vstack([asc_deform.reshape(-1), desc_deform.reshape(-1)])
-    dd = np.linalg.solve(east_up_coeffs, d_asc_desc)
-    def_east = dd[0, :].reshape((nlayers, nrows, ncols))
-    def_vertical = dd[1, :].reshape((nlayers, nrows, ncols))
-    return def_east, def_vertical
-
-
 def merge_geolists(geolist1, geolist2):
-    """Task asc and desc geolists, makes one merged
+    """Take asc and desc geolists, makes one merged
 
     Gives the overlap indices of the merged list for each smaller
 
@@ -251,6 +223,7 @@ def merge_geolists(geolist1, geolist2):
 
 
 def plot_enu_maps(enu_ll, title=None, cmap='jet'):
+    import matplotlib.pyplot as plt
     fig, axes = plt.subplots(1, 3)
 
     titles = ['east', 'north', 'up']
@@ -265,8 +238,6 @@ def plot_enu_maps(enu_ll, title=None, cmap='jet'):
 
 
 def intersect_bounds(fname1, fname2):
-    import shapely.geometry
-    import rasterio as rio
     with rio.open(fname1) as src1, rio.open(fname2) as src2:
         b1 = shapely.geometry.box(*src1.bounds)
         b2 = shapely.geometry.box(*src2.bounds)
@@ -274,7 +245,6 @@ def intersect_bounds(fname1, fname2):
 
 
 def read_intersections(fname1, fname2, band1=None, band2=None):
-    import rasterio as rio
     bounds = intersect_bounds(fname1, fname2)
     with rio.open(fname1) as src1, rio.open(fname2) as src2:
         w1 = src1.window(*bounds)
