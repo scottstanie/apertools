@@ -1091,6 +1091,12 @@ def save_as_vrt(filename=None,
 
     bytes_per_pix = np.dtype(dtype).itemsize
     total_bytes = os.path.getsize(filename)
+    if interleave is None or num_bands is None:
+        interleave, num_bands = get_interleave(filename, num_bands=num_bands)
+    if band is None:
+        # This will offset the start- only making the vrt point to phase
+        band = 1 if apertools.utils.get_file_ext(filename) in STACKED_FILES else 0
+
     assert rows == int(
         total_bytes / bytes_per_pix / cols /
         num_bands), (f"rows = total_bytes / bytes_per_pix / cols / num_bands : "
@@ -1111,12 +1117,6 @@ def save_as_vrt(filename=None,
     srs = gdal.osr.SpatialReference()
     srs.SetWellKnownGeogCS("WGS84")
     out_raster.SetProjection(srs.ExportToWkt())
-
-    if interleave is None or num_bands is None:
-        interleave, num_bands = get_interleave(filename, num_bands=num_bands)
-    if band is None:
-        # This will offset the start- only making the vrt point to phase
-        band = 1 if apertools.utils.get_file_ext(filename) in STACKED_FILES else 0
 
     image_offset, pixel_offset, line_offset = get_offsets(
         dtype,
