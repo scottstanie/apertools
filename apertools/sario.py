@@ -152,6 +152,7 @@ DEFAULT_KEYS = {
 
 
 def load_file(filename,
+              arr=None,
               downsample=None,
               looks=None,
               rsc_file=None,
@@ -165,6 +166,8 @@ def load_file(filename,
 
     Args:
         filename (str): path to the file to open
+        arr (ndarray): pre-allocated array of the correct size/dtype
+            TODO: (error if wrong size/type?)
         rsc_file (str): path to a dem.rsc file (if Sentinel)
         rsc_data (str): preloaded dem.rsc file as a dict
         ann_info (dict): data parsed from annotation file (UAVSAR)
@@ -258,9 +261,11 @@ def load_file(filename,
         raise ValueError("Need .rsc file or .ann file to load")
 
     if ext in BOOL_EXTS:
-        return _take_looks(load_bool(filename, rsc_data=rsc_data, rows=rows, cols=cols), *looks)
+        return _take_looks(load_bool(filename, arr=arr, rsc_data=rsc_data, rows=rows, cols=cols),
+                           *looks)
     elif ext in STACKED_FILES:
         stacked = load_stacked_img(filename,
+                                   arr=arr,
                                    rsc_data=rsc_data,
                                    ann_info=ann_info,
                                    rows=rows,
@@ -269,11 +274,16 @@ def load_file(filename,
         return stacked[..., ::downsample, ::downsample]
     elif is_complex(filename=filename, ext=ext):
         return _take_looks(
-            load_complex(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols),
-            *looks)
+            load_complex(filename,
+                         arr=arr,
+                         ann_info=ann_info,
+                         rsc_data=rsc_data,
+                         rows=rows,
+                         cols=cols), *looks)
     else:
         return _take_looks(
-            load_real(filename, ann_info=ann_info, rsc_data=rsc_data, rows=rows, cols=cols), *looks)
+            load_real(filename, arr=arr, ann_info=ann_info, rsc_data=rsc_data, rows=rows,
+                      cols=cols), *looks)
 
 
 # Make a shorter alias for load_file
@@ -371,13 +381,38 @@ def _assert_valid_size(data, cols):
     assert math.modf(float(len(data)) / cols)[0] == 0, error_str
 
 
-def load_real(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
-    """Reads in real 4-byte per pixel files""
+def _load_binary(filename,
+                 dtype=None,
+                 buffer=None,
+                 rows=None,
+                 cols=None,
+                 ann_info=None,
+                 rsc_data=None):
+    if buffer is not None:
+        if dtype is not None:
+            assert (buffer.type == dtype)
+        else:
+            dtype = buffer.dtype
+
+    data = np.fromfile(filename, dtype)
+    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
+    _assert_valid_size(data, cols)
+
+
+def load_real(filename,
+              arr=None,
+              rows=None,
+              cols=None,
+              ann_info=None,
+              rsc_data=None,
+              dtype=FLOAT_32_LE):
+    """Reads in real 4-byte per pixel files
 
     Valid filetypes: See sario.REAL_EXTS
 
     Args:
         filename (str): path to the file to open
+        arr (ndarray): pre-allocated array of the correct size/dtype
         rows (int): manually pass number of rows (overrides rsc/ann data)
         cols (int): manually pass number of cols (overrides rsc/ann data)
         rsc_data (dict): output from load_dem_rsc, gives width of file
@@ -387,40 +422,30 @@ def load_real(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtyp
         ndarray: float32 values for the real 2D matrix
 
     """
-    data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
-    _assert_valid_size(data, cols)
+    data = _load_binary(
+        filename,
+        dtype=dtype,
+        arr=arr,
+        rows=rows,
+        cols=rows,
+        ann_info=ann_info,
+        rsc_data=rsc_data,
+    )
     return data.reshape([-1, cols])
 
 
-def load_complex(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=FLOAT_32_LE):
-    """Combines real and imaginary values from a filename to make complex image
-
-    Valid filetypes: See sario.COMPLEX_EXTS
-
-    Args:
-        filename (str): path to the file to open
-        rows (int): manually pass number of rows (overrides rsc/ann data)
-        cols (int): manually pass number of cols (overrides rsc/ann data)
-        rsc_data (dict): output from load_dem_rsc, gives width of file
-        ann_info (dict): data parsed from UAVSAR annotation file
-
-    Returns:
-        ndarray: imaginary numbers of the combined floats (dtype('complex64'))
-    """
-    data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
-    _assert_valid_size(data, cols)
-
-    real_data, imag_data = parse_complex_data(data, cols)
-    return combine_real_imag(real_data, imag_data)
-
-
-def load_bool(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=np.bool):
+def load_bool(filename,
+              arr=None,
+              rows=None,
+              cols=None,
+              ann_info=None,
+              rsc_data=None,
+              dtype=np.bool):
     """Load binary boolean image
 
     Args:
         filename (str): path to the file to open
+        arr (ndarray): pre-allocated array of the correct size/dtype
         rows (int): manually pass number of rows (overrides rsc/ann data)
         cols (int): manually pass number of cols (overrides rsc/ann data)
         rsc_data (dict): output from load_dem_rsc, gives width of file
@@ -429,9 +454,48 @@ def load_bool(filename, rows=None, cols=None, ann_info=None, rsc_data=None, dtyp
     Returns:
         ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
-    data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
-    _assert_valid_size(data, cols)
+    data = _load_binary(
+        filename,
+        dtype=dtype,
+        arr=arr,
+        rows=rows,
+        cols=rows,
+        ann_info=ann_info,
+        rsc_data=rsc_data,
+    )
+    return data.reshape([-1, cols])
+
+
+def load_complex(filename,
+                 arr=None,
+                 rows=None,
+                 cols=None,
+                 ann_info=None,
+                 rsc_data=None,
+                 dtype=FLOAT_32_LE):
+    """Combines real and imaginary values from a filename to make complex image
+
+    Args:
+        filename (str): path to the file to open
+        arr (ndarray): pre-allocated array of the correct size/dtype
+        rows (int): manually pass number of rows (overrides rsc/ann data)
+        cols (int): manually pass number of cols (overrides rsc/ann data)
+        rsc_data (dict): output from load_dem_rsc, gives width of file
+        ann_info (dict): data parsed from UAVSAR annotation file
+
+    Returns:
+        ndarray: complex64 values for the real 2D matrix
+
+    """
+    data = _load_binary(
+        filename,
+        dtype=dtype,
+        arr=arr,
+        rows=rows,
+        cols=rows,
+        ann_info=ann_info,
+        rsc_data=rsc_data,
+    )
     return data.reshape([-1, cols])
 
 
@@ -448,6 +512,10 @@ def load_stacked_img(filename,
     Format is two stacked matrices:
         [[first], [second]] where the first "cols" number of floats
         are the first matrix, next "cols" are second, etc.
+    Also called BIL, Band Interleaved by Line
+    See http://webhelp.esri.com/arcgisdesktop/9.3/index.cfm?topicname=BIL,_BIP,_and_BSQ_raster_files
+    for explantion
+
     For .unw height files, the first is amplitude, second is phase (unwrapped)
     For .cc correlation files, first is amp, second is correlation (0 to 1)
 
@@ -461,22 +529,6 @@ def load_stacked_img(filename,
     Returns:
         ndarray: dtype=float32, the second matrix (height, correlation, ...) parsed
         if return_amp == True, returns two ndarrays stacked along axis=0
-
-    Example illustrating how strips of data alternate:
-    reading unw (unwrapped phase) data
-
-    data = np.fromfile('20141128_20150503.unw', '<f4')
-
-    # The first section of data is amplitude data
-    # The amplitude has a different, larger range of values
-    amp = data[:cols]
-    print(np.max(amp), np.min(amp))
-    # Output: (27140.396, 118.341095)
-
-    # The next part of the data is a line of phases:
-    phase = data[cols:2*cols])
-    print(np.max(phase), np.min(phase))
-    # Output: (8.011558, -2.6779003)
     """
     data = np.fromfile(filename, dtype)
     rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
