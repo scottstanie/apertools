@@ -382,6 +382,7 @@ def _assert_valid_size(data, cols):
 
 
 def _load_binary(filename,
+                 arr=None,
                  dtype=None,
                  buffer=None,
                  rows=None,
@@ -393,10 +394,16 @@ def _load_binary(filename,
             assert (buffer.type == dtype)
         else:
             dtype = buffer.dtype
+        # https://github.com/numpy/numpy/blob/master/numpy/core/records.py#L896-L897
+        with open(filename, 'rb') as fd:
+            fd.readinfo(arr.data)
+            data = arr
+    else:
+        data = np.fromfile(filename, dtype)
 
-    data = np.fromfile(filename, dtype)
     rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
     _assert_valid_size(data, cols)
+    return data, rows, cols
 
 
 def load_real(filename,
@@ -422,7 +429,7 @@ def load_real(filename,
         ndarray: float32 values for the real 2D matrix
 
     """
-    data = _load_binary(
+    data, rows, cols = _load_binary(
         filename,
         dtype=dtype,
         arr=arr,
@@ -454,7 +461,7 @@ def load_bool(filename,
     Returns:
         ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
-    data = _load_binary(
+    data, rows, cols = _load_binary(
         filename,
         dtype=dtype,
         arr=arr,
@@ -487,7 +494,7 @@ def load_complex(filename,
         ndarray: complex64 values for the real 2D matrix
 
     """
-    data = _load_binary(
+    data, rows, cols = _load_binary(
         filename,
         dtype=dtype,
         arr=arr,
@@ -496,10 +503,12 @@ def load_complex(filename,
         ann_info=ann_info,
         rsc_data=rsc_data,
     )
-    return data.reshape([-1, cols])
+    real_data, imag_data = parse_complex_data(data, cols)
+    return combine_real_imag(real_data, imag_data)
 
 
 def load_stacked_img(filename,
+                     arr=None,
                      rows=None,
                      cols=None,
                      rsc_data=None,
@@ -530,9 +539,15 @@ def load_stacked_img(filename,
         ndarray: dtype=float32, the second matrix (height, correlation, ...) parsed
         if return_amp == True, returns two ndarrays stacked along axis=0
     """
-    data = np.fromfile(filename, dtype)
-    rows, cols = _get_file_rows_cols(rows=rows, cols=cols, ann_info=ann_info, rsc_data=rsc_data)
-    _assert_valid_size(data, cols)
+    data, rows, cols = _load_binary(
+        filename,
+        dtype=dtype,
+        arr=arr,
+        rows=rows,
+        cols=rows,
+        ann_info=ann_info,
+        rsc_data=rsc_data,
+    )
 
     first = data.reshape((rows, 2 * cols))[:, :cols]
     second = data.reshape((rows, 2 * cols))[:, cols:]
