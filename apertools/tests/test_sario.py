@@ -90,6 +90,10 @@ class TestLoading(unittest.TestCase):
         expected_dem = np.array([[1413, 1413], [1414, 1414], [1415, 1415]], dtype='<i2')
         assert_array_almost_equal(expected_dem, loaded_dem)
 
+        # check again with buffer
+        loaded_dem2 = sario.load(self.dem_path, arr=loaded_dem, verbose=True)
+        assert_array_almost_equal(expected_dem, loaded_dem)
+
     def test_downsample(self):
         loaded_dem = sario.load_file(self.dem_path)
         self.assertEqual(loaded_dem.shape, (3, 2))
