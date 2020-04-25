@@ -60,14 +60,6 @@ class TestLoading(unittest.TestCase):
 
         self.assertRaises(ValueError, sario.is_complex, 'badext.tif')
 
-    def test_is_combine_real_imag(self):
-        real_data = np.array([1, 2, 3], dtype='<f4')
-        imag_data = np.array([4, 5, 6], dtype='<f4')
-        complex_expected = np.array([1 + 4j, 2 + 5j, 3 + 6j])
-        output = sario.combine_real_imag(real_data, imag_data)
-        assert_array_almost_equal(complex_expected, output)
-        self.assertEqual(output.dtype, np.dtype('complex64'))
-
     def test_assert_valid_size(self):
         data = np.array([1, 2, 3, 4], '<f4')
         cols = 1
@@ -92,7 +84,7 @@ class TestLoading(unittest.TestCase):
 
         # check again with buffer
         loaded_dem2 = sario.load(self.dem_path, arr=loaded_dem, verbose=True)
-        assert_array_almost_equal(expected_dem, loaded_dem)
+        assert_array_almost_equal(expected_dem, loaded_dem2)
 
     def test_downsample(self):
         loaded_dem = sario.load_file(self.dem_path)

@@ -5,7 +5,6 @@ Email: scott.stanie@utexas.edu
 """
 
 from __future__ import division, print_function
-import collections
 import datetime
 import fileinput
 import glob
@@ -22,6 +21,7 @@ import matplotlib.pyplot as plt
 
 import apertools.utils
 import apertools.parsers
+from .demloading import format_dem_rsc, load_dem_rsc, load_elevation
 from apertools.log import get_log
 logger = get_log()
 
@@ -35,8 +35,6 @@ _take_looks = apertools.utils.take_looks
 
 FLOAT_32_LE = np.dtype('<f4')
 COMPLEX_64_LE = np.dtype('<c8')
-INT_16_LE = np.dtype('<i2')
-INT_16_BE = np.dtype('>i2')
 
 SENTINEL_EXTS = ['.geo', '.cc', '.int', '.amp', '.unw', '.unwflat']
 UAVSAR_EXTS = [
@@ -125,30 +123,6 @@ DEM_RSC_DSET = "dem_rsc"
 
 GEOLIST_DSET = "geo_dates"
 INTLIST_DSET = "int_dates"
-
-RSC_KEY_TYPES = [
-    ('width', int),
-    ('file_length', int),
-    ('x_first', float),
-    ('y_first', float),
-    ('x_step', float),
-    ('y_step', float),
-    ('x_unit', str),
-    ('y_unit', str),
-    ('z_offset', int),
-    ('z_scale', int),
-    ('projection', str),
-]
-RSC_KEYS = [tup[0] for tup in RSC_KEY_TYPES]
-
-# in case only speciying rows/cols/steps, these always seem to be same
-DEFAULT_KEYS = {
-    'x_unit': 'degrees',
-    'y_unit': 'degrees',
-    'z_offset': 0,
-    'z_scale': 1,
-    'projection': 'LL',
-}
 
 
 def load_file(filename,
@@ -378,25 +352,24 @@ def _assert_valid_size(data, cols):
     """
     error_str = "Invalid number of cols (%s) for file size %s." % (cols, len(data))
     # math.modf returns (fractional remainder, integer remainder)
-    assert math.modf(float(len(data)) / cols)[0] == 0, error_str
+    assert math.modf(float(data.size) / cols)[0] == 0, error_str
 
 
-def _load_binary(filename,
-                 arr=None,
-                 dtype=None,
-                 buffer=None,
-                 rows=None,
-                 cols=None,
-                 ann_info=None,
-                 rsc_data=None):
-    if buffer is not None:
+def _load_binary1d(filename,
+                   arr=None,
+                   dtype=None,
+                   rows=None,
+                   cols=None,
+                   ann_info=None,
+                   rsc_data=None):
+    if arr is not None:
         if dtype is not None:
-            assert (buffer.type == dtype)
+            assert (arr.dtype == np.dtype(dtype)), f"{arr.dtype} != {dtype}"
         else:
-            dtype = buffer.dtype
+            dtype = arr.dtype
         # https://github.com/numpy/numpy/blob/master/numpy/core/records.py#L896-L897
         with open(filename, 'rb') as fd:
-            fd.readinfo(arr.data)
+            fd.readinto(arr.data)
             data = arr
     else:
         data = np.fromfile(filename, dtype)
@@ -406,13 +379,26 @@ def _load_binary(filename,
     return data, rows, cols
 
 
-def load_real(filename,
-              arr=None,
-              rows=None,
-              cols=None,
-              ann_info=None,
-              rsc_data=None,
-              dtype=FLOAT_32_LE):
+def load_binary_img(filename,
+                    arr=None,
+                    rows=None,
+                    cols=None,
+                    ann_info=None,
+                    rsc_data=None,
+                    dtype=None):
+    data, rows, cols = _load_binary1d(
+        filename,
+        dtype=dtype,
+        arr=arr,
+        rows=rows,
+        cols=rows,
+        ann_info=ann_info,
+        rsc_data=rsc_data,
+    )
+    return data.reshape([-1, cols])
+
+
+def load_real(filename, arr=None, rows=None, cols=None, ann_info=None, rsc_data=None):
     """Reads in real 4-byte per pixel files
 
     Valid filetypes: See sario.REAL_EXTS
@@ -429,25 +415,16 @@ def load_real(filename,
         ndarray: float32 values for the real 2D matrix
 
     """
-    data, rows, cols = _load_binary(
-        filename,
-        dtype=dtype,
-        arr=arr,
-        rows=rows,
-        cols=rows,
-        ann_info=ann_info,
-        rsc_data=rsc_data,
-    )
-    return data.reshape([-1, cols])
+    return load_binary_img(filename,
+                           arr=arr,
+                           rows=rows,
+                           cols=cols,
+                           ann_info=ann_info,
+                           rsc_data=rsc_data,
+                           dtype=FLOAT_32_LE)
 
 
-def load_bool(filename,
-              arr=None,
-              rows=None,
-              cols=None,
-              ann_info=None,
-              rsc_data=None,
-              dtype=np.bool):
+def load_bool(filename, arr=None, rows=None, cols=None, ann_info=None, rsc_data=None):
     """Load binary boolean image
 
     Args:
@@ -461,26 +438,17 @@ def load_bool(filename,
     Returns:
         ndarray: imaginary numbers of the combined floats (dtype('complex64'))
     """
-    data, rows, cols = _load_binary(
-        filename,
-        dtype=dtype,
-        arr=arr,
-        rows=rows,
-        cols=rows,
-        ann_info=ann_info,
-        rsc_data=rsc_data,
-    )
-    return data.reshape([-1, cols])
+    return load_binary_img(filename,
+                           arr=arr,
+                           rows=rows,
+                           cols=cols,
+                           ann_info=ann_info,
+                           rsc_data=rsc_data,
+                           dtype=np.bool)
 
 
-def load_complex(filename,
-                 arr=None,
-                 rows=None,
-                 cols=None,
-                 ann_info=None,
-                 rsc_data=None,
-                 dtype=FLOAT_32_LE):
-    """Combines real and imaginary values from a filename to make complex image
+def load_complex(filename, arr=None, rows=None, cols=None, ann_info=None, rsc_data=None):
+    """Loads a Complex64 binary image
 
     Args:
         filename (str): path to the file to open
@@ -494,17 +462,13 @@ def load_complex(filename,
         ndarray: complex64 values for the real 2D matrix
 
     """
-    data, rows, cols = _load_binary(
-        filename,
-        dtype=dtype,
-        arr=arr,
-        rows=rows,
-        cols=rows,
-        ann_info=ann_info,
-        rsc_data=rsc_data,
-    )
-    real_data, imag_data = parse_complex_data(data, cols)
-    return combine_real_imag(real_data, imag_data)
+    return load_binary_img(filename,
+                           arr=arr,
+                           rows=rows,
+                           cols=cols,
+                           ann_info=ann_info,
+                           rsc_data=rsc_data,
+                           dtype=COMPLEX_64_LE)
 
 
 def load_stacked_img(filename,
@@ -539,7 +503,7 @@ def load_stacked_img(filename,
         ndarray: dtype=float32, the second matrix (height, correlation, ...) parsed
         if return_amp == True, returns two ndarrays stacked along axis=0
     """
-    data, rows, cols = _load_binary(
+    data, rows, cols = _load_binary1d(
         filename,
         dtype=dtype,
         arr=arr,
@@ -575,19 +539,6 @@ def is_complex(filename=None, ext=None):
         return any(pol in filename for pol in apertools.parsers.Uavsar.COMPLEX_POLS)
     else:
         return ext in COMPLEX_EXTS
-
-
-def parse_complex_data(complex_data, cols):
-    """Splits a 1-D array of real/imag bytes to 2 square arrays"""
-    # double check if I ever need rows
-    real_data = complex_data[::2].reshape([-1, cols])
-    imag_data = complex_data[1::2].reshape([-1, cols])
-    return real_data, imag_data
-
-
-def combine_real_imag(real_data, imag_data):
-    """Combines two float data arrays into one complex64 array"""
-    return real_data + 1j * imag_data
 
 
 def save(filename, data, normalize=True, cmap="gray", preview=False, vmax=None, vmin=None):
@@ -1404,15 +1355,8 @@ def gdal_to_numpy_type(gdal_dtype=None, band=None):
     return gdal_array.GDALTypeCodeToNumericTypeCode(gdal_dtype)
 
 
-def read_window(fname, bounds, band=1, driver=None):
-    """Returns the window `bounds` (left, bot, right, top)"""
-    import rasterio as rio  # TODO: figure out if i want rio or gdal...
-    with rio.open(fname, driver=driver) as src:
-        return src.read(band, window=src.window(*bounds))
-
-
-# TODO: not quite working to add a colorbar to grayscale tif...
 def testt(fn):
+    # TODO: not quite working to add a colorbar to grayscale tif...
     import gdal
     ds = gdal.Open(fn, 1)
     band = ds.GetRasterBand(1)
@@ -1442,131 +1386,6 @@ def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=
     with fileinput.FileInput(output, inplace=True) as f:
         for line in f:
             print(line.replace("<SourceBand>1</SourceBand>", "<SourceBand>2</SourceBand>"), end='')
-
-
-def load_dem_rsc(filename, lower=False, **kwargs):
-    """Loads and parses the .dem.rsc file
-
-    Args:
-        filename (str) path to either the .dem or .dem.rsc file.
-            Function will add .rsc to path if passed .dem file
-        lower (bool): make keys of the dict lowercase
-
-    Returns:
-        dict: dem.rsc file parsed out, keys are all caps
-
-    example file:
-    WIDTH         10801
-    FILE_LENGTH   7201
-    X_FIRST       -157.0
-    Y_FIRST       21.0
-    X_STEP        0.000277777777
-    Y_STEP        -0.000277777777
-    X_UNIT        degrees
-    Y_UNIT        degrees
-    Z_OFFSET      0
-    Z_SCALE       1
-    PROJECTION    LL
-    """
-
-    # Use OrderedDict so that upsample_dem_rsc creates with same ordering as old
-    output_data = collections.OrderedDict()
-    # Second part in tuple is used to cast string to correct type
-
-    rsc_filename = '{}.rsc'.format(filename) if not filename.endswith('.rsc') else filename
-    with open(rsc_filename, 'r') as f:
-        for line in f.readlines():
-            for field, num_type in RSC_KEY_TYPES:
-                if line.startswith(field.upper()):
-                    output_data[field] = num_type(line.split()[1])
-
-    if lower:
-        output_data = {k.lower(): d for k, d in output_data.items()}
-    return output_data
-
-
-def format_dem_rsc(rsc_dict):
-    """Creates the .dem.rsc file string from key/value pairs of an OrderedDict
-
-    Output of function can be written to a file as follows
-        with open('my.dem.rsc', 'w') as f:
-            f.write(outstring)
-
-    Args:
-        rsc_dict (OrderedDict): data about dem in ordered key/value format
-            See `load_dem_rsc` output for example
-
-    Returns:
-        outstring (str) formatting string to be written to .dem.rsc
-
-    """
-    outstring = ""
-    rsc_dict = {k.lower(): v for k, v in rsc_dict.items()}
-    # for field, value in rsc_dict.items():
-    for field in RSC_KEYS:
-        # Make sure to skip extra keys that might be in the dict
-        if field not in RSC_KEYS:
-            continue
-
-        value = rsc_dict.get(field, DEFAULT_KEYS.get(field))
-        if value is None:
-            raise ValueError("%s is necessary for .rsc file: missing from dict" % field)
-
-        # Files seemed to be left justified with 14 spaces? Not sure why 14
-        # Apparently it was an old fortran format, where they use "read(15)"
-        if field in ('x_step', 'y_step'):
-            # give step floats proper sig figs to not output scientific notation
-            outstring += "{field:<14s}{val:0.12f}\n".format(field=field.upper(), val=value)
-        else:
-            outstring += "{field:<14s}{val}\n".format(field=field.upper(), val=value)
-
-    return outstring
-
-
-# TODO: see if this should be folded in, or just gdal loaded
-def load_elevation(filename):
-    """Loads a digital elevation map from either .hgt file or .dem
-
-    .hgt is the NASA SRTM files given. Documentation on format here:
-    https://dds.cr.usgs.gov/srtm/version2_1/Documentation/SRTM_Topo.pdf
-    Key point: Big-endian 2 byte (16-bit) integers
-
-    .dem is format used by Zebker geo-coded and ROI-PAC SAR software
-    Only difference is data is stored little-endian (like other SAR data)
-
-    Note on both formats: gaps in coverage are given by INT_MIN -32768,
-    so either manually set data(data == np.min(data)) = 0,
-        data = np.clip(data, 0, None), or when plotting, plt.imshow(data, vmin=0)
-    """
-    ext = os.path.splitext(filename)[1]
-    data_type = INT_16_LE if ext == '.dem' else INT_16_BE
-    data = np.fromfile(filename, dtype=data_type)
-    # Make sure we're working with little endian
-    if data_type == INT_16_BE:
-        data = data.astype(INT_16_LE)
-
-    # Reshape to correct size.
-    # Either get info from .dem.rsc
-    if ext == '.dem':
-        info = load_dem_rsc(filename)
-        dem_img = data.reshape((info['file_length'], info['width']))
-
-    # Or check if we are using STRM1 (3601x3601) or SRTM3 (1201x1201)
-    else:
-        if (data.shape[0] / 3601) == 3601:
-            # STRM1- 1 arc second data, 30 meter data
-            dem_img = data.reshape((3601, 3601))
-        elif (data.shape[0] / 1201) == 1201:
-            # STRM3- 3 arc second data, 90 meter data
-            dem_img = data.reshape((1201, 1201))
-        else:
-            raise ValueError("Invalid .hgt data size: must be square size 1201 or 3601")
-        # TODO: Verify that the min real value will be above -1000
-        min_valid = -1000
-        # Set NaN values to 0
-        dem_img[dem_img < min_valid] = 0
-
-    return dem_img
 
 
 def find_looks_taken(igram_path,
