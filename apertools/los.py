@@ -279,6 +279,12 @@ def read_intersections(fname1, fname2, band1=None, band2=None):
     with rio.open(fname1) as src1, rio.open(fname2) as src2:
         w1 = src1.window(*bounds)
         w2 = src2.window(*bounds)
-        r1 = np.stack([src1.read(n, window=w1) for n in range(1, src1.count + 1)], axis=0)
-        r2 = np.stack([src2.read(n, window=w2) for n in range(1, src2.count + 1)], axis=0)
+        if band1 is None:
+            r1 = np.stack([src1.read(n, window=w1) for n in range(1, src1.count + 1)], axis=0)
+        else:
+            r1 = src1.read(band1, window=w1)
+        if band2 is None:
+            r2 = np.stack([src2.read(n, window=w2) for n in range(1, src2.count + 1)], axis=0)
+        else:
+            r2 = src2.read(band2, window=w2)
         return r1, r2
