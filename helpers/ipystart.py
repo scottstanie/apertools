@@ -35,5 +35,6 @@ import os
 import glob
 import requests
 import datetime
+import hdf5plugin
 import h5py
 import rasterio as rio

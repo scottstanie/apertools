@@ -322,6 +322,18 @@ def _abs_max(img):
     return np.nanmax(np.abs(img))
 
 
+def _get_vminmax(img, vm=None, vmin=None, vmax=None, twoway=True):
+    img_nonan = img[~np.isnan(img)]
+    vm = vm or np.max(np.abs(img_nonan))
+    if twoway:
+        vmax = vm if vmax is None else vmax
+        vmin = -vm if vmin is None else vmin
+    else:
+        vmax = vm if vmax is None else vmax
+        vmin = 0 if vmin is None else vmin
+    return vmin, vmax
+
+
 def view_stack(
     stack,
     display_img,
@@ -569,15 +581,19 @@ def plot_shapefile(filename, fig=None, ax=None, z=None):
 # def plotcompare(fnames, dset="velos", vmax=25, vmin=-25, cmap="seismic_wide", **kwargs):
 def plot_img_diff(arrays=None,
                   dset="velos",
-                  vmax=25,
-                  vmin=-25,
-                  cmap="seismic_wide",
+                  vm=20,
+                  vmax=None,
+                  vmin=None,
+                  twoway=True,
+                  cmap="seismic_wide_y",
                   show=True,
                   **kwargs):
     """Rough tool to compare several plots at once"""
     # if arrays is None:
     #     arrays = [sario.load(f, **kwargs) for f in fnames]
     n = len(arrays)
+    vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
+    print(f"{vmin} {vmax}")
     fig, axes = plt.subplots(1, n, sharex=True, sharey=True)
     for ii in range(n):
         axim = axes[ii].imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)

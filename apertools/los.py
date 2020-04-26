@@ -2,11 +2,10 @@
 """
 from __future__ import division, print_function
 import numpy as np
-import rasterio as rio
-import shapely.geometry
 from numpy import sin, cos
 import h5py
 # from scipy import interpolate
+from . import subset
 from apertools.log import get_log
 logger = get_log()
 
@@ -31,6 +30,7 @@ def find_enu_coeffs(lon, lat, los_map_file=None, verbose=False):
         col = _find_nearest_idx(lons, lon)
         return stack[:, row, col]
     elif los_map_file.endswith(".tif"):
+        import rasterio as rio
         with rio.open(los_map_file) as src:
             # Note: https://github.com/mapbox/rasterio/blob/master/rasterio/sample.py#L42
             # uses floor by default, so may be different
@@ -46,16 +46,17 @@ def solve_east_up(
     desc_band=1,
     asc_dset="velos/1",
     desc_dset="velos/1",
+    outfile=None,
 ):
     if isinstance(asc_enu_stack, str) or isinstance(desc_enu_stack, str):
-        asc_enu_stack, desc_enu_stack = read_intersections(asc_enu_stack, desc_enu_stack)
+        asc_enu_stack, desc_enu_stack = subset.read_intersections(asc_enu_stack, desc_enu_stack)
         # _, _, asc_enu_stack, = read_los_map_file(asc_enu_stack)
         # _, _, desc_enu_stack = read_los_map_file(desc_enu_stack)
     if asc_enu_stack.shape != desc_enu_stack.shape:
         raise ValueError("asc_enu_stack not same shape as desc_enu_stack")
 
     if isinstance(asc_img, str) or isinstance(desc_img, str):
-        asc_img, desc_img = read_intersections(asc_img, desc_img, asc_band, desc_band)
+        asc_img, desc_img = subset.read_intersections(asc_img, desc_img, asc_band, desc_band)
         # with h5py.File(asc_img, "r") as f:
         #     asc_img = f[asc_dset][:]
     if asc_img.shape != desc_img.shape:
@@ -74,12 +75,18 @@ def solve_east_up(
     Apinv = np.linalg.pinv(np.moveaxis(asc_desc_eu, -1, 0))
     # This einsum results in (npixel, 2), where each row is [east, up]
     east_up_rows = np.einsum('ijk, ki -> ij', Apinv, asc_desc_img)
-    return east_up_rows[:, 0].reshape(asc_img.shape), east_up_rows[:, 1].reshape(asc_img.shape)
+    east = east_up_rows[:, 0].reshape(asc_img.shape).astype(np.float32)
+    up = east_up_rows[:, 1].reshape(asc_img.shape.astype(np.float32))
+    if outfile:
+        subset.write_outfile(outfile, np.stack([east, up], axis=0))
+
+    return east, up
 
 
 def read_los_map_file(los_map_file):
     """Returns the (lats, lons, ENU stack) from `los_map_file`"""
     if los_map_file.endswith(".tif"):
+        import rasterio as rio
         with rio.open(los_map_file) as src:
             return np.stack([src.read(i) for i in (1, 2, 3)], axis=0)
     with h5py.File(los_map_file, "r") as f:
@@ -235,26 +242,3 @@ def plot_enu_maps(enu_ll, title=None, cmap='jet'):
     cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
     fig.colorbar(axim, cax=cbar_ax)
     fig.suptitle(title)
-
-
-def intersect_bounds(fname1, fname2):
-    with rio.open(fname1) as src1, rio.open(fname2) as src2:
-        b1 = shapely.geometry.box(*src1.bounds)
-        b2 = shapely.geometry.box(*src2.bounds)
-        return b1.intersection(b2).bounds
-
-
-def read_intersections(fname1, fname2, band1=None, band2=None):
-    bounds = intersect_bounds(fname1, fname2)
-    with rio.open(fname1) as src1, rio.open(fname2) as src2:
-        w1 = src1.window(*bounds)
-        w2 = src2.window(*bounds)
-        if band1 is None:
-            r1 = np.stack([src1.read(n, window=w1) for n in range(1, src1.count + 1)], axis=0)
-        else:
-            r1 = src1.read(band1, window=w1)
-        if band2 is None:
-            r2 = np.stack([src2.read(n, window=w2) for n in range(1, src2.count + 1)], axis=0)
-        else:
-            r2 = src2.read(band2, window=w2)
-        return r1, r2

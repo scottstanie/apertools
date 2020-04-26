@@ -420,4 +420,5 @@ def smallslc(
 @click.option("--nodata", default="0")
 @click.option("--outtype", default="Float32")
 def geotiff(infile, rsc, output, dset, nodata, outtype):
-    return hdf5_geotiff.hdf5_to_geotiff(infile, rsc, output, dset, nodata, outtype)
+    from .hdf5_geotiff import hdf5_to_geotiff
+    return hdf5_to_geotiff(infile, rsc, output, dset, nodata, outtype)
