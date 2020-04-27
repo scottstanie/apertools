@@ -38,28 +38,24 @@ def find_enu_coeffs(lon, lat, los_map_file=None, verbose=False):
 
 
 def solve_east_up(
-    asc_enu_stack,
-    desc_enu_stack,
-    asc_img,
-    desc_img,
+    asc_enu_stack_fname,
+    desc_enu_stack_fname,
+    asc_img_fname,
+    desc_img_fname,
     asc_band=1,
     desc_band=1,
-    asc_dset="velos/1",
-    desc_dset="velos/1",
     outfile=None,
+    # asc_dset="velos/1",
+    # desc_dset="velos/1",
 ):
-    if isinstance(asc_enu_stack, str) or isinstance(desc_enu_stack, str):
-        asc_enu_stack, desc_enu_stack = subset.read_intersections(asc_enu_stack, desc_enu_stack)
-        # _, _, asc_enu_stack, = read_los_map_file(asc_enu_stack)
-        # _, _, desc_enu_stack = read_los_map_file(desc_enu_stack)
-    if asc_enu_stack.shape != desc_enu_stack.shape:
-        raise ValueError("asc_enu_stack not same shape as desc_enu_stack")
+    asc_enu_stack, desc_enu_stack = subset.read_intersections(asc_enu_stack_fname,
+                                                              desc_enu_stack_fname)
+    asc_img, desc_img = subset.read_intersections(asc_img_fname, desc_img_fname, asc_band,
+                                                  desc_band)
 
-    if isinstance(asc_img, str) or isinstance(desc_img, str):
-        asc_img, desc_img = subset.read_intersections(asc_img, desc_img, asc_band, desc_band)
-        # with h5py.File(asc_img, "r") as f:
-        #     asc_img = f[asc_dset][:]
     if asc_img.shape != desc_img.shape:
+        raise ValueError("asc_img not same shape as desc_img")
+    if asc_enu_stack.shape != desc_enu_stack.shape:
         raise ValueError("asc_enu_stack not same shape as desc_enu_stack")
 
     # Form a (2, 2, npixels) array of system matrices A
@@ -76,9 +72,13 @@ def solve_east_up(
     # This einsum results in (npixel, 2), where each row is [east, up]
     east_up_rows = np.einsum('ijk, ki -> ij', Apinv, asc_desc_img)
     east = east_up_rows[:, 0].reshape(asc_img.shape).astype(np.float32)
-    up = east_up_rows[:, 1].reshape(asc_img.shape.astype(np.float32))
+    up = east_up_rows[:, 1].reshape(asc_img.shape).astype(np.float32)
     if outfile:
-        subset.write_outfile(outfile, np.stack([east, up], axis=0))
+        transform = subset.get_intersect_transform(asc_img_fname, desc_img_fname)
+        crs = subset.get_crs(asc_img_fname)
+        nodata = subset.get_nodata(asc_img_fname)
+        out_stack = np.stack([east, up], axis=0)
+        subset.write_outfile(outfile, out_stack, transform=transform, crs=crs, nodata=nodata)
 
     return east, up
 

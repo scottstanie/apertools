@@ -863,11 +863,11 @@ def save_geolist_to_h5(
     logger.debug("Saving geo dates to %s / %s" % (out_file, GEOLIST_DSET))
     with h5py.File(out_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
-        # f[GEOLIST_DSET] = json.dumps(_geolist_to_str(geo_date_list))
+        # f[GEOLIST_DSET] = json.dumps(geolist_to_str(geo_date_list))
         if dset_name is not None:
-            f[dset_name].attrs[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
+            f[dset_name].attrs[GEOLIST_DSET] = geolist_to_str(geo_date_list)
         else:
-            f[GEOLIST_DSET] = _geolist_to_str(geo_date_list)
+            f[GEOLIST_DSET] = geolist_to_str(geo_date_list)
 
 
 def save_intlist_to_h5(
@@ -886,16 +886,16 @@ def save_intlist_to_h5(
     logger.info("Saving igram dates to %s / %s" % (out_file, INTLIST_DSET))
     with h5py.File(out_file, "a") as f:
         if dset_name is not None:
-            f[dset_name].attrs[INTLIST_DSET] = _intlist_to_str(int_date_list)
+            f[dset_name].attrs[INTLIST_DSET] = intlist_to_str(int_date_list)
         else:
-            f[INTLIST_DSET] = _intlist_to_str(int_date_list)
+            f[INTLIST_DSET] = intlist_to_str(int_date_list)
 
 
-def _geolist_to_str(geo_date_list):
+def geolist_to_str(geo_date_list):
     return np.array([d.strftime(DATE_FMT) for d in geo_date_list]).astype("S")
 
 
-def _intlist_to_str(int_date_list):
+def intlist_to_str(int_date_list):
     """Date pairs to Nx2 numpy array or strings"""
     return np.array([(a.strftime(DATE_FMT), b.strftime(DATE_FMT))
                      for a, b in int_date_list]).astype("S")
