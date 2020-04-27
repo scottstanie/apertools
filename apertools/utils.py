@@ -81,6 +81,8 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False):
     """
     if row_looks == 1 and col_looks == 1:
         return arr
+    if isinstance(arr, dict):
+        return take_looks_rsc(arr, row_looks, col_looks)
     if np.iscomplexobj(arr) and separate_complex:
         mag_looked = take_looks(np.abs(arr), row_looks, col_looks)
         phase_looked = take_looks(np.angle(arr), row_looks, col_looks)
@@ -106,6 +108,17 @@ def _find_look_outsize(shape, row_looks, col_looks):
     nrows, ncols = shape
     new_rows, new_cols = shape[0] // row_looks, shape[1] // col_looks
     return new_rows, new_cols
+
+
+def take_looks_rsc(rsc_data, row_looks, col_looks):
+    nrows, ncols = rsc_data["file_length"], rsc_data["width"]
+
+    out_rsc = rsc_data.copy()
+    out_rsc["x_step"] = rsc_data["x_step"] * col_looks
+    out_rsc["y_step"] = rsc_data["y_step"] * row_looks
+    out_rsc["file_length"] = nrows // row_looks
+    out_rsc["width"] = ncols // col_looks
+    return out_rsc
 
 
 def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC"):
