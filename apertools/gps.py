@@ -457,7 +457,6 @@ def load_gps_los_data(
         enu_coeffs = apertools.los.find_enu_coeffs(
             lon,
             lat,
-            geo_path=geo_path,
             los_map_file=los_map_file,
         )
 
