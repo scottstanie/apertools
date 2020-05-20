@@ -432,7 +432,6 @@ def plot_gps_enu(station=None,
 
 
 def load_gps_los_data(
-    geo_path=None,
     los_map_file=None,
     station_name=None,
     to_cm=True,
@@ -480,7 +479,6 @@ def load_gps_los_data(
 
     if reference_station is not None:
         dt_ref, losref = load_gps_los_data(
-            geo_path,
             los_map_file,
             reference_station,
             to_cm,
