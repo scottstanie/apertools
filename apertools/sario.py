@@ -108,7 +108,7 @@ UNW_FILENAME = "unw_stack.h5"
 CC_FILENAME = "cc_stack.h5"
 
 # dataset names for general 3D stacks
-STACK_DSET = "stack"
+STACK_DSET = "stack/1"
 STACK_MEAN_DSET = "mean_stack"
 STACK_FLAT_DSET = "deramped_stack"
 STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"

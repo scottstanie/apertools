@@ -390,8 +390,7 @@ def smallslc(
     List as many filenames with the same rsc as necessary
     """
     import apertools.sario
-    import apertools.utils
-    x_uprate, y_uprate = apertools.utils.calc_upsample_rate(rsc_filename=rsc_file)
+    x_uprate, y_uprate = apertools.sario.calc_upsample_rate(rsc_filename=rsc_file)
     pct_x = int(100 / x_uprate / downrate)
     pct_y = int(100 / y_uprate / downrate)
     for f in filenames:

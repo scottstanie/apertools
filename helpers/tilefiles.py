@@ -27,7 +27,7 @@ def _translate(vf, out, new_width, new_height, outformat):
 
 
 def convert(vrtlist, new_width, new_height, outformat="ROI_PAC", outext=".slc"):
-    outfilelist = [f.replace(".geo.vrt", outext) for f in vrtlist]
+    outfilelist = ["small_" + f.replace(".geo.vrt", outext) for f in vrtlist]
     with open("filelist.txt", "w") as fl:
         fl.write("\n".join(outfilelist) + "\n")
 
@@ -92,18 +92,14 @@ if __name__ == "__main__":
     outfilelist = convert(vrtlist, new_width, new_height, outformat="ROI_PAC", outext=".slc")
 
     # Now convert the small binary slcs into one tile file
-    stack_file = "stackfile"
+    stackfile = "stackfile"
     # usage: makestackfile filelist stackfile length nigrams
-    cmd = "makestackfile filelist.txt {stack} {w} {N}".format(
-        stack=stack_file,
-        w=new_width,
-        N=len(outfilelist),
-    )
+    cmd = f"makestackfile filelist.txt {stackfile} {new_width} {len(outfilelist)}"
     print("Running ", cmd)
     subprocess.run(cmd, shell=True)
     # usage: tilefile infile outfile tiles_across len lines
     cmd = "tilefile {inp} {out} {ta} {w} {h}".format(
-        inp=stack_file,
+        inp=stackfile,
         out=args.outfile,
         ta=num_tiles_across,
         w=new_width,
