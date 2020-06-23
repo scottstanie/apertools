@@ -449,8 +449,9 @@ def load_gps_los_data(
     Returns the timeseries, and the datetimes of the points
 
     This assumes that the los is AWAY from the satellite towards the ground.
-    We multiply the GPS data by -1 here so that ground moving upward
-    (towards the mostly-pointing-down satellite) shows positive value.
+
+    Ground moving upward (towards the mostly-pointing-down satellite) shows negate value,
+    as it is a smaller distance along the LOS (increase in LOS -> positive value)
     """
     if enu_coeffs is None:
         lon, lat = station_lonlat(station_name)
@@ -467,8 +468,7 @@ def load_gps_los_data(
         end_date=end_date,
         force_download=force_download,
     )
-    # See docstring about negative 1 so vertical up ground gives a positive value
-    enu_data = -1 * df[['east', 'north', 'up']].T
+    enu_data = df[['east', 'north', 'up']].T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
     if zero_start:
