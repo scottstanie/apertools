@@ -409,19 +409,19 @@ def plot_gps_enu(station=None,
     axes[0].plot(dts, east_cm, 'b.')
     axes[0].set_ylabel('east (cm)')
     # axes[0].plot(dts, moving_average(east_cm, days_smooth), 'r-')
-    axes[0].plot(dts, pd.Series(east_cm).rolling(days_smooth, min_periods=10).mean(), 'r-')
+    axes[0].plot(dts, moving_average(east_cm), 'r-')
     axes[0].grid(True)
     remove_xticks(axes[0])
 
     axes[1].plot(dts, north_cm, 'b.')
     axes[1].set_ylabel('north (cm)')
-    axes[1].plot(dts, pd.Series(north_cm).rolling(days_smooth, min_periods=10).mean(), 'r-')
+    axes[1].plot(dts, moving_average(north_cm), 'r-')
     axes[1].grid(True)
     remove_xticks(axes[1])
 
     axes[2].plot(dts, up_cm, 'b.')
     axes[2].set_ylabel('up (cm)')
-    axes[2].plot(dts, pd.Series(up_cm).rolling(days_smooth, min_periods=10).mean(), 'r-')
+    axes[2].plot(dts, moving_average(up_cm), 'r-')
     axes[2].grid(True)
     # remove_xticks(axes[2])
 
@@ -442,6 +442,7 @@ def load_gps_los_data(
     reference_station=None,
     enu_coeffs=None,
     force_download=False,
+    days_smooth=0,
 ):
     """Load the GPS timeseries of a station name
 
@@ -489,6 +490,9 @@ def load_gps_los_data(
             force_download=force_download,
         )
         return _merge_los(df['dt'], los_gps_data, dt_ref, losref)
+    
+    if days_smooth:
+        los_gps_data = moving_average(los_gps_data, days_smooth)
 
     return df['dt'], los_gps_data
 
@@ -542,7 +546,7 @@ def find_insar_ts(defo_filename='deformation.h5', station_name_list=[], window_s
                                  station=station_name,
                                  window_size=window_size))
 
-    geolist = apertools.sario.load_geolist_from_h5(defo_filename)
+    geolist = apertools.sario.load_geolist_from_h5(defo_filename, dset=apertools.sario.STACK_DSET)
     return geolist, insar_ts_list
 
 
@@ -572,13 +576,15 @@ def _series_to_date(series):
     return pd.to_datetime(series).apply(lambda row: row.date())
 
 
-def create_insar_gps_df(geo_path,
+def create_insar_gps_df(geo_path="..",
+                        los_map_file="los_map.h5",
                         defo_filename='deformation.h5',
                         station_name_list=[],
                         reference_station=None,
                         window_size=1,
                         days_smooth_insar=None,
                         days_smooth_gps=None,
+                        create_diffs=True,
                         **kwargs):
     """Set days_smooth to None or 0 to avoid any data smoothing
 
@@ -594,10 +600,13 @@ def create_insar_gps_df(geo_path,
         )
 
     insar_df = create_insar_df(defo_filename, station_name_list, window_size, days_smooth_insar)
-    gps_df = create_gps_los_df(geo_path, station_name_list, days_smooth_gps)
+    gps_df = create_gps_los_df(los_map_file, station_name_list, days_smooth_gps)
     df = combine_insar_gps_dfs(insar_df, gps_df)
     if reference_station:
         df = subtract_reference(df, reference_station)
+    if create_diffs:
+        for s in station_name_list:
+            df[f"{s}_diff"] = df[f"{s}_gps"] - df[f"{s}_insar"]
     return _remove_bad_cols(df)
 
 
@@ -660,10 +669,10 @@ def create_insar_df(defo_filename='deformation.h5',
     return insar_df
 
 
-def create_gps_los_df(geo_path, station_name_list=[], days_smooth=30):
+def create_gps_los_df(los_map_file="los_map.h5", station_name_list=[], days_smooth=30):
     df_list = []
     for stat in station_name_list:
-        gps_dts, los_gps_data = load_gps_los_data(geo_path, stat)
+        gps_dts, los_gps_data = load_gps_los_data(los_map_file=los_map_file, station_name=stat)
 
         df = pd.DataFrame({"dts": _series_to_date(gps_dts)})
         df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
