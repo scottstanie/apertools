@@ -17,6 +17,7 @@ if in_screen():
     print("Currently in screen, using agg backend")
     matplotlib.use("agg")
 import matplotlib.pyplot as plt
+plt.ion()
 
 # get_ipython().run_line_magic('matplotlib', 'tk')
 
