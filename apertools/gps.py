@@ -478,6 +478,9 @@ def load_gps_los_data(
         logger.debug("Making GPS data 0 mean")
         los_gps_data = los_gps_data - np.mean(los_gps_data)
 
+    if days_smooth:
+        los_gps_data = moving_average(los_gps_data, days_smooth)
+
     if reference_station is not None:
         dt_ref, losref = load_gps_los_data(
             los_map_file,
@@ -487,12 +490,11 @@ def load_gps_los_data(
             zero_start,
             start_date,
             end_date,
+            reference_station=None,
             force_download=force_download,
+            days_smooth=days_smooth,
         )
         return _merge_los(df['dt'], los_gps_data, dt_ref, losref)
-    
-    if days_smooth:
-        los_gps_data = moving_average(los_gps_data, days_smooth)
 
     return df['dt'], los_gps_data
 
@@ -517,7 +519,7 @@ def moving_average(arr, window_size=7):
     if not window_size:
         return arr
     # return uniform_filter1d(arr, size=window_size, mode='nearest')
-    return pd.Series(arr).rolling(window_size).mean()
+    return np.array(pd.Series(arr).rolling(window_size).mean())
 
 
 def find_insar_ts(defo_filename='deformation.h5', station_name_list=[], window_size=1):
