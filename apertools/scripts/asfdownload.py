@@ -100,7 +100,7 @@ def downlaod_data(output="metalink", **kwargs):
     outname = query_only(output="metalink", **kwargs)
 
     aria2_conf = os.path.expanduser("~/.aria2/asf.conf")
-    download_cmd = """aria2c --http-auth-challenge=true --conf-path={} {}""".format(
+    download_cmd = """aria2c --http-auth-challenge=true--continue=true --conf-path={} {}""".format(
         aria2_conf,
         outname,
     )
