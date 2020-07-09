@@ -273,7 +273,7 @@ def dem_rate(rsc_file, orig_rsc_file):
     if orig_rsc_file is not None:
         orig_x_uprate, orig_y_uprate = apertools.sario.calc_upsample_rate(
             rsc_filename=orig_rsc_file)
-        click.echo("(%d, %d) looks were taken on %s to get %s" %
+        click.echo("(%.0f, %.0f) looks were taken on %s to get %s" %
                    (orig_x_uprate / x_uprate, orig_y_uprate / y_uprate, orig_rsc_file, rsc_file))
 
 
