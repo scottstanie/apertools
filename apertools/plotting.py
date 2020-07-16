@@ -193,7 +193,7 @@ def view_stack(
         raise ValueError("display_img must be an int or ndarray-like obj")
 
     title = title or "Deformation Time Series"  # Default title
-    plot_image_shifted(img,
+    plot_image(img,
                        fig=imagefig,
                        title=title,
                        cmap=cmap,
@@ -382,24 +382,32 @@ def plot_shapefile(filename, fig=None, ax=None, z=None):
 
 # def plotcompare(fnames, dset="velos", vmax=25, vmin=-25, cmap="seismic_wide", **kwargs):
 def plot_img_diff(arrays=None,
-                  dset="velos",
+                  dset="velos/1",
+                  fnames=[],
                   vm=20,
+                  vdiff=4,
                   vmax=None,
                   vmin=None,
                   twoway=True,
                   cmap="seismic_wide_y",
                   show=True,
                   **kwargs):
-    """Rough tool to compare several plots at once"""
-    # if arrays is None:
-    #     arrays = [sario.load(f, **kwargs) for f in fnames]
+    """Compare two images and their difference"""
+    if arrays is None:
+        from apertools import sario
+        arrays = [sario.load(f, dset=dset, **kwargs) for f in fnames]
+
     n = len(arrays)
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(1, n, sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, n+1, sharex=True, sharey=True)
     for ii in range(n):
         axim = axes[ii].imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
-    fig.colorbar(axim)
+    fig.colorbar(axim, ax=axes[-2])
+    # Now different image at end
+    axim = axes[-1].imshow(arrays[0] - arrays[1], cmap=cmap, vmax=vdiff, vmin=-vdiff)
+    axes[-1].set_title("left - middle")
+    fig.colorbar(axim, ax=axes[-1])
     # [f.close() for f in files]
     if show:
         plt.show(block=False)
