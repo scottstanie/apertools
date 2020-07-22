@@ -121,6 +121,13 @@ def take_looks_rsc(rsc_data, row_looks, col_looks):
     return out_rsc
 
 
+def scale_dset(filename, dset, scale):
+    import h5py
+    with h5py.File(filename, "r+") as f:
+        data = f[dset]
+        data[...] *= scale
+
+
 def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC"):
     """Downsample an array on disk using gdal_translate
 

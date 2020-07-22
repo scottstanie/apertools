@@ -35,7 +35,8 @@ def cli(ctx, verbose, path):
 
 # COMMAND: view-stack
 @cli.command('view-stack')
-@click.option("--filename", default='deformation.npy', help="Name of saved deformation stack")
+@click.option("--filename", default='deformation.h5', help="Name of saved file containing deformation stack")
+@click.option("--dset", default='stack/1', help="Dataset within hdf5 file")
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
 @click.option("--title", help="Title for image plot")
@@ -48,23 +49,15 @@ def cli(ctx, verbose, path):
               is_flag=True,
               default=False)
 @click.pass_obj
-def view_stack(context, filename, cmap, label, title, row_start, row_end, col_start, col_end,
+def view_stack(context, filename, dset, cmap, label, title, row_start, row_end, col_start, col_end,
                rowcol):
-    """Explore timeseries on deformation image.
-
-    If deformation.npy and geolist.npy or .unw files are not in current directory,
-    use the --path option:
-
-        aper --path /path/to/igrams view_stack
-
+    """Explore timeseries on stack of deformation images.
     """
+    import apertools.sario, apertools.latlon, apertools.plotting
     import numpy as np
-    if filename.endswith(".h5"):
-        h_file = h5py.File(filename, "r")
-        deformation = h_file["deformation"]
-        geolist = [datetime.strptime(g.decode("ascii"), "%Y%m%d").date() for g in h_file["geolist"]]
-    else:
-        geolist, deformation = apertools.sario.load_deformation(context['path'], filename=filename)
+    with h5py.File(filename, "r") as f:
+        deformation = f[dset][:]
+        geolist = apertools.sario.load_geolist_from_h5(filename, dset)
 
     if geolist is None or deformation is None:
         return
@@ -74,7 +67,7 @@ def view_stack(context, filename, cmap, label, title, row_start, row_end, col_st
     else:
         rsc_data = apertools.sario.load(os.path.join(context['path'], 'dem.rsc'))
 
-    deformation = apertools.latlon.LatlonImage(data=deformation, dem_rsc=rsc_data)
+    deformation = apertools.latlon.LatlonImage(data=deformation, rsc_data=rsc_data)
     deformation = deformation[:, row_start:row_end, col_start:col_end]
     img = np.mean(deformation[-3:], axis=0)
 

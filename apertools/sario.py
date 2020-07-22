@@ -804,7 +804,7 @@ def find_geos(directory=".", parse=True, filename=None):
 
 def _strip_geoname(name):
     """Leaves just date from format S1A_YYYYmmdd.geo"""
-    return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '')
+    return name.replace('S1A_', '').replace('S1B_', '').replace('.geo', '').replace('.vrt', '')
 
 
 def find_igrams(directory=".", parse=True, filename=None):
