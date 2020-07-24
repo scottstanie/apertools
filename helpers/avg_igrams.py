@@ -13,7 +13,8 @@ import rasterio as rio
 from apertools import sario
 from insar.prepare import remove_ramp
 
-if __name__ == "__main__":
+
+def main():
     p = argparse.ArgumentParser()
     p.add_argument(
         "--outfile",
@@ -91,3 +92,20 @@ if __name__ == "__main__":
         ])
         # if idx > 3:
         #     break
+
+
+def plot_avgs(avgs, fnames, cmap="seismic"):
+    import matplotlib.pyplot as plt
+    vmin, vmax = np.nanmin(avgs), np.nanmax(avgs)
+    vm = np.max(np.abs([vmin, vmax]))
+    ntiles = int(np.ceil(np.sqrt(len(avgs))))
+    fig, axes = plt.subplots(ntiles, ntiles)
+    for (avg, ax, fn) in zip(avgs, axes.ravel(), fnames):
+        axim = ax.imshow(avg, vmin=-vm, vmax=vm, cmap=cmap)
+        ax.set_title(f"{fn}: {np.var(avg):.2f}")
+        fig.colorbar(axim, ax=ax)
+    return fig, axes
+
+
+if __name__ == "__main__":
+    main()
