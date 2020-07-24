@@ -160,6 +160,9 @@ def load_file(filename,
         ValueError: if sentinel files loaded without a .rsc file in same path
             to give the file width
     """
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"No such file or directory: '{filename}'")
+
     if downsample:
         if (downsample < 1 or not isinstance(downsample, int)):
             raise ValueError("downsample must be a positive integer")
