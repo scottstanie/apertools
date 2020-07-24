@@ -11,6 +11,7 @@ import argparse
 import rasterio as rio
 
 from apertools import sario
+from insar.prepare import remove_ramp
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
@@ -24,6 +25,12 @@ if __name__ == "__main__":
         type=float,
         default=1,
         help="pct size of original igrams (default=%(default)s)",
+    )
+    p.add_argument(
+        "--deramp",
+        action="store_true",
+        default=True,
+        help="remove a linear ramp from phase after averaging (default=%(default)s)",
     )
     args = p.parse_args()
 
@@ -40,6 +47,7 @@ if __name__ == "__main__":
 
     for (idx, gdate) in enumerate(geo_dates):
         cur_unws = [f for (pair, f) in zip(ifg_date_list, unw_file_list) if gdate in pair]
+        # reset the matrix to all zeros
         out = 0
         for unwf in cur_unws:
             with rio.open(unwf) as ds:
@@ -49,6 +57,10 @@ if __name__ == "__main__":
         print("Averaging {} unwrapped igrams for {} ({} out of {})".format(
             len(cur_unws), gdate, idx + 1, len(geo_dates)))
         out /= len(cur_unws)
+
+        if args.deramp:
+            out = remove_ramp(out, deramp_order=1, mask=np.ma.nomask)
+
         outfile = "avg_" + gdate.strftime("%Y%m%d") + ".tif"
         with rio.open(
                 outfile,
