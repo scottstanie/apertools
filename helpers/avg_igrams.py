@@ -2,6 +2,7 @@
 """
 Averages all unwrapped igrams, making images of the averge phase per date
 """
+import glob
 import itertools
 import subprocess
 # import multiprocessing
@@ -94,8 +95,22 @@ def main():
         #     break
 
 
-def plot_avgs(avgs, fnames, cmap="seismic"):
+def load_avg_igrams():
+    avgs = []
+    fnames = glob.glob("avg*[0-9].tif")
+    for f in fnames:
+        with rio.open(f) as ds:
+            avgs.append(ds.read(1))
+
+    avgs = np.stack(avgs)
+    return avgs, fnames
+
+
+def plot_avgs(avgs=None, fnames=None, cmap="seismic"):
     import matplotlib.pyplot as plt
+    if avgs is None or fnames is None:
+        avgs, fnames = load_avg_igrams()
+
     vmin, vmax = np.nanmin(avgs), np.nanmax(avgs)
     vm = np.max(np.abs([vmin, vmax]))
     ntiles = int(np.ceil(np.sqrt(len(avgs))))
@@ -107,5 +122,5 @@ def plot_avgs(avgs, fnames, cmap="seismic"):
     return fig, axes
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+# main()

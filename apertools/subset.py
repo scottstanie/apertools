@@ -2,10 +2,12 @@ import numpy as np
 import shapely.geometry
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
 from apertools.log import get_log
+from apertools.latlon import km_to_deg
 logger = get_log()
 
 
 def read_subset(bbox, in_fname, driver=None, bands=None):
+    # bbox: left, bot, right, top
     with rio.open(in_fname, driver=driver) as src:
         w = src.window(*bbox)
         bands = bands or range(1, src.count + 1)
@@ -108,3 +110,10 @@ def read_intersections(fname1, fname2, band1=None, band2=None):
         else:
             r2 = src2.read(band2, window=w2)
         return r1, r2
+
+
+def bbox_around_point(lon, lat, side_km=25):
+    """ Finds (left, bot, right top) in deg around a lon, lat point"""
+    side_deg = km_to_deg(side_km)
+    r = side_deg / 2
+    return (lon - r, lat - r, lon + r, lat + r)
