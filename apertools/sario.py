@@ -1057,6 +1057,26 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
     out_raster = None
 
 
+def save_image_using_existing(arr, outname, input_fname, out_dtype=None, nodata=None):
+    """Writes out an array using the georeferencing data from `input_fname`"""
+    import rasterio as rio
+    with rio.open(input_fname) as src:
+        if (src.height, src.width) != arr.shape:
+            raise ValueError(f"{input_fname} must be same size as arr to use georeference data")
+
+        with rio.open(outname,
+                      "w",
+                      driver=src.driver,
+                      height=arr.shape[0],
+                      width=arr.shape[1],
+                      transform=src.transform,
+                      count=1,
+                      dtype=(out_dtype or arr.dtype),
+                      crs=src.crs,
+                      nodata=nodata) as dest:
+            dest.write(arr, 1)
+
+
 def save_as_vrt(filename=None,
                 array=None,
                 rows=None,
