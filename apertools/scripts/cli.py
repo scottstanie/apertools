@@ -35,7 +35,9 @@ def cli(ctx, verbose, path):
 
 # COMMAND: view-stack
 @cli.command('view-stack')
-@click.option("--filename", default='deformation.h5', help="Name of saved file containing deformation stack")
+@click.option("--filename",
+              default='deformation.h5',
+              help="Name of saved file containing deformation stack")
 @click.option("--dset", default='stack/1', help="Dataset within hdf5 file")
 @click.option("--cmap", default='seismic', help="Colormap for image display.")
 @click.option("--label", default='Centimeters', help="Label on colorbar/yaxis for plot")
@@ -372,7 +374,10 @@ def save_vrt(filenames, rsc_file, cols, rows, dtype, band, num_bands):
 @cli.command("smallslc")
 @click.argument("filenames", nargs=-1)
 @click.option("--rsc-file", help="If exists, the .rsc file of data")
-@click.option("--downrate", default=10, help="Downsampling beyond the 30m SRTM resolution")
+@click.option("--downrate",
+              default=10,
+              help="Downsampling beyond the 30m SRTM resolution",
+              show_default=True)
 def smallslc(
     filenames,
     rsc_file,
@@ -409,8 +414,17 @@ def smallslc(
 @click.option("--output", "-o", help="output geotiff file")
 @click.option("--rsc", help=".rsc file containing lat/lon start and steps")
 @click.option("--dset", help="specify to only save one dataset")
-@click.option("--nodata", default="0")
-@click.option("--outtype", default="Float32")
+@click.option("--nodata", default="0", show_default=True)
+@click.option("--outtype", default="Float32", show_default=True)
 def geotiff(infile, rsc, output, dset, nodata, outtype):
     from .hdf5_geotiff import hdf5_to_geotiff
     return hdf5_to_geotiff(infile, rsc, output, dset, nodata, outtype)
+
+
+@cli.command("set-unit")
+@click.argument("filenames", nargs=-1)
+@click.option("--unit", "-u", default="cm", help="unit for file", show_default=True)
+def set_unit(filenames, unit):
+    import apertools.sario
+    for f in filenames:
+        apertools.sario.set_unit(f, unit)
