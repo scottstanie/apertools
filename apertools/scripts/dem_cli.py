@@ -23,13 +23,14 @@ import shapely.wkt
 PATH = os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
-def positive_small_int(argstring):
+def positive_small(argstring):
     try:
-        intval = int(argstring)
-        assert (intval > 0 and intval < 50)
+        # val = int(argstring)
+        val = float(argstring)
+        assert (val > 0 and val < 50)
     except (ValueError, AssertionError):
         raise ArgumentTypeError("--rate must be positive integer < 50")
-    return intval
+    return val
 
 
 DESCRIPTION = """Form a cropped (upsampled) DEM from SRTM GL1
@@ -79,14 +80,14 @@ def cli():
         "--xrate",
         "-x",
         default=1,
-        type=positive_small_int,
+        type=positive_small,
         help="Upsample DEM in x (range) direction (default=%(default)s)",
     )
     parser.add_argument(
         "--yrate",
         "-y",
         default=1,
-        type=positive_small_int,
+        type=positive_small,
         help="Upsample DEM in x (range) direction (default=%(default)s)",
     )
     parser.add_argument(
