@@ -476,3 +476,22 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
     if not os.path.exists(path):
         os.makedirs(path)
     return path
+
+
+def az_inc_to_enu(infile, outfile='geo_los_enu.tif'):
+    cmd = f'gdal_calc.py -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile geo_los_e.tif --calc="sin(deg2rad(A)) * cos(deg2rad(B+90))" '
+    print(cmd)
+    subprocess.run(cmd, check=True, shell=True)
+
+    f'gdal_calc.py -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile geo_los_n.tif --calc="sin(deg2rad(A)) * sin(deg2rad(B+90))" '
+    print(cmd)
+    subprocess.run(cmd, check=True, shell=True)
+
+    f'gdal_calc.py -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile geo_los_u.tif --calc="cos(deg2rad(A))" '
+    print(cmd)
+    subprocess.run(cmd, check=True, shell=True)
+
+    f'gdal_merge.py -separate -o {outfile} geo_los_e.tif geo_los_n.tif geo_los_u.tif '
+    print(cmd)
+    subprocess.run(cmd, check=True, shell=True)
+    subprocess.run('rm -f geo_los_e.tif geo_los_e.tif geo_los_e.tif', shell=True, check=True)

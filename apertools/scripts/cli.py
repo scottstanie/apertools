@@ -428,3 +428,11 @@ def set_unit(filenames, unit):
     import apertools.sario
     for f in filenames:
         apertools.sario.set_unit(f, unit)
+
+
+@cli.command("az-inc-to-enu")
+@click.argument("infile")
+@click.option("--outfile", "-o", default="los_enu.tif", show_default=True)
+def convert_to_enu(infile, outfile):
+    import apertools.utils
+    apertools.utils.az_inc_to_enu(infile, outfile)
