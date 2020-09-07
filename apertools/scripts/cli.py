@@ -351,8 +351,14 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
 @click.option("--rows", type=int, help="Number of rows (file_length) in file")
 @click.option("--dtype", help="Optional number dtype string")
 @click.option("--band", type=int, help="The band number to use for the VRT")
+@click.option(
+    "--interleave",
+    type=click.Choice(["BIP", "BIL", "BSQ"]),
+    default=None,
+    help="Type of pixel interleave in binary file",
+)
 @click.option("--num-bands", type=int, help="Number of bands in file")
-def save_vrt(filenames, rsc_file, cols, rows, dtype, band, num_bands):
+def save_vrt(filenames, rsc_file, cols, rows, dtype, band, interleave, num_bands):
     """Save GDAL .vrt file binary raster loading
 
     List as many filenames with the same rsc as necessary
@@ -366,6 +372,7 @@ def save_vrt(filenames, rsc_file, cols, rows, dtype, band, num_bands):
             dtype=dtype,
             rsc_file=rsc_file,
             band=band,
+            interleave=interleave,
             num_bands=num_bands,
         )
 

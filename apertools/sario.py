@@ -1242,7 +1242,11 @@ def create_derived_band(src_filename, outfile=None, src_dtype="CFloat32", desc=N
 
 
 def get_interleave(filename, num_bands=None):
-    """Returns band interleave format, and number of bands"""
+    """Returns band interleave format, and number of bands
+    
+    Band interleaved by line (BIL), band interleaved by pixel (BIP), and band sequential (BSQ)
+    https://desktop.arcgis.com/en/arcmap/10.3/manage-data/raster-and-images/bil-bip-and-bsq-raster-files.htm
+    """
     if num_bands == 1:
         # 1 band is always same: its just all pixels in a row
         return "BIP", 1
@@ -1260,7 +1264,7 @@ def get_interleave(filename, num_bands=None):
 
 def get_offsets(dtype, interleave, band, width, length, num_bands):
     """
-    From ISCE Image.py:
+    From ISCE Image.py
     """
     bytes_per_pix = np.dtype(dtype).itemsize
     if interleave == "BIL":
