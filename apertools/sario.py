@@ -1109,14 +1109,24 @@ def save_as_vrt(filename=None,
     if outfile is None:
         raise ValueError("Need outfile or filename to save")
 
-    # Set geotransform (based on rsc data) and projection
+    # Get geotransform and project based on rsc data, or existing GDAL info
     if rsc_data is None:
         if rsc_file is None:
             # rsc_file = rsc_file if rsc_file else find_rsc_file(filename)
-            print("Warning: No .rsc file or data given")
-            geotrans = None
+            try:
+                ds = gdal.Open(filename)
+                geotrans = ds.GetGeoTransform()
+                srs = ds.GetSpatialRef()
+            except:
+                print(f"Warning: Cant get geotransform from {filename}, no .rsc file or data given")
+                geotrans = None
+                srs = gdal.osr.SpatialReference()
+                srs.SetWellKnownGeogCS("WGS84")
         else:
             rsc_data = load(rsc_file)
+            geotrans = rsc_to_geotransform(rsc_data)
+            srs = gdal.osr.SpatialReference()
+            srs.SetWellKnownGeogCS("WGS84")
 
     if array is not None:
         dtype = array.dtype
@@ -1149,14 +1159,11 @@ def save_as_vrt(filename=None,
     # out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=1, eType=gdal_dtype)
     out_raster = vrt_driver.Create(outfile, xsize=cols, ysize=rows, bands=0)
 
-    if rsc_data is not None:
-        geotrans = rsc_to_geotransform(rsc_data)
+    if geotrans is not None:
         out_raster.SetGeoTransform(geotrans)
     else:
         print("Warning: No GeoTransform could be made/set")
 
-    srs = gdal.osr.SpatialReference()
-    srs.SetWellKnownGeogCS("WGS84")
     out_raster.SetProjection(srs.ExportToWkt())
 
     image_offset, pixel_offset, line_offset = get_offsets(

@@ -426,7 +426,8 @@ def looked_dem(src_dem, dest_rsc, outname):
     import apertools.sario as sario
     rsc = sario.load(dest_rsc)
     xstep, ystep = rsc["x_step"], rsc["y_step"]
-    cmd = f"gdal_translate -tr {xstep} {ystep} {src_dem} {outname} -r nearest -of ENVI"
+    # -r nearest == Use nearest-neighbor resampling, -tr = target resolution
+    cmd = f"gdal_translate -r nearest -of ROI_PAC -tr {xstep} {ystep} {src_dem} {outname}"
     logger.info(cmd)
     subprocess.check_call(cmd, shell=True)
 
