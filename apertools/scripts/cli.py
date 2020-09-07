@@ -377,7 +377,6 @@ def save_vrt(filenames, rsc_file, cols, rows, dtype, band, interleave, num_bands
         )
 
 
-# COMMAND: save-vrt
 @cli.command("smallslc")
 @click.argument("filenames", nargs=-1)
 @click.option("--rsc-file", help="If exists, the .rsc file of data")
@@ -414,6 +413,22 @@ def smallslc(
         )
         logger.info(cmd)
         subprocess.check_call(cmd, shell=True)
+
+
+@cli.command("looked-dem")
+@click.option("--src-dem", default="../elevation.dem", help="Original, large DEM")
+@click.option("--dest-rsc", default="dem.rsc", help=".rsc file of the destination")
+@click.option("--outname", default="elevation_looked.dem")
+def looked_dem(src_dem, dest_rsc, outname):
+    """Save a smaller DEM version to match size of dest-rsc file
+
+    """
+    import apertools.sario as sario
+    rsc = sario.load(dest_rsc)
+    xstep, ystep = rsc["x_step"], rsc["y_step"]
+    cmd = f"gdal_translate -tr {xstep} {ystep} {src_dem} {outname} -r nearest -of ENVI"
+    logger.info(cmd)
+    subprocess.check_call(cmd, shell=True)
 
 
 @cli.command("hdf5-gtiff")
