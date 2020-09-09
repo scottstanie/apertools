@@ -416,9 +416,15 @@ def smallslc(
 
 
 @cli.command("looked-dem")
-@click.option("--src-dem", default="../elevation.dem", help="Original, large DEM")
-@click.option("--dest-rsc", default="dem.rsc", help=".rsc file of the destination")
-@click.option("--outname", default="elevation_looked.dem")
+@click.option("--src-dem",
+              default="../elevation.dem",
+              help="Original, large DEM",
+              show_default=True)
+@click.option("--dest-rsc",
+              default="dem.rsc",
+              help=".rsc file of the destination",
+              show_default=True)
+@click.option("--outname", default="elevation_looked.dem", help="destination", show_default=True)
 def looked_dem(src_dem, dest_rsc, outname):
     """Save a smaller DEM version to match size of dest-rsc file
 
@@ -448,6 +454,7 @@ def geotiff(infile, rsc, output, dset, nodata, outtype):
 @click.argument("filenames", nargs=-1)
 @click.option("--unit", "-u", default="cm", help="unit for file", show_default=True)
 def set_unit(filenames, unit):
+    """Alter the metadata of gdal-readable file to add units"""
     import apertools.sario
     for f in filenames:
         apertools.sario.set_unit(f, unit)
