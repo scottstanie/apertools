@@ -497,3 +497,10 @@ def az_inc_to_enu(infile, outfile='geo_los_enu.tif'):
     subprocess.run('rm -f tmp_los_east.tif tmp_los_north.tif tmp_los_up.tif',
                    shell=True,
                    check=True)
+
+
+def velo_to_cumulative_scale(geolist):
+    ndays = (geolist[-1] - geolist[0]).days
+    # input is MM/year
+    # (mm/year) * (1 yr / 365 days) * (1 cm / 10 mm) * ndays => [cm]
+    return ndays / 365 / 10

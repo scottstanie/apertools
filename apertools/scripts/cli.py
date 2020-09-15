@@ -445,9 +445,25 @@ def looked_dem(src_dem, dest_rsc, outname):
 @click.option("--dset", help="specify to only save one dataset")
 @click.option("--nodata", default="0", show_default=True)
 @click.option("--outtype", default="Float32", show_default=True)
-def geotiff(infile, rsc, output, dset, nodata, outtype):
+@click.option("--unit", default=None, show_default=True)
+@click.option("--scale",
+              default=1.0,
+              show_default=True,
+              help="Multiply pixels by this number to calculate new values in output file")
+@click.option('--convert-to-cumulative', is_flag=True)
+def geotiff(infile, rsc, output, dset, nodata, outtype, unit, scale, convert_to_cumulative):
     from .hdf5_geotiff import hdf5_to_geotiff
-    return hdf5_to_geotiff(infile, rsc, output, dset, nodata, outtype)
+    return hdf5_to_geotiff(
+        infile,
+        rsc,
+        output,
+        dset,
+        nodata,
+        outtype,
+        unit,
+        scale,
+        convert_to_cumulative,
+    )
 
 
 @cli.command("set-unit")
@@ -466,3 +482,13 @@ def set_unit(filenames, unit):
 def convert_to_enu(infile, outfile):
     import apertools.utils
     apertools.utils.az_inc_to_enu(infile, outfile)
+
+
+@cli.command("set-unit")
+@click.argument("filenames", nargs=-1)
+@click.option("--unit", "-u", default="cm", help="unit for file", show_default=True)
+def set_unit(filenames, unit):
+    """Alter the metadata of gdal-readable file to add units"""
+    import apertools.sario
+    for f in filenames:
+        apertools.sario.set_unit(f, unit)
