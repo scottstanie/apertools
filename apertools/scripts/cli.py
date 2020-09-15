@@ -15,6 +15,11 @@ import apertools.log
 logger = apertools.log.get_log()
 
 
+def _log_and_run(cmd):
+    logger.info(cmd)
+    subprocess.check_call(cmd, shell=True)
+
+
 # Main entry point `aper`:
 @click.group()
 @click.option('--verbose', is_flag=True)
@@ -411,8 +416,7 @@ def smallslc(
             px=pct_x,
             py=pct_y,
         )
-        logger.info(cmd)
-        subprocess.check_call(cmd, shell=True)
+        _log_and_run(cmd)
 
 
 @cli.command("looked-dem")
@@ -434,8 +438,7 @@ def looked_dem(src_dem, dest_rsc, outname):
     xstep, ystep = rsc["x_step"], rsc["y_step"]
     # -r nearest == Use nearest-neighbor resampling, -tr = target resolution
     cmd = f"gdal_translate -r nearest -of ROI_PAC -tr {xstep} {ystep} {src_dem} {outname}"
-    logger.info(cmd)
-    subprocess.check_call(cmd, shell=True)
+    _log_and_run(cmd)
 
 
 @cli.command("hdf5-gtiff")
@@ -484,11 +487,26 @@ def convert_to_enu(infile, outfile):
     apertools.utils.az_inc_to_enu(infile, outfile)
 
 
-@cli.command("set-unit")
+@cli.command("mask-by-elevation")
 @click.argument("filenames", nargs=-1)
-@click.option("--unit", "-u", default="cm", help="unit for file", show_default=True)
-def set_unit(filenames, unit):
-    """Alter the metadata of gdal-readable file to add units"""
-    import apertools.sario
+@click.option("--dem", "-d", help="DEM filename")
+@click.option("--cutoff", type=float, help="Elevation threshold at which to mask")
+@click.option(
+    "--operator",
+    type=click.Choice([">", "<"]),
+    default=">",
+    help="operator to use for masking "
+    "(e.g. using '>' will mask all values where the dem is greater "
+    "than the cutoff, keeping only the small values",
+    show_default=True,
+)
+def mask_by_elevation(filenames, dem, cutoff, operator):
+    """Set NoData pixels in files based on elevation threshold
+    """
+
     for f in filenames:
-        apertools.sario.set_unit(f, unit)
+        cmd = (f'gdal_calc.py --quiet -A {f} -B {dem} --outfile=tmp_out.tif '
+               f' --calc="A * ~(B {operator} {cutoff})" --NoDataValue=0')
+        _log_and_run(cmd)
+        _log_and_run(f"mv tmp_out.tif {f}")
+        # _log_and_run(f"gdal_edit.py -a_nodata 0 {f}")

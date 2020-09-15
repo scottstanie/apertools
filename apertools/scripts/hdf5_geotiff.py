@@ -11,9 +11,10 @@ def _log_and_run(cmd):
     subprocess.check_call(cmd, shell=True)
 
 
-def rescale_dset(infile, scale):
+def rescale_dset(infile, scale, nodata):
     logger.info(f"Rescaling data by {scale}")
-    cmd = f'gdal_calc.py --quiet -A {infile} --outfile=tmp_out.tif --calc="A * {scale}" '
+    cmd = (f'gdal_calc.py --quiet -A {infile} --outfile=tmp_out.tif'
+           f' --calc="A * {scale}" --NoDataValue={nodata}')
     _log_and_run(cmd)
     _log_and_run(f"mv tmp_out.tif {infile}")
 
@@ -80,10 +81,10 @@ def hdf5_to_geotiff(
         apertools.sario.set_unit(output, unit)
 
     if scale is not None and scale != 1:
-        rescale_dset(output, scale)
+        rescale_dset(output, scale, nodata)
 
     if convert_to_cumulative:
         logger.info(f"Converting velocities to cumulative deformation")
         geolist = apertools.sario.load_geolist_from_h5(infile, dset=dset)
         scale = apertools.utils.velo_to_cumulative_scale(geolist)
-        rescale_dset(output, scale)
+        rescale_dset(output, scale, nodata)
