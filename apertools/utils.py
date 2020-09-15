@@ -504,3 +504,17 @@ def velo_to_cumulative_scale(geolist):
     # input is MM/year
     # (mm/year) * (1 yr / 365 days) * (1 cm / 10 mm) * ndays => [cm]
     return ndays / 365 / 10
+
+
+def find_largest_component_idxs(binimg, strel_size=2):
+    from skimage.morphology import disk, closing
+    from skimage import measure
+    from collections import Counter
+    selem = disk(strel_size)
+    img = closing(binimg, selem)
+    labels, num = measure.label(img, return_num=True, connectivity=2)
+    counts = Counter(labels.reshape(-1))
+    # Get the top label which is not 0, the background
+    top2 = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:2]
+    fg_label, fg_count = top2[0] if top2[0][0] != 0 else top2[1]
+    return labels == fg_label

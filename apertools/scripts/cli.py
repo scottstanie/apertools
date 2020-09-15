@@ -500,9 +500,14 @@ def convert_to_enu(infile, outfile):
     "than the cutoff, keeping only the small values",
     show_default=True,
 )
-def mask_by_elevation(filenames, dem, cutoff, operator):
+@click.option("--largest-component",
+              is_flag=True,
+              help="Keep only the largest component which survives cutoff")
+def mask_by_elevation(filenames, dem, cutoff, operator, largest_component):
     """Set NoData pixels in files based on elevation threshold
     """
+    import apertools.utils
+    import rasterio as rio
 
     for f in filenames:
         cmd = (f'gdal_calc.py --quiet -A {f} -B {dem} --outfile=tmp_out.tif '
@@ -510,3 +515,25 @@ def mask_by_elevation(filenames, dem, cutoff, operator):
         _log_and_run(cmd)
         _log_and_run(f"mv tmp_out.tif {f}")
         # _log_and_run(f"gdal_edit.py -a_nodata 0 {f}")
+
+        if largest_component is True:
+            logger.info("Keeping only pixels from largest connected component")
+            with rio.open(f) as src:
+                img = src.read(1)
+            binimg = img != 0
+            fg_idxs = apertools.utils.find_largest_component_idxs(binimg, strel_size=3)
+            mask_fname = "idxs.bin"
+            with rio.open(mask_fname,
+                          "w",
+                          count=1,
+                          driver="ENVI",
+                          height=fg_idxs.shape[0],
+                          width=fg_idxs.shape[1],
+                          dtype="uint8") as dst:
+                dst.write(fg_idxs.astype("uint8"), 1)
+
+            cmd = (f'gdal_calc.py --quiet -A {f} -B {mask_fname} --outfile=tmp_out.tif '
+                   f' --calc="A * B " --NoDataValue=0')
+            _log_and_run(cmd)
+            _log_and_run(f"mv tmp_out.tif {f}")
+            _log_and_run(f"rm {mask_fname} {mask_fname.replace('.bin', '.hdr')}")
