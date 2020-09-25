@@ -51,6 +51,7 @@ def solve_east_up(
     # asc_dset="velos/1",
     # desc_dset="velos/1",
 ):
+
     asc_enu_stack, desc_enu_stack = subset.read_intersections(
         asc_enu_stack_fname, desc_enu_stack_fname
     )
@@ -194,37 +195,39 @@ def rot(angle, axis, in_degrees=True):
     return R
 
 
-def project_enu_to_los(enu, los_vec=None, lat=None, lon=None, enu_coeffs=None):
+def project_enu_to_los(
+    data_enu,
+    enu_coeffs=None,
+    los_xyz=None,
+    lat=None,
+    lon=None,
+):
     """Find magnitude of an ENU vector in the LOS direction
 
     Rotates the line of sight vector to ENU coordinates at
-    (lat, lon), then dots with the enu data vector
+    (lat, lon), then dots with the data_enu data vector
 
     Args:
-        enu (list[float], ndarray[float]): E,N,U coordinates, either
+        data_enu (ndarray[float]): E,N,U coordinates, either
             as list of 3, or a (3, k) array of k ENU vectors
-        los_vec (ndarray[float]) length 3 line of sight, in XYZ frame
-        lat (float): degrees latitude of los point
-        lon (float): degrees longitude of los point
         enu_coeffs (ndarray) size 3 array of the E,N,U coefficients
         of a line of sight vector. Comes from `find_enu_coeffs`.
             If this arg is used, others are not needed
+        los_xyz (ndarray[float]) length 3 line of sight, in XYZ frame
+        lat (float): degrees latitude of los point
+        lon (float): degrees longitude of los point
 
     Returns:
-        ndarray: magnitudes same length as enu input, (k, 1)
+        ndarray: magnitudes same length as data_enu input, (k, 1)
 
     Examples:
-    # >>> print('%.2f' % project_enu_to_los([1,2,3],[1, 0, 0], 0, 0))
-    # -2.00
-    # >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 1, 0], 0, 0))
-    # -3.00
-    # >>> print('%.2f' % project_enu_to_los([1,2,3],[0, 0, 1], 0, 0))
-    # 1.00
+    >>> print('%.2f' % project_enu_to_los([1.,2.,3.],enu_coeffs=[1., 0, 0]))
+    1.00
     """
     if enu_coeffs is None:
-        los_hat = los_vec / np.linalg.norm(los_vec)
+        los_hat = los_xyz / np.linalg.norm(los_xyz)
         enu_coeffs = rotate_xyz_to_enu(los_hat, lat, lon)
-    return enu_coeffs @ enu
+    return np.array(enu_coeffs) @ np.array(data_enu)
 
 
 def merge_geolists(geolist1, geolist2):
