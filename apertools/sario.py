@@ -187,6 +187,14 @@ def load_file(
         with open(filename) as f:
             return json.load(f)
 
+    # Pass though and load with gdal
+    if ext in GDAL_FORMATS:
+        # Use rasterio for easier loading of all bands into stack
+        import rasterio as rio
+
+        with rio.open(filename) as src:
+            return src.read(kwargs.get("band"))
+
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
         return _take_looks(load_elevation(filename), *looks)
