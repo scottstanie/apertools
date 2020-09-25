@@ -4,9 +4,11 @@ from __future__ import division, print_function
 import numpy as np
 from numpy import sin, cos
 import h5py
+
 # from scipy import interpolate
 from . import subset
 from apertools.log import get_log
+
 logger = get_log()
 
 
@@ -31,6 +33,7 @@ def find_enu_coeffs(lon, lat, los_map_file=None, verbose=False):
         return stack[:, row, col]
     elif los_map_file.endswith(".tif"):
         import rasterio as rio
+
         with rio.open(los_map_file) as src:
             # Note: https://github.com/mapbox/rasterio/blob/master/rasterio/sample.py#L42
             # uses floor by default, so may be different
@@ -48,10 +51,12 @@ def solve_east_up(
     # asc_dset="velos/1",
     # desc_dset="velos/1",
 ):
-    asc_enu_stack, desc_enu_stack = subset.read_intersections(asc_enu_stack_fname,
-                                                              desc_enu_stack_fname)
-    asc_img, desc_img = subset.read_intersections(asc_img_fname, desc_img_fname, asc_band,
-                                                  desc_band)
+    asc_enu_stack, desc_enu_stack = subset.read_intersections(
+        asc_enu_stack_fname, desc_enu_stack_fname
+    )
+    asc_img, desc_img = subset.read_intersections(
+        asc_img_fname, desc_img_fname, asc_band, desc_band
+    )
 
     if asc_img.shape != desc_img.shape:
         raise ValueError("asc_img not same shape as desc_img")
@@ -70,7 +75,7 @@ def solve_east_up(
     # output: (..., N, M) after pseudo inverse
     Apinv = np.linalg.pinv(np.moveaxis(asc_desc_eu, -1, 0))
     # This einsum results in (npixel, 2), where each row is [east, up]
-    east_up_rows = np.einsum('ijk, ki -> ij', Apinv, asc_desc_img)
+    east_up_rows = np.einsum("ijk, ki -> ij", Apinv, asc_desc_img)
     east = east_up_rows[:, 0].reshape(asc_img.shape).astype(np.float32)
     up = east_up_rows[:, 1].reshape(asc_img.shape).astype(np.float32)
     if outfile:
@@ -78,7 +83,9 @@ def solve_east_up(
         crs = subset.get_crs(asc_img_fname)
         nodata = subset.get_nodata(asc_img_fname)
         out_stack = np.stack([east, up], axis=0)
-        subset.write_outfile(outfile, out_stack, transform=transform, crs=crs, nodata=nodata)
+        subset.write_outfile(
+            outfile, out_stack, transform=transform, crs=crs, nodata=nodata
+        )
 
     return east, up
 
@@ -87,6 +94,7 @@ def read_los_map_file(los_map_file):
     """Returns the (lats, lons, ENU stack) from `los_map_file`"""
     if los_map_file.endswith(".tif"):
         import rasterio as rio
+
         with rio.open(los_map_file) as src:
             return np.stack([src.read(i) for i in (1, 2, 3)], axis=0)
     with h5py.File(los_map_file, "r") as f:
@@ -123,7 +131,11 @@ def los_to_enu(los_file=None, lat_lons=None, xyz_los_vecs=None):
 
 def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
     return np.array(
-        [rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)])
+        [
+            rotate_xyz_to_enu(xyz, lat, lon)
+            for (lat, lon), xyz in zip(lat_lons, xyz_array)
+        ]
+    )
 
 
 def rotate_xyz_to_enu(xyz, lat, lon):
@@ -212,7 +224,7 @@ def project_enu_to_los(enu, los_vec=None, lat=None, lon=None, enu_coeffs=None):
     if enu_coeffs is None:
         los_hat = los_vec / np.linalg.norm(los_vec)
         enu_coeffs = rotate_xyz_to_enu(los_hat, lat, lon)
-    return np.dot(enu_coeffs, enu)
+    return enu_coeffs @ enu
 
 
 def merge_geolists(geolist1, geolist2):
@@ -229,11 +241,12 @@ def merge_geolists(geolist1, geolist2):
     return merged_geolist, indices1, indices2
 
 
-def plot_enu_maps(enu_ll, title=None, cmap='jet'):
+def plot_enu_maps(enu_ll, title=None, cmap="jet"):
     import matplotlib.pyplot as plt
+
     fig, axes = plt.subplots(1, 3)
 
-    titles = ['east', 'north', 'up']
+    titles = ["east", "north", "up"]
     for idx in range(3):
         axim = axes[idx].imshow(np.abs(enu_ll[idx]), vmin=0, vmax=1, cmap=cmap)
         axes[idx].set_title(titles[idx])
