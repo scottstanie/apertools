@@ -15,6 +15,11 @@ import apertools.log
 logger = apertools.log.get_log()
 
 
+def _log_and_run(cmd):
+    logger.info(cmd)
+    subprocess.check_call(cmd, shell=True)
+
+
 # Main entry point `aper`:
 @click.group()
 @click.option('--verbose', is_flag=True)
@@ -411,14 +416,19 @@ def smallslc(
             px=pct_x,
             py=pct_y,
         )
-        logger.info(cmd)
-        subprocess.check_call(cmd, shell=True)
+        _log_and_run(cmd)
 
 
 @cli.command("looked-dem")
-@click.option("--src-dem", default="../elevation.dem", help="Original, large DEM")
-@click.option("--dest-rsc", default="dem.rsc", help=".rsc file of the destination")
-@click.option("--outname", default="elevation_looked.dem")
+@click.option("--src-dem",
+              default="../elevation.dem",
+              help="Original, large DEM",
+              show_default=True)
+@click.option("--dest-rsc",
+              default="dem.rsc",
+              help=".rsc file of the destination",
+              show_default=True)
+@click.option("--outname", default="elevation_looked.dem", help="destination", show_default=True)
 def looked_dem(src_dem, dest_rsc, outname):
     """Save a smaller DEM version to match size of dest-rsc file
 
@@ -428,8 +438,7 @@ def looked_dem(src_dem, dest_rsc, outname):
     xstep, ystep = rsc["x_step"], rsc["y_step"]
     # -r nearest == Use nearest-neighbor resampling, -tr = target resolution
     cmd = f"gdal_translate -r nearest -of ROI_PAC -tr {xstep} {ystep} {src_dem} {outname}"
-    logger.info(cmd)
-    subprocess.check_call(cmd, shell=True)
+    _log_and_run(cmd)
 
 
 @cli.command("hdf5-gtiff")
@@ -439,15 +448,32 @@ def looked_dem(src_dem, dest_rsc, outname):
 @click.option("--dset", help="specify to only save one dataset")
 @click.option("--nodata", default="0", show_default=True)
 @click.option("--outtype", default="Float32", show_default=True)
-def geotiff(infile, rsc, output, dset, nodata, outtype):
+@click.option("--unit", default=None, show_default=True)
+@click.option("--scale",
+              default=1.0,
+              show_default=True,
+              help="Multiply pixels by this number to calculate new values in output file")
+@click.option('--convert-to-cumulative', is_flag=True)
+def geotiff(infile, rsc, output, dset, nodata, outtype, unit, scale, convert_to_cumulative):
     from .hdf5_geotiff import hdf5_to_geotiff
-    return hdf5_to_geotiff(infile, rsc, output, dset, nodata, outtype)
+    return hdf5_to_geotiff(
+        infile,
+        rsc,
+        output,
+        dset,
+        nodata,
+        outtype,
+        unit,
+        scale,
+        convert_to_cumulative,
+    )
 
 
 @cli.command("set-unit")
 @click.argument("filenames", nargs=-1)
 @click.option("--unit", "-u", default="cm", help="unit for file", show_default=True)
 def set_unit(filenames, unit):
+    """Alter the metadata of gdal-readable file to add units"""
     import apertools.sario
     for f in filenames:
         apertools.sario.set_unit(f, unit)
@@ -459,3 +485,55 @@ def set_unit(filenames, unit):
 def convert_to_enu(infile, outfile):
     import apertools.utils
     apertools.utils.az_inc_to_enu(infile, outfile)
+
+
+@cli.command("mask-by-elevation")
+@click.argument("filenames", nargs=-1)
+@click.option("--dem", "-d", help="DEM filename")
+@click.option("--cutoff", type=float, help="Elevation threshold at which to mask")
+@click.option(
+    "--operator",
+    type=click.Choice([">", "<"]),
+    default=">",
+    help="operator to use for masking "
+    "(e.g. using '>' will mask all values where the dem is greater "
+    "than the cutoff, keeping only the small values",
+    show_default=True,
+)
+@click.option("--largest-component",
+              is_flag=True,
+              help="Keep only the largest component which survives cutoff")
+def mask_by_elevation(filenames, dem, cutoff, operator, largest_component):
+    """Set NoData pixels in files based on elevation threshold
+    """
+    import apertools.utils
+    import rasterio as rio
+
+    for f in filenames:
+        cmd = (f'gdal_calc.py --quiet -A {f} -B {dem} --outfile=tmp_out.tif '
+               f' --calc="A * ~(B {operator} {cutoff})" --NoDataValue=0')
+        _log_and_run(cmd)
+        _log_and_run(f"mv tmp_out.tif {f}")
+        # _log_and_run(f"gdal_edit.py -a_nodata 0 {f}")
+
+        if largest_component is True:
+            logger.info("Keeping only pixels from largest connected component")
+            with rio.open(f) as src:
+                img = src.read(1)
+            binimg = img != 0
+            fg_idxs = apertools.utils.find_largest_component_idxs(binimg, strel_size=3)
+            mask_fname = "idxs.bin"
+            with rio.open(mask_fname,
+                          "w",
+                          count=1,
+                          driver="ENVI",
+                          height=fg_idxs.shape[0],
+                          width=fg_idxs.shape[1],
+                          dtype="uint8") as dst:
+                dst.write(fg_idxs.astype("uint8"), 1)
+
+            cmd = (f'gdal_calc.py --quiet -A {f} -B {mask_fname} --outfile=tmp_out.tif '
+                   f' --calc="A * B " --NoDataValue=0')
+            _log_and_run(cmd)
+            _log_and_run(f"mv tmp_out.tif {f}")
+            _log_and_run(f"rm {mask_fname} {mask_fname.replace('.bin', '.hdr')}")
