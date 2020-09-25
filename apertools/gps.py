@@ -43,14 +43,16 @@ logger = get_log()
 # URL for ascii file of 24-hour final GPS solutions in east-north-vertical (NA12)
 # GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/NA12/{station}.NA12.tenv3"
 # UPDATE 4/20/20: noticed they changed it to
-GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/plates/NA/{station}.NA.tenv3"
+GPS_BASE_URL = (
+    "http://geodesy.unr.edu/gps_timeseries/tenv3/plates/NA/{station}.NA.tenv3"
+)
 GPS_FILE = GPS_BASE_URL.split("/")[-1]
 
 # Assuming the master station list is in the
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
 STATION_LLH_FILE = os.environ.get(
-    'STATION_LIST',
-    os.path.join(DIRNAME, 'data/station_llh_all.csv'),
+    "STATION_LIST",
+    os.path.join(DIRNAME, "data/station_llh_all.csv"),
 )
 START_DATE = datetime.date(2014, 11, 1)  # Start of InSAR data I care about
 
@@ -65,13 +67,15 @@ def _get_gps_dir():
 GPS_DIR = _get_gps_dir()
 
 
-def plot_insar_vs_gps(geo_path=None,
-                      defo_filename="deformation.npy",
-                      station_name_list=None,
-                      df=None,
-                      kind="line",
-                      reference_station=None,
-                      **kwargs):
+def plot_insar_vs_gps(
+    geo_path=None,
+    defo_filename="deformation.npy",
+    station_name_list=None,
+    df=None,
+    kind="line",
+    reference_station=None,
+    **kwargs,
+):
     """Make a GPS vs InSAR plot.
 
     kinds:
@@ -84,14 +88,15 @@ def plot_insar_vs_gps(geo_path=None,
         with gps subtracting the gps, insar subtracting the insar
     """
 
-    igrams_dir = os.path.join(geo_path, 'igrams')
+    igrams_dir = os.path.join(geo_path, "igrams")
     if df is None:
         df = create_insar_gps_df(
             geo_path,
             defo_filename=defo_filename,
             # station_name_list=station_name_list,  # For now, filter given names after grabbing all
             reference_station=reference_station,
-            **kwargs)
+            **kwargs,
+        )
         # window_size=1, days_smooth_insar=5, days_smooth_gps=30):
     if station_name_list is not None:
         df = _filter_df_by_stations(df, station_name_list, igrams_dir, defo_filename)
@@ -105,11 +110,15 @@ def _filter_df_by_stations(df, station_name_list, igrams_dir, defo_filename):
         defo_filename=defo_filename,
         station_name_list=station_name_list,
     )
-    select_cols = [col for col in df.columns if any(name in col for name in station_name_list)]
+    select_cols = [
+        col for col in df.columns if any(name in col for name in station_name_list)
+    ]
     return df[select_cols]
 
 
-def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, velocity=True, **kwargs):
+def plot_insar_gps_df(
+    df, kind="errorbar", grid=True, block=False, velocity=True, **kwargs
+):
     """Plot insar vs gps values from dataframe
 
     kinds:
@@ -138,13 +147,15 @@ def plot_insar_gps_df(df, kind="errorbar", grid=True, block=False, velocity=True
     return fig, axes
 
 
-def load_station_enu(station,
-                     start_date=START_DATE,
-                     end_date=None,
-                     to_cm=True,
-                     zero_mean=True,
-                     zero_start=False,
-                     force_download=False):
+def load_station_enu(
+    station,
+    start_date=START_DATE,
+    end_date=None,
+    to_cm=True,
+    zero_mean=True,
+    zero_start=False,
+    force_download=False,
+):
     """Loads one gps station's ENU data since start_date until end_date
     as separate Series items
 
@@ -160,22 +171,24 @@ def load_station_enu(station,
     )
 
     if zero_start:
-        start_val = station_df[['east', 'north', 'up']].iloc[:10].mean()
-        enu_zeroed = station_df[['east', 'north', 'up']] - start_val
+        start_val = station_df[["east", "north", "up"]].iloc[:10].mean()
+        enu_zeroed = station_df[["east", "north", "up"]] - start_val
     elif zero_mean:
-        mean_val = station_df[['east', 'north', 'up']].mean()
-        enu_zeroed = station_df[['east', 'north', 'up']] - mean_val
+        mean_val = station_df[["east", "north", "up"]].mean()
+        enu_zeroed = station_df[["east", "north", "up"]] - mean_val
 
-    dts = station_df['dt']
+    dts = station_df["dt"]
     return dts, enu_zeroed
 
 
-def load_station_data(station_name,
-                      start_date=START_DATE,
-                      end_date=None,
-                      download_if_missing=True,
-                      force_download=False,
-                      to_cm=True):
+def load_station_data(
+    station_name,
+    start_date=START_DATE,
+    end_date=None,
+    download_if_missing=True,
+    force_download=False,
+    to_cm=True,
+):
     """Loads one gps station's ENU data since start_date until end_date as a dataframe
 
     Args:
@@ -199,30 +212,36 @@ def load_station_data(station_name,
             logger.info(f"Downloading {station_name} to {gps_data_file}")
             download_station_data(station_name)
         else:
-            raise ValueError("{gps_data_file} does not exist, download_if_missing = False")
+            raise ValueError(
+                "{gps_data_file} does not exist, download_if_missing = False"
+            )
 
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
     clean_df = _clean_gps_df(df, start_date, end_date)
     if to_cm:
         # logger.info("Converting %s GPS to cm" % station_name)
-        clean_df[['east', 'north', 'up']] = 100 * clean_df[['east', 'north', 'up']]
+        clean_df[["east", "north", "up"]] = 100 * clean_df[["east", "north", "up"]]
     return clean_df
 
 
 def _clean_gps_df(df, start_date=None, end_date=None):
-    df['dt'] = pd.to_datetime(df['YYMMMDD'], format='%y%b%d')
+    df["dt"] = pd.to_datetime(df["YYMMMDD"], format="%y%b%d")
 
     if start_date:
-        df_ranged = df[df['dt'] >= pd.to_datetime(start_date)]
+        df_ranged = df[df["dt"] >= pd.to_datetime(start_date)]
     if end_date:
-        df_ranged = df_ranged[df_ranged['dt'] <= pd.to_datetime(end_date)]
-    df_enu = df_ranged[['dt', '__east(m)', '_north(m)', '____up(m)']]
-    df_enu = df_enu.rename(mapper=lambda s: s.replace('_', '').replace('(m)', ''), axis='columns')
+        df_ranged = df_ranged[df_ranged["dt"] <= pd.to_datetime(end_date)]
+    df_enu = df_ranged[["dt", "__east(m)", "_north(m)", "____up(m)"]]
+    df_enu = df_enu.rename(
+        mapper=lambda s: s.replace("_", "").replace("(m)", ""), axis="columns"
+    )
     df_enu.reset_index(inplace=True, drop=True)
     return df_enu
 
 
-def stations_within_image(image_ll=None, filename=None, mask_invalid=True, gps_filename=None):
+def stations_within_image(
+    image_ll=None, filename=None, mask_invalid=True, gps_filename=None
+):
     """Given an image, find gps stations contained in area
 
     Must have an associated .rsc file, either from being a LatlonImage (passed
@@ -241,9 +260,9 @@ def stations_within_image(image_ll=None, filename=None, mask_invalid=True, gps_f
         image_ll = apertools.latlon.LatlonImage(filename=filename)
 
     df = read_station_llas(filename=gps_filename)
-    station_lon_lat_arr = df[['lon', 'lat']].values
+    station_lon_lat_arr = df[["lon", "lat"]].values
     contains_bools = image_ll.contains(station_lon_lat_arr)
-    candidates = df[contains_bools][['name', 'lon', 'lat']].values
+    candidates = df[contains_bools][["name", "lon", "lat"]].values
     good_stations = []
     if mask_invalid:
         for name, lon, lat in candidates:
@@ -257,29 +276,36 @@ def stations_within_image(image_ll=None, filename=None, mask_invalid=True, gps_f
     return good_stations
 
 
-def plot_stations(image_ll=None,
-                  filename=None,
-                  directory=None,
-                  full_path=None,
-                  mask_invalid=True,
-                  station_name_list=None):
+def plot_stations(
+    image_ll=None,
+    filename=None,
+    directory=None,
+    full_path=None,
+    mask_invalid=True,
+    station_name_list=None,
+):
     """Plot an GPS station points contained within an image
 
     To only plot subset of stations, pass an iterable of strings to station_name_list
     """
-    directory, filename, full_path = apertools.sario.get_full_path(directory, filename, full_path)
+    directory, filename, full_path = apertools.sario.get_full_path(
+        directory, filename, full_path
+    )
 
     if image_ll is None:
         try:
             # First check if we want to load the 3D stack "deformation.npy"
-            image_ll = apertools.latlon.load_deformation_img(filename=filename, full_path=full_path)
+            image_ll = apertools.latlon.load_deformation_img(
+                filename=filename, full_path=full_path
+            )
         except ValueError:
             image_ll = apertools.latlon.LatlonImage(filename=filename)
 
     if mask_invalid:
         try:
-            stack_mask = apertools.sario.load_mask(directory=directory,
-                                                   deformation_filename=full_path)
+            stack_mask = apertools.sario.load_mask(
+                directory=directory, deformation_filename=full_path
+            )
             image_ll[stack_mask] = np.nan
         except Exception:
             logger.warning("error in load_mask", exc_info=True)
@@ -298,7 +324,7 @@ def plot_stations(image_ll=None,
     size = 25
     for idx, (name, lon, lat) in enumerate(stations):
         # ax.plot(lon, lat, 'X', markersize=15, label=name)
-        ax.scatter(lon, lat, marker='X', label=name, color=colors[idx], s=size)
+        ax.scatter(lon, lat, marker="X", label=name, color=colors[idx], s=size)
     plt.legend()
 
 
@@ -306,10 +332,10 @@ def save_station_points_kml(station_iter):
     for name, lat, lon, alt in station_iter:
         apertools.kml.create_kml(
             title=name,
-            desc='GPS station location',
+            desc="GPS station location",
             lon_lat=(lon, lat),
-            kml_out='%s.kml' % name,
-            shape='point',
+            kml_out="%s.kml" % name,
+            shape="point",
         )
 
 
@@ -323,7 +349,7 @@ def read_station_llas(header=None, filename=None):
     filename = filename or STATION_LLH_FILE
     logger.debug("Searching %s for gps data" % filename)
     df = pd.read_csv(filename, header=header)
-    df.columns = ['name', 'lat', 'lon', 'alt']
+    df.columns = ["name", "lat", "lon", "alt"]
     return df
 
 
@@ -331,10 +357,12 @@ def station_lonlat(station_name):
     """Return the (lon, lat) of a `station_name`"""
     df = read_station_llas()
     station_name = station_name.upper()
-    if station_name not in df['name'].values:
-        closest_names = difflib.get_close_matches(station_name, df['name'], n=5)
-        raise ValueError("No station named %s found. Closest: %s" % (station_name, closest_names))
-    name, lat, lon, alt = df[df['name'] == station_name].iloc[0]
+    if station_name not in df["name"].values:
+        closest_names = difflib.get_close_matches(station_name, df["name"], n=5)
+        raise ValueError(
+            "No station named %s found. Closest: %s" % (station_name, closest_names)
+        )
+    name, lat, lon, alt = df[df["name"] == station_name].iloc[0]
     return lon, lat
 
 
@@ -356,9 +384,11 @@ def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_filename=None):
         rsc_data = apertools.sario.load(rsc_filename)
 
     df = read_station_llas(filename=gps_filename)
-    station_lon_lat_arr = df[['lon', 'lat']].values
-    contains_bools = [apertools.latlon.grid_contains(s, **rsc_data) for s in station_lon_lat_arr]
-    return df[contains_bools][['name', 'lon', 'lat']].values
+    station_lon_lat_arr = df[["lon", "lat"]].values
+    contains_bools = [
+        apertools.latlon.grid_contains(s, **rsc_data) for s in station_lon_lat_arr
+    ]
+    return df[contains_bools][["name", "lon", "lat"]].values
 
 
 def download_station_data(station_name):
@@ -375,26 +405,32 @@ def download_station_data(station_name):
 
 def station_std(station, to_cm=True, start_date=START_DATE, end_date=None):
     """Calculates the sum of east, north, and vertical stds of gps"""
-    dts, enu_df = load_station_enu(station, start_date=start_date, end_date=end_date, to_cm=to_cm)
+    dts, enu_df = load_station_enu(
+        station, start_date=start_date, end_date=end_date, to_cm=to_cm
+    )
     if enu_df.empty:
         logger.warning(f"{station} gps data returned an empty dataframe")
         return np.nan
     return np.sum(enu_df.std())
 
 
-def plot_gps_enu(station=None,
-                 days_smooth=12,
-                 start_date=START_DATE,
-                 end_date=None,
-                 force_download=True):
+def plot_gps_enu(
+    station=None,
+    days_smooth=12,
+    start_date=START_DATE,
+    end_date=None,
+    force_download=True,
+):
     """Plot the east,north,up components of `station`"""
+
     def remove_xticks(ax):
         ax.tick_params(
-            axis='x',  # changes apply to the x-axis
-            which='both',  # both major and minor ticks are affected
+            axis="x",  # changes apply to the x-axis
+            which="both",  # both major and minor ticks are affected
             bottom=False,  # ticks along the bottom edge are off
             top=False,  # ticks along the top edge are off
-            labelbottom=False)
+            labelbottom=False,
+        )
 
     dts, enu_df = load_station_enu(
         station,
@@ -403,25 +439,25 @@ def plot_gps_enu(station=None,
         to_cm=True,
         force_download=force_download,
     )
-    (east_cm, north_cm, up_cm) = enu_df[['east', 'north', 'up']].T.values
+    (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
 
     fig, axes = plt.subplots(3, 1)
-    axes[0].plot(dts, east_cm, 'b.')
-    axes[0].set_ylabel('east (cm)')
+    axes[0].plot(dts, east_cm, "b.")
+    axes[0].set_ylabel("east (cm)")
     # axes[0].plot(dts, moving_average(east_cm, days_smooth), 'r-')
-    axes[0].plot(dts, moving_average(east_cm), 'r-')
+    axes[0].plot(dts, moving_average(east_cm), "r-")
     axes[0].grid(True)
     remove_xticks(axes[0])
 
-    axes[1].plot(dts, north_cm, 'b.')
-    axes[1].set_ylabel('north (cm)')
-    axes[1].plot(dts, moving_average(north_cm), 'r-')
+    axes[1].plot(dts, north_cm, "b.")
+    axes[1].set_ylabel("north (cm)")
+    axes[1].plot(dts, moving_average(north_cm), "r-")
     axes[1].grid(True)
     remove_xticks(axes[1])
 
-    axes[2].plot(dts, up_cm, 'b.')
-    axes[2].set_ylabel('up (cm)')
-    axes[2].plot(dts, moving_average(up_cm), 'r-')
+    axes[2].plot(dts, up_cm, "b.")
+    axes[2].set_ylabel("up (cm)")
+    axes[2].plot(dts, moving_average(up_cm), "r-")
     axes[2].grid(True)
     # remove_xticks(axes[2])
 
@@ -468,7 +504,7 @@ def load_gps_los_data(
         end_date=end_date,
         force_download=force_download,
     )
-    enu_data = df[['east', 'north', 'up']].T
+    enu_data = df[["east", "north", "up"]].T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
 
     if zero_start:
@@ -494,9 +530,9 @@ def load_gps_los_data(
             force_download=force_download,
             days_smooth=days_smooth,
         )
-        return _merge_los(df['dt'], los_gps_data, dt_ref, losref)
+        return _merge_los(df["dt"], los_gps_data, dt_ref, losref)
 
-    return df['dt'], los_gps_data
+    return df["dt"], los_gps_data
 
 
 def _merge_los(dt1, los1, dt_ref, los_ref):
@@ -522,7 +558,7 @@ def moving_average(arr, window_size=7):
     return np.array(pd.Series(arr).rolling(window_size).mean())
 
 
-def find_insar_ts(defo_filename='deformation.h5', station_name_list=[], window_size=1):
+def find_insar_ts(defo_filename="deformation.h5", station_name_list=[], window_size=1):
     """Get the insar timeseries closest to a list of GPS stations
 
     Returns the timeseries, and the datetimes of points for plotting
@@ -542,23 +578,26 @@ def find_insar_ts(defo_filename='deformation.h5', station_name_list=[], window_s
         dem_rsc = apertools.sario.load_dem_from_h5(defo_filename)
         row, col = apertools.latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat)
         insar_ts_list.append(
-            get_stack_timeseries(defo_filename,
-                                 row,
-                                 col,
-                                 station=station_name,
-                                 window_size=window_size))
+            get_stack_timeseries(
+                defo_filename, row, col, station=station_name, window_size=window_size
+            )
+        )
 
-    geolist = apertools.sario.load_geolist_from_h5(defo_filename, dset=apertools.sario.STACK_DSET)
+    geolist = apertools.sario.load_geolist_from_h5(
+        defo_filename, dset=apertools.sario.STACK_DSET
+    )
     return geolist, insar_ts_list
 
 
-def get_stack_timeseries(filename,
-                         row,
-                         col,
-                         stack_dset_name=apertools.sario.STACK_DSET,
-                         station=None,
-                         window_size=1):
-    with h5py.File(filename, 'a') as f:
+def get_stack_timeseries(
+    filename,
+    row,
+    col,
+    stack_dset_name=apertools.sario.STACK_DSET,
+    station=None,
+    window_size=1,
+):
+    with h5py.File(filename, "a") as f:
         try:
             dset = f[station]
             logger.debug("Getting cached timeseries at %s" % station)
@@ -578,30 +617,34 @@ def _series_to_date(series):
     return pd.to_datetime(series).apply(lambda row: row.date())
 
 
-def create_insar_gps_df(geo_path="..",
-                        los_map_file="los_map.h5",
-                        defo_filename='deformation.h5',
-                        station_name_list=[],
-                        reference_station=None,
-                        window_size=1,
-                        days_smooth_insar=None,
-                        days_smooth_gps=None,
-                        create_diffs=True,
-                        **kwargs):
+def create_insar_gps_df(
+    geo_path="..",
+    los_map_file="los_map.h5",
+    defo_filename="deformation.h5",
+    station_name_list=[],
+    reference_station=None,
+    window_size=1,
+    days_smooth_insar=None,
+    days_smooth_gps=None,
+    create_diffs=True,
+    **kwargs,
+):
     """Set days_smooth to None or 0 to avoid any data smoothing
 
     If refernce station is specified, all timeseries will subtract
     that station's data
     """
     if not station_name_list:
-        igrams_dir = os.path.join(geo_path, 'igrams')
+        igrams_dir = os.path.join(geo_path, "igrams")
         station_name_list = _load_station_list(
             igrams_dir=igrams_dir,
             defo_filename=defo_filename,
             station_name_list=station_name_list,
         )
 
-    insar_df = create_insar_df(defo_filename, station_name_list, window_size, days_smooth_insar)
+    insar_df = create_insar_df(
+        defo_filename, station_name_list, window_size, days_smooth_insar
+    )
     gps_df = create_gps_los_df(los_map_file, station_name_list, days_smooth_gps)
     df = combine_insar_gps_dfs(insar_df, gps_df)
     if reference_station:
@@ -617,16 +660,18 @@ def _find_bad_cols(df, nan_threshold):
     empty_ends = df.columns[df.tail(10).isna().all()]
     nan_pcts = df.isna().sum() / len(df)
     high_pct_nan = df.columns[nan_pcts > nan_threshold]
-    high_pct_nan = [c for c in high_pct_nan if 'gps' in c]  # Ignore all the insar nans
+    high_pct_nan = [c for c in high_pct_nan if "gps" in c]  # Ignore all the insar nans
 
-    return np.concatenate((
-        np.array(empty_starts),
-        np.array(empty_ends),
-        np.array(high_pct_nan),
-    ))
+    return np.concatenate(
+        (
+            np.array(empty_starts),
+            np.array(empty_ends),
+            np.array(high_pct_nan),
+        )
+    )
 
 
-def _remove_bad_cols(df, nan_threshold=.4):
+def _remove_bad_cols(df, nan_threshold=0.4):
     """Drops columns that are all NaNs, or where GPS doesn't cover whole period"""
     bad_cols = _find_bad_cols(df, nan_threshold)
     logger.info("Removing the following bad columns:")
@@ -647,24 +692,23 @@ def subtract_reference(df, reference_station):
     insar_ref_col = "%s_%s" % (reference_station, "insar")
     df_out = df.copy()
     for col in df.columns:
-        if 'gps' in col:
+        if "gps" in col:
             df_out[col] = df[col] - df[gps_ref_col]
-        elif 'insar' in col:
+        elif "insar" in col:
             df_out[col] = df[col] - df[insar_ref_col]
     return df_out
 
 
-def create_insar_df(defo_filename='deformation.h5',
-                    station_name_list=[],
-                    window_size=1,
-                    days_smooth=5):
+def create_insar_df(
+    defo_filename="deformation.h5", station_name_list=[], window_size=1, days_smooth=5
+):
     """Set days_smooth to None or 0 to avoid any data smoothing"""
     geolist, insar_ts_list = find_insar_ts(
         defo_filename=defo_filename,
         station_name_list=station_name_list,
         window_size=window_size,
     )
-    insar_df = pd.DataFrame({'dts': _series_to_date(pd.Series(geolist))})
+    insar_df = pd.DataFrame({"dts": _series_to_date(pd.Series(geolist))})
     for stat, ts in zip(station_name_list, insar_ts_list):
         insar_df[stat + "_insar"] = moving_average(ts, days_smooth)
         # insar_df[stat + "_smooth_insar"] = moving_average(ts, days_smooth)
@@ -674,15 +718,17 @@ def create_insar_df(defo_filename='deformation.h5',
 def create_gps_los_df(los_map_file="los_map.h5", station_name_list=[], days_smooth=30):
     df_list = []
     for stat in station_name_list:
-        gps_dts, los_gps_data = load_gps_los_data(los_map_file=los_map_file, station_name=stat)
+        gps_dts, los_gps_data = load_gps_los_data(
+            los_map_file=los_map_file, station_name=stat
+        )
 
         df = pd.DataFrame({"dts": _series_to_date(gps_dts)})
         df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
         # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
         df_list.append(df)
 
-    min_date = np.min(pd.concat([df['dts'] for df in df_list]))
-    max_date = np.max(pd.concat([df['dts'] for df in df_list]))
+    min_date = np.min(pd.concat([df["dts"] for df in df_list]))
+    max_date = np.max(pd.concat([df["dts"] for df in df_list]))
 
     # Now merge together based on uneven time data
     gps_df = pd.DataFrame({"dts": pd.date_range(start=min_date, end=max_date).date})
@@ -695,20 +741,27 @@ def create_gps_los_df(los_map_file="los_map.h5", station_name_list=[], days_smoo
 def combine_insar_gps_dfs(insar_df, gps_df):
     # First constrain the date range to just the InSAR min/max dates
     df = pd.DataFrame(
-        {"dts": pd.date_range(start=np.min(insar_df["dts"]), end=np.max(insar_df["dts"])).date})
+        {
+            "dts": pd.date_range(
+                start=np.min(insar_df["dts"]), end=np.max(insar_df["dts"])
+            ).date
+        }
+    )
     df = pd.merge(df, insar_df, on="dts", how="left")
     df = pd.merge(df, gps_df, on="dts", how="left", suffixes=("", "_gps"))
     # Now final df has datetime as index
     return df.set_index("dts")
 
 
-def create_gps_enu_df(station_name_list=None,
-                      defo_filename=None,
-                      igrams_dir=None,
-                      start_date=START_DATE,
-                      end_date=None,
-                      days_smooth=None,
-                      to_cm=True):
+def create_gps_enu_df(
+    station_name_list=None,
+    defo_filename=None,
+    igrams_dir=None,
+    start_date=START_DATE,
+    end_date=None,
+    days_smooth=None,
+    to_cm=True,
+):
     if not station_name_list:
         station_name_list = _load_station_list(
             igrams_dir=igrams_dir,
@@ -718,10 +771,9 @@ def create_gps_enu_df(station_name_list=None,
 
     df_list = []
     for station in station_name_list:
-        dts, enu_df = load_station_enu(station,
-                                       start_date=start_date,
-                                       end_date=end_date,
-                                       to_cm=to_cm)
+        dts, enu_df = load_station_enu(
+            station, start_date=start_date, end_date=end_date, to_cm=to_cm
+        )
 
         enu_df["dts"] = _series_to_date(dts)
         # Add station name to columns for post-merge identification
@@ -732,8 +784,8 @@ def create_gps_enu_df(station_name_list=None,
         enu_df.rename(mapper, inplace=True, axis=1)
         df_list.append(enu_df)
 
-    min_date = np.min(pd.concat([df['dts'] for df in df_list]))
-    max_date = np.max(pd.concat([df['dts'] for df in df_list]))
+    min_date = np.min(pd.concat([df["dts"] for df in df_list]))
+    max_date = np.max(pd.concat([df["dts"] for df in df_list]))
 
     # Now merge together based on uneven time data
     enu_df = pd.DataFrame({"dts": pd.date_range(start=min_date, end=max_date).date})
@@ -741,7 +793,7 @@ def create_gps_enu_df(station_name_list=None,
         enu_df = pd.merge(enu_df, df, on="dts", how="left")
 
     enu_df = enu_df.set_index("dts")
-    nan_thresh = .8
+    nan_thresh = 0.8
     # Drop empty columns or no data for last 14 days
     bad_cols = _find_bad_cols(enu_df, nan_thresh)
     for col in np.unique(bad_cols):
@@ -792,71 +844,76 @@ def flat_std(series):
 
 def _plot_errorbar_df(df, ylim=None, velocity=True, **kwargs):
     gps_cols, insar_cols, final_gps_vals, final_insar_vals = get_final_gps_insar_values(
-        df, velocity=velocity, **kwargs)
+        df, velocity=velocity, **kwargs
+    )
     gps_stds = [flat_std(df[col].dropna()) for col in df.columns if col in gps_cols]
 
     fig, axes = plt.subplots(squeeze=False)
     ax = axes[0, 0]
     idxs = range(len(final_gps_vals))
-    ax.errorbar(idxs, final_gps_vals, gps_stds, marker='o', lw=2, linestyle='', capsize=6)
-    ax.plot(idxs, final_insar_vals, 'rx')
+    ax.errorbar(
+        idxs, final_gps_vals, gps_stds, marker="o", lw=2, linestyle="", capsize=6
+    )
+    ax.plot(idxs, final_insar_vals, "rx")
 
     if velocity:
-        ax.set_ylabel('mm/year of LOS displacement')
+        ax.set_ylabel("mm/year of LOS displacement")
     else:
-        ax.set_ylabel('CM of cumulative LOS displacement')
+        ax.set_ylabel("CM of cumulative LOS displacement")
 
-    labels = [c.replace('_gps', '') for c in gps_cols]
+    labels = [c.replace("_gps", "") for c in gps_cols]
     ax.set_xticks(range(len(labels)))
-    ax.set_xticklabels(labels, rotation='vertical', fontsize=12)
+    ax.set_xticklabels(labels, rotation="vertical", fontsize=12)
     if ylim is not None:
         ax.set_ylim(ylim)
     return fig, axes
 
 
 def _plot_slope_df(df, **kwargs):
-    gps_cols, insar_cols, final_gps_vals, final_insar_vals = get_final_gps_insar_values(df)
+    gps_cols, insar_cols, final_gps_vals, final_insar_vals = get_final_gps_insar_values(
+        df
+    )
     insar_stds = [flat_std(df[col].dropna()) for col in df.columns if col in insar_cols]
 
     fig, axes = plt.subplots(squeeze=False)
     ax = axes[0, 0]
-    ax.errorbar(final_gps_vals, final_insar_vals, yerr=insar_stds, fmt='rx', capsize=6)
+    ax.errorbar(final_gps_vals, final_insar_vals, yerr=insar_stds, fmt="rx", capsize=6)
 
     max_val = max(np.max(final_insar_vals), np.max(final_gps_vals))
     min_val = min(np.min(final_insar_vals), np.min(final_gps_vals))
-    ax.plot(np.linspace(min_val, max_val), np.linspace(min_val, max_val), 'g')
-    ax.set_ylabel('InSAR predicted cumulative CM')
-    ax.set_xlabel('GPS cumulative CM')
+    ax.plot(np.linspace(min_val, max_val), np.linspace(min_val, max_val), "g")
+    ax.set_ylabel("InSAR predicted cumulative CM")
+    ax.set_xlabel("GPS cumulative CM")
     return fig, axes
 
 
-def _plot_line_df(df,
-                  ylim=None,
-                  share=True,
-                  days_smooth_gps=None,
-                  days_smooth_insar=None,
-                  **kwargs):
+def _plot_line_df(
+    df, ylim=None, share=True, days_smooth_gps=None, days_smooth_insar=None, **kwargs
+):
     """share is used to indicate that GPS and insar will be on same axes"""
+
     def _plot_smoothed(ax, df, column, days_smooth, marker):
-        ax.plot(df[column].dropna().index,
-                df[column].dropna().rolling(days_smooth_gps).mean(),
-                marker,
-                linewidth=3,
-                label="%s day smoothed %s" % (days_smooth, column))
+        ax.plot(
+            df[column].dropna().index,
+            df[column].dropna().rolling(days_smooth_gps).mean(),
+            marker,
+            linewidth=3,
+            label="%s day smoothed %s" % (days_smooth, column),
+        )
 
     columns = df.columns
     nrows = 1 if share else 2
     fig, axes = plt.subplots(nrows, len(columns) // 2, figsize=(16, 5), squeeze=False)
 
-    gps_idxs = np.where(['gps' in col for col in columns])[0]
-    insar_idxs = np.where(['insar' in col for col in columns])[0]
+    gps_idxs = np.where(["gps" in col for col in columns])[0]
+    insar_idxs = np.where(["insar" in col for col in columns])[0]
 
     for idx, column in enumerate(columns):
-        if 'insar' in column:
-            marker = 'rx'
+        if "insar" in column:
+            marker = "rx"
             ax_idx = np.where(insar_idxs == idx)[0][0] if share else idx
         else:
-            marker = 'b.'
+            marker = "b."
             ax_idx = np.where(gps_idxs == idx)[0][0] if share else idx
 
         ax = axes.ravel()[ax_idx]
@@ -868,12 +925,12 @@ def _plot_line_df(df,
             ax.set_ylim(ylim)
         xticks = ax.get_xticks()
         ax.set_xticks([xticks[0], xticks[len(xticks) // 2], xticks[-1]])
-        if days_smooth_gps and 'gps' in column:
+        if days_smooth_gps and "gps" in column:
             _plot_smoothed(ax, df, column, days_smooth_gps, "b-")
-        if days_smooth_insar and 'insar' in column:
+        if days_smooth_insar and "insar" in column:
             _plot_smoothed(ax, df, column, days_smooth_insar, "r-")
 
-        ax.set_ylabel('InSAR cumulative CM')
+        ax.set_ylabel("InSAR cumulative CM")
         ax.legend()
 
     axes.ravel()[-1].set_xlabel("Date")
@@ -882,8 +939,8 @@ def _plot_line_df(df,
 
 
 def _get_gps_insar_cols(df):
-    gps_idxs = ['gps' in col for col in df.columns]
-    insar_idxs = ['insar' in col for col in df.columns]
+    gps_idxs = ["gps" in col for col in df.columns]
+    insar_idxs = ["insar" in col for col in df.columns]
     gps_cols = df.columns[gps_idxs]
     insar_cols = df.columns[insar_idxs]
     return gps_idxs, gps_cols, insar_idxs, insar_cols
@@ -902,7 +959,7 @@ def get_final_gps_insar_values(df, linear=True, as_df=False, velocity=True):
     if velocity:
         full_dates = df.index
         days_spanning = (full_dates[-1] - full_dates[0]).days
-        final_val_arr *= (10 * 365 / days_spanning)  # Now in mm/year
+        final_val_arr *= 10 * 365 / days_spanning  # Now in mm/year
 
     gps_idxs, gps_cols, insar_idxs, insar_cols = _get_gps_insar_cols(df)
 
@@ -911,40 +968,43 @@ def get_final_gps_insar_values(df, linear=True, as_df=False, velocity=True):
     if not as_df:
         return gps_cols, insar_cols, final_gps_vals, final_insar_vals
     else:
-        final_val_station_order = [s.split('_')[0] for s in gps_cols]
-        return pd.DataFrame(index=final_val_station_order,
-                            data={
-                                'gps': final_gps_vals,
-                                'insar': final_insar_vals
-                            })
+        final_val_station_order = [s.split("_")[0] for s in gps_cols]
+        return pd.DataFrame(
+            index=final_val_station_order,
+            data={"gps": final_gps_vals, "insar": final_insar_vals},
+        )
 
 
 def _load_stations(igrams_dir=None, defo_filename=None, defo_full_path=None):
-    directory, filename, full_path = apertools.sario.get_full_path(igrams_dir, defo_filename,
-                                                                   defo_full_path)
-    defo_img = apertools.latlon.load_deformation_img(filename=filename, full_path=full_path)
+    directory, filename, full_path = apertools.sario.get_full_path(
+        igrams_dir, defo_filename, defo_full_path
+    )
+    defo_img = apertools.latlon.load_deformation_img(
+        filename=filename, full_path=full_path
+    )
     existing_station_tuples = stations_within_image(defo_img)
     return existing_station_tuples
 
 
-def _load_station_list(igrams_dir=None,
-                       defo_filename=None,
-                       defo_full_path=None,
-                       station_name_list=[]):
+def _load_station_list(
+    igrams_dir=None, defo_filename=None, defo_full_path=None, station_name_list=[]
+):
     existing_station_tuples = _load_stations(igrams_dir, defo_filename, defo_full_path)
     if not station_name_list:
         # Take all station names
         station_name_list = [name for name, lon, lat in existing_station_tuples]
     else:
         station_name_list = [
-            name for name, lon, lat in existing_station_tuples if name in station_name_list
+            name
+            for name, lon, lat in existing_station_tuples
+            if name in station_name_list
         ]
     return sorted(station_name_list, key=lambda name: station_name_list.index(name))
 
 
 def _stations_from_df(df):
     """Takes df with columns ['NMHB_insar', 'TXAD_insar',...], returns unique station names"""
-    return list(set(map(lambda s: s.split('_')[0], df.columns)))
+    return list(set(map(lambda s: s.split("_")[0], df.columns)))
 
 
 def create_station_location_df(timeseries_df=None, station_name_list=None):
@@ -962,59 +1022,61 @@ def create_station_location_df(timeseries_df=None, station_name_list=None):
         station_name_list = _stations_from_df(timeseries_df)
     station_lonlats = [station_lonlat(name) for name in station_name_list]
     lons, lats = zip(*station_lonlats)
-    return pd.DataFrame(index=station_name_list, data={'lon': lons, 'lat': lats})
+    return pd.DataFrame(index=station_name_list, data={"lon": lons, "lat": lats})
 
 
 def _get_residuals(df, which):
-    if which not in ('gps', 'insar', 'diff'):
+    if which not in ("gps", "insar", "diff"):
         raise ValueError("argument `which` must in ('diff','gps','insar')")
 
     df_final_vals = get_final_gps_insar_values(df, as_df=True)
     df_locations = create_station_location_df(df)
     df_merged = df_locations.join(df_final_vals)
 
-    if which == 'diff':
-        values = df_merged['gps'] - df_merged['insar']
+    if which == "diff":
+        values = df_merged["gps"] - df_merged["insar"]
     else:
         values = df_merged[which]
     return df_merged, values
 
 
-def plot_residuals_by_loc(df,
-                          which='diff',
-                          title=None,
-                          fig=None,
-                          ax=None,
-                          plot_scatter=True,
-                          **plot_kwargs):
+def plot_residuals_by_loc(
+    df, which="diff", title=None, fig=None, ax=None, plot_scatter=True, **plot_kwargs
+):
     """Takes a timeseries df and plots the final values at their lat/lons
 
     df should be the timeseries df with "dts" as index created by create_insar_gps_df
     `which` argument is "diff","gps","insar", where 'diff' takes (gps - insar)
     """
+
     def _build_labels(df_merged, values):
         """Inclue station name and final value in label"""
-        return ["{}:\n{:.2f}".format(name, val) for name, val in zip(df_merged.index, values)]
+        return [
+            "{}:\n{:.2f}".format(name, val)
+            for name, val in zip(df_merged.index, values)
+        ]
 
     df_merged, values = _get_residuals(df, which)
 
     print("Total abs values summed:", total_abs_error(values))
     print("RMS value:", rms(values))
 
-    xs = df_merged['lon']
-    ys = df_merged['lat']
+    xs = df_merged["lon"]
+    ys = df_merged["lat"]
     labels = _build_labels(df_merged, values)
     if title is None:
         title = "Final values of %s by location" % which
-    fig, ax = _plot_latlon_with_labels(xs,
-                                       ys,
-                                       values,
-                                       labels,
-                                       title="",
-                                       fig=fig,
-                                       ax=ax,
-                                       plot_scatter=plot_scatter,
-                                       **plot_kwargs)
+    fig, ax = _plot_latlon_with_labels(
+        xs,
+        ys,
+        values,
+        labels,
+        title="",
+        fig=fig,
+        ax=ax,
+        plot_scatter=plot_scatter,
+        **plot_kwargs,
+    )
     return df_merged, fig, ax
 
 
@@ -1026,15 +1088,17 @@ def total_abs_error(errors):
     return np.sum(np.abs(errors))
 
 
-def _plot_latlon_with_labels(xs,
-                             ys,
-                             values,
-                             labels,
-                             title="",
-                             fig=None,
-                             ax=None,
-                             plot_scatter=True,
-                             **plot_kwargs):
+def _plot_latlon_with_labels(
+    xs,
+    ys,
+    values,
+    labels,
+    title="",
+    fig=None,
+    ax=None,
+    plot_scatter=True,
+    **plot_kwargs,
+):
     fig, ax = apertools.plotting.get_fig_ax(fig, ax)
 
     if plot_scatter:
@@ -1047,22 +1111,24 @@ def _plot_latlon_with_labels(xs,
             label,
             xy=(x, y),
             xytext=(-10, 10),
-            textcoords='offset points',
+            textcoords="offset points",
             # ha='right',
             # va='bottom',
-            bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+            bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.5),
             # arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'),
         )
     ax.set_title(title)
     return fig, ax
 
 
-def plot_gps_east_by_loc(defo_filename,
-                         igrams_dir,
-                         start_date=START_DATE,
-                         end_date=None,
-                         cmap_name="seismic_r",
-                         **plot_kwargs):
+def plot_gps_east_by_loc(
+    defo_filename,
+    igrams_dir,
+    start_date=START_DATE,
+    end_date=None,
+    cmap_name="seismic_r",
+    **plot_kwargs,
+):
     enu_df = create_gps_enu_df(
         defo_filename=defo_filename,
         igrams_dir=igrams_dir,
@@ -1077,32 +1143,28 @@ def plot_gps_east_by_loc(defo_filename,
     df_merged = df_locations.join(df_final_vals)
 
     labels = [
-        "{}: {:.2f}".format(stat, val) for stat, val in zip(df_merged.index, df_merged['east'])
+        "{}: {:.2f}".format(stat, val)
+        for stat, val in zip(df_merged.index, df_merged["east"])
     ]
-    xs = df_merged['lon']
-    ys = df_merged['lat']
-    vals = df_merged['east']
+    xs = df_merged["lon"]
+    ys = df_merged["lat"]
+    vals = df_merged["east"]
     # Note: reversed for ascending path so that red = west movement = toward satellite
-    cmap = apertools.plotting.make_shifted_cmap(cmap_name=cmap_name,
-                                                vmax=vals.max(),
-                                                vmin=vals.min())
+    cmap = apertools.plotting.make_shifted_cmap(
+        cmap_name=cmap_name, vmax=vals.max(), vmin=vals.min()
+    )
 
     first_date, last_date = east_df.index[0], east_df.index[-1]
     title = "east GPS movement from {} to {}".format(first_date, last_date)
-    fig, axes = _plot_latlon_with_labels(xs,
-                                         ys,
-                                         vals,
-                                         labels,
-                                         title=title,
-                                         cmap=cmap,
-                                         **plot_kwargs)
+    fig, axes = _plot_latlon_with_labels(
+        xs, ys, vals, labels, title=title, cmap=cmap, **plot_kwargs
+    )
     return df_merged, fig, axes
 
 
-def get_mean_correlations(igrams_dir=None,
-                          defo_filename=None,
-                          defo_full_path=None,
-                          cc_filename="cc_stack.h5"):
+def get_mean_correlations(
+    igrams_dir=None, defo_filename=None, defo_full_path=None, cc_filename="cc_stack.h5"
+):
     existing_station_tuples = _load_stations(igrams_dir, defo_filename, defo_full_path)
     corrs = {}
     dem_rsc = apertools.sario.load_dem_from_h5(defo_filename)
