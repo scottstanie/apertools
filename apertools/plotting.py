@@ -28,24 +28,26 @@ def get_fig_ax(fig, ax):
     return fig, ax
 
 
-def plot_image(img=None,
-               filename=None,
-               dset=None,
-               fig=None,
-               ax=None,
-               cmap='seismic_wide_y',
-               rsc_data=None,
-               title='',
-               label='',
-               xlabel='',
-               ylabel='',
-               vm=None,
-               twoway=True,
-               vmin=None,
-               vmax=None,
-               aspect='auto',
-               perform_shift=False,
-               colorbar=True):
+def plot_image(
+    img=None,
+    filename=None,
+    dset=None,
+    fig=None,
+    ax=None,
+    cmap="seismic_wide_y",
+    rsc_data=None,
+    title="",
+    label="",
+    xlabel="",
+    ylabel="",
+    vm=None,
+    twoway=True,
+    vmin=None,
+    vmax=None,
+    aspect="auto",
+    perform_shift=False,
+    colorbar=True,
+):
     """Plot an image with a zero-shifted colorbar
 
     Args:
@@ -69,6 +71,7 @@ def plot_image(img=None,
     if filename and dset:
         from apertools import sario
         import h5py
+
         with h5py.File(filename, "r") as f:
             img = f[dset][:]
         rsc_data = sario.load_dem_from_h5(filename)
@@ -141,9 +144,9 @@ def view_stack(
     display_img,
     geolist=None,
     label="Centimeters",
-    cmap='seismic_wide',
+    cmap="seismic_wide",
     perform_shift=False,
-    title='',
+    title="",
     vmin=None,
     vmax=None,
     legend_loc="upper left",
@@ -187,27 +190,31 @@ def view_stack(
     if isinstance(display_img, int):
         img = stack[display_img, :, :]
     # TODO: is this the best way to check if it's ndarray or Latlonimage?
-    elif hasattr(display_img, '__array_finalize__'):
+    elif hasattr(display_img, "__array_finalize__"):
         img = display_img
     else:
         raise ValueError("display_img must be an int or ndarray-like obj")
 
     title = title or "Deformation Time Series"  # Default title
-    plot_image(img,
-                       fig=imagefig,
-                       title=title,
-                       cmap=cmap,
-                       label=label,
-                       vmin=vmin,
-                       vmax=vmax,
-                       perform_shift=perform_shift)
+    plot_image(
+        img,
+        fig=imagefig,
+        title=title,
+        cmap=cmap,
+        label=label,
+        vmin=vmin,
+        vmax=vmax,
+        perform_shift=perform_shift,
+    )
 
     timefig = plt.figure()
 
     plt.title(title)
     legend_entries = []
     if not line_plot_kwargs:
-        line_plot_kwargs = dict(marker='o', linestyle='dashed', linewidth=1, markersize=4)
+        line_plot_kwargs = dict(
+            marker="o", linestyle="dashed", linewidth=1, markersize=4
+        )
 
     def onclick(event):
         # Ignore right/middle click, clicks off image
@@ -229,9 +236,9 @@ def view_stack(
 
         if lat_lon:
             lat, lon = img.rowcol_to_latlon(row, col)
-            legend_entries.append('Lat {:.3f}, Lon {:.3f}'.format(lat, lon))
+            legend_entries.append("Lat {:.3f}, Lon {:.3f}".format(lat, lon))
         else:
-            legend_entries.append('Row %s, Col %s' % (row, col))
+            legend_entries.append("Row %s, Col %s" % (row, col))
 
         plt.figure(2)
         plt.plot(geolist, timeline, **line_plot_kwargs)
@@ -242,7 +249,7 @@ def view_stack(
         plt.ylabel(label)
         plt.show()
 
-    imagefig.canvas.mpl_connect('button_press_event', onclick)
+    imagefig.canvas.mpl_connect("button_press_event", onclick)
     plt.show(block=True)
 
 
@@ -255,17 +262,19 @@ def equalize_and_mask(image, low=1e-6, high=2, fill_value=np.inf, db=True):
     return utils.db(im) if db else im
 
 
-def animate_stack(stack,
-                  pause_time=200,
-                  display=True,
-                  titles=None,
-                  label=None,
-                  save_title=None,
-                  cmap_name='seismic',
-                  shifted=True,
-                  vmin=None,
-                  vmax=None,
-                  **savekwargs):
+def animate_stack(
+    stack,
+    pause_time=200,
+    display=True,
+    titles=None,
+    label=None,
+    save_title=None,
+    cmap_name="seismic",
+    shifted=True,
+    vmin=None,
+    vmax=None,
+    **savekwargs,
+):
     """Runs a matplotlib loop to show each image in a 3D stack
 
     Args:
@@ -294,15 +303,18 @@ def animate_stack(stack,
     if titles:
         assert len(titles) == num_images, "len(titles) must equal stack.shape[0]"
     else:
-        titles = ['' for _ in range(num_images)]  # blank titles, same length
+        titles = ["" for _ in range(num_images)]  # blank titles, same length
     if np.iscomplexobj(stack):
         stack = np.abs(stack)
 
     # Use the same stack min and stack max (or vmin/vmax) for all colorbars/ color ranges
     vmin = np.min(stack) if vmin is None else vmin
     vmax = np.max(stack) if vmax is None else vmax
-    cmap = cmap_name if not shifted else make_shifted_cmap(
-        vmin=vmin, vmax=vmax, cmap_name=cmap_name)
+    cmap = (
+        cmap_name
+        if not shifted
+        else make_shifted_cmap(vmin=vmin, vmax=vmax, cmap_name=cmap_name)
+    )
 
     fig, ax = plt.subplots()
     axes_image = plt.imshow(stack[0, :, :], vmin=vmin, vmax=vmax, cmap=cmap)
@@ -316,18 +328,20 @@ def animate_stack(stack,
     def update_im(idx):
         axes_image.set_data(stack[idx, :, :])
         fig.suptitle(titles[idx])
-        return axes_image,
+        return (axes_image,)
 
-    stack_ani = animation.FuncAnimation(fig,
-                                        update_im,
-                                        frames=range(num_images),
-                                        interval=pause_time,
-                                        blit=False,
-                                        repeat=True)
+    stack_ani = animation.FuncAnimation(
+        fig,
+        update_im,
+        frames=range(num_images),
+        interval=pause_time,
+        blit=False,
+        repeat=True,
+    )
 
     if save_title:
         logger.info("Saving to %s", save_title)
-        stack_ani.save(save_title, writer='imagemagick', **savekwargs)
+        stack_ani.save(save_title, writer="imagemagick", **savekwargs)
 
     if display:
         plt.show()
@@ -338,7 +352,7 @@ def make_figure_noborder():
     fig = plt.figure(frameon=False)
 
     # To make the content fill the whole figure
-    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
     ax.set_axis_off()
     fig.add_axes(ax)
     return fig, ax
@@ -351,21 +365,22 @@ def set_aspect_image(fig, img, height=4):
     """
     nrows, ncols = img.shape
     width = ncols / nrows * height
-    print('width', width, 'height', height)
+    print("width", width, "height", height)
     fig.set_size_inches(width, height)
 
 
 def save_paper_figure(fig, fname, axis_off=True):
     fig.tight_layout()
     if axis_off:
-        plt.axis('off')
-    print('Saving %s' % fname)
-    fig.savefig(fname, bbox_inches='tight', transparent=True, dpi=300)
+        plt.axis("off")
+    print("Saving %s" % fname)
+    fig.savefig(fname, bbox_inches="tight", transparent=True, dpi=300)
 
 
 def plot_shapefile(filename, fig=None, ax=None, z=None):
     # Credit: https://gis.stackexchange.com/a/152331
     import shapefile
+
     fig, ax = get_fig_ax(fig, ax)
 
     with shapefile.Reader(filename) as sf:
@@ -373,34 +388,37 @@ def plot_shapefile(filename, fig=None, ax=None, z=None):
             x = [i[0] for i in shape.shape.points[:]]
             y = [i[1] for i in shape.shape.points[:]]
             if z is not None:
-                ax.plot3D(x, y, z, 'b')
+                ax.plot3D(x, y, z, "b")
             else:
-                ax.plot(x, y, 'b')
+                ax.plot(x, y, "b")
 
         plt.show()
 
 
 # def plotcompare(fnames, dset="velos", vmax=25, vmin=-25, cmap="seismic_wide", **kwargs):
-def plot_img_diff(arrays=None,
-                  dset="velos/1",
-                  fnames=[],
-                  vm=20,
-                  vdiff=4,
-                  vmax=None,
-                  vmin=None,
-                  twoway=True,
-                  cmap="seismic_wide_y",
-                  show=True,
-                  **kwargs):
+def plot_img_diff(
+    arrays=None,
+    dset="velos/1",
+    fnames=[],
+    vm=20,
+    vdiff=4,
+    vmax=None,
+    vmin=None,
+    twoway=True,
+    cmap="seismic_wide_y",
+    show=True,
+    **kwargs,
+):
     """Compare two images and their difference"""
     if arrays is None:
         from apertools import sario
+
         arrays = [sario.load(f, dset=dset, **kwargs) for f in fnames]
 
     n = len(arrays)
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(1, n+1, sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, n + 1, sharex=True, sharey=True)
     for ii in range(n):
         axim = axes[ii].imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
     fig.colorbar(axim, ax=axes[-2])

@@ -10,14 +10,15 @@ from datetime import datetime
 
 import apertools.latlon
 from apertools.log import get_log
+
 logger = get_log()
 
-__all__ = ['Sentinel', 'Uavsar', 'SentinelOrbit']
+__all__ = ["Sentinel", "Uavsar", "SentinelOrbit"]
 
 
 class Base(object):
-    """Base parser to illustrate expected interface/ minimum data available
-    """
+    """Base parser to illustrate expected interface/ minimum data available"""
+
     FILE_REGEX = None
     TIME_FMT = None
     _FIELD_MEANINGS = None
@@ -55,8 +56,9 @@ class Base(object):
 
         match = re.search(self.FILE_REGEX, self.filename)
         if not match:
-            raise ValueError('Invalid {} filename: {}'.format(self.__class__.__name__,
-                                                              self.filename))
+            raise ValueError(
+                "Invalid {} filename: {}".format(self.__class__.__name__, self.filename)
+            )
         else:
             return match.groups()
 
@@ -105,40 +107,44 @@ class Sentinel(Base):
     Attributes:
         filename (str) name of the sentinel data product
     """
-    FILE_REGEX = r'(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_([012])S([SDHV]{2})_([T\d]{15})_([T\d]{15})_(\d{6})_([\d\w]{6})_([\d\w]{4})'
-    TIME_FMT = '%Y%m%dT%H%M%S'
+
+    FILE_REGEX = r"(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_([012])S([SDHV]{2})_([T\d]{15})_([T\d]{15})_(\d{6})_([\d\w]{6})_([\d\w]{4})"
+    TIME_FMT = "%Y%m%dT%H%M%S"
     _FIELD_MEANINGS = (
-        'mission',
-        'beam',
-        'product type',
-        'resolution class',
-        'product level',
-        'polarization',
-        'start datetime',
-        'stop datetime',
-        'orbit number',
-        'data-take identified',
-        'product unique id',
+        "mission",
+        "beam",
+        "product type",
+        "resolution class",
+        "product level",
+        "polarization",
+        "start datetime",
+        "stop datetime",
+        "orbit number",
+        "data-take identified",
+        "product unique id",
     )
 
     def __init__(self, filename, **kwargs):
         super(Sentinel, self).__init__(filename, **kwargs)
         # The name of the unzipped .SAFE directory (with .zip stripped)
         self._safe_dir = self._form_safe_dir(filename)
-        self._preview_folder = os.path.join(self._safe_dir, 'preview')
-        self.map_overlay_kml = os.path.join(self._preview_folder, 'map-overlay.kml')
-        self._lon_lat_overlay_coords = apertools.latlon.map_overlay_coords(self.map_overlay_kml)
+        self._preview_folder = os.path.join(self._safe_dir, "preview")
+        self.map_overlay_kml = os.path.join(self._preview_folder, "map-overlay.kml")
+        self._lon_lat_overlay_coords = apertools.latlon.map_overlay_coords(
+            self.map_overlay_kml
+        )
 
     def _form_safe_dir(self, filename):
         """Get just the Sentinel product name without extensions, then add .SAFE"""
         # Strip '/' from end to start in case they pass "blahblah.SAFE/", or splitext[1] is ''
-        fname = filename.rstrip('/').replace('.zip', '').replace('.geo', '')
+        fname = filename.rstrip("/").replace(".zip", "").replace(".geo", "")
         root, ext = os.path.splitext(fname)
-        return root + '.SAFE'
+        return root + ".SAFE"
 
     def __str__(self):
-        return "{} {}, path {} from {}".format(self.__class__.__name__, self.mission, self.path,
-                                               self.date)
+        return "{} {}, path {} from {}".format(
+            self.__class__.__name__, self.mission, self.path, self.date
+        )
 
     def __lt__(self, other):
         return (self.start_time, self.filename) < (other.start_time, other.filename)
@@ -167,7 +173,7 @@ class Sentinel(Base):
             >>> print(s.start_time)
             2018-04-08 04:30:25
         """
-        start_time_str = self._get_field('start datetime')
+        start_time_str = self._get_field("start datetime")
         return datetime.strptime(start_time_str, self.TIME_FMT)
 
     @property
@@ -185,7 +191,7 @@ class Sentinel(Base):
             >>> print(s.stop_time)
             2018-04-08 04:30:53
         """
-        stop_time_str = self._get_field('stop datetime')
+        stop_time_str = self._get_field("stop datetime")
         return datetime.strptime(stop_time_str, self.TIME_FMT)
 
     @property
@@ -197,7 +203,7 @@ class Sentinel(Base):
             >>> print(s.polarization)
             DV
         """
-        return self._get_field('polarization')
+        return self._get_field("polarization")
 
     @property
     def product_type(self):
@@ -208,7 +214,7 @@ class Sentinel(Base):
             >>> print(s.product_type)
             SLC
         """
-        return self._get_field('product type')
+        return self._get_field("product type")
 
     @property
     def level(self):
@@ -224,7 +230,7 @@ class Sentinel(Base):
             >>> print(s.mission)
             S1A
         """
-        return self._get_field('mission')
+        return self._get_field("mission")
 
     @property
     def absolute_orbit(self):
@@ -235,7 +241,7 @@ class Sentinel(Base):
             >>> print(s.absolute_orbit)
             21371
         """
-        return int(self._get_field('orbit number'))
+        return int(self._get_field("orbit number"))
 
     @property
     def relative_orbit(self):
@@ -252,9 +258,9 @@ class Sentinel(Base):
             >>> print(s.relative_orbit)
             160
         """
-        if self.mission == 'S1A':
+        if self.mission == "S1A":
             return ((self.absolute_orbit - 73) % 175) + 1
-        elif self.mission == 'S1B':
+        elif self.mission == "S1B":
             return ((self.absolute_orbit - 27) % 175) + 1
 
     @property
@@ -265,7 +271,7 @@ class Sentinel(Base):
     @property
     def product_uid(self):
         """Unique identifier of product (last 4 of filename)"""
-        return self._get_field('product unique id')
+        return self._get_field("product unique id")
 
     @property
     def date(self):
@@ -280,7 +286,9 @@ class Sentinel(Base):
         (lon_left,lon_right,lat_bottom,lat_top)
         """
         if not os.path.exists(self.map_overlay_kml):
-            raise ValueError("No map-overlay.kml file found in %s" % self._preview_folder)
+            raise ValueError(
+                "No map-overlay.kml file found in %s" % self._preview_folder
+            )
         lons, lats = list(zip(*self._lon_lat_overlay_coords))
         return min(lons), max(lons), min(lats), max(lats)
 
@@ -310,7 +318,7 @@ class Sentinel(Base):
 
     def overlaps(self, geojson_or_rsc):
         """Swath is contained in DEM or geojson (parsed to figure out which is passed)"""
-        if 'x_first' in [k.lower() for k in geojson_or_rsc.keys()]:
+        if "x_first" in [k.lower() for k in geojson_or_rsc.keys()]:
             return self.overlaps_dem(geojson_or_rsc)
 
         # Test for geojson by extracting the coords
@@ -356,17 +364,26 @@ class SentinelOrbit(Base):
     Attributes:
         filename (str) name of the sentinel data product
     """
-    FILE_REGEX = r'(S1A|S1B)_OPER_AUX_([\w_]{6})_OPOD_([T\d]{15})_V([T\d]{15})_([T\d]{15}).EOF'
-    TIME_FMT = '%Y%m%dT%H%M%S'
-    _FIELD_MEANINGS = ('mission', 'orbit type', 'created datetime', 'start datetime',
-                       'stop datetime')
+
+    FILE_REGEX = (
+        r"(S1A|S1B)_OPER_AUX_([\w_]{6})_OPOD_([T\d]{15})_V([T\d]{15})_([T\d]{15}).EOF"
+    )
+    TIME_FMT = "%Y%m%dT%H%M%S"
+    _FIELD_MEANINGS = (
+        "mission",
+        "orbit type",
+        "created datetime",
+        "start datetime",
+        "stop datetime",
+    )
 
     def __init__(self, filename, **kwargs):
         super(SentinelOrbit, self).__init__(filename, **kwargs)
 
     def __str__(self):
-        return "{} {} from {} to {}".format(self.orbit_type, self.__class__.__name__,
-                                            self.start_time, self.stop_time)
+        return "{} {} from {} to {}".format(
+            self.orbit_type, self.__class__.__name__, self.start_time, self.stop_time
+        )
 
     def __lt__(self, other):
         return (self.start_time, self.filename) < (other.start_time, other.filename)
@@ -376,12 +393,7 @@ class SentinelOrbit(Base):
         return self.start_time < dt < self.stop_time
 
     def __eq__(self, other):
-        return (
-            self.mission,
-            self.start_time,
-            self.stop_time,
-            self.orbit_type,
-        ) == (
+        return (self.mission, self.start_time, self.stop_time, self.orbit_type,) == (
             other.mission,
             other.start_time,
             other.stop_time,
@@ -397,7 +409,7 @@ class SentinelOrbit(Base):
             >>> print(s.mission)
             S1A
         """
-        return self._get_field('mission')
+        return self._get_field("mission")
 
     @property
     def start_time(self):
@@ -414,7 +426,7 @@ class SentinelOrbit(Base):
             >>> print(s.start_time)
             2019-12-31 22:59:42
         """
-        start_time_str = self._get_field('start datetime')
+        start_time_str = self._get_field("start datetime")
         return datetime.strptime(start_time_str, self.TIME_FMT)
 
     @property
@@ -432,7 +444,7 @@ class SentinelOrbit(Base):
             >>> print(s.stop_time)
             2020-01-02 00:59:42
         """
-        stop_time_str = self._get_field('stop datetime')
+        stop_time_str = self._get_field("stop datetime")
         return datetime.strptime(stop_time_str, self.TIME_FMT)
 
     @property
@@ -450,7 +462,7 @@ class SentinelOrbit(Base):
             >>> print(s.created_time)
             2020-01-21 12:06:54
         """
-        stop_time_str = self._get_field('created datetime')
+        stop_time_str = self._get_field("created datetime")
         return datetime.strptime(stop_time_str, self.TIME_FMT)
 
     @property
@@ -465,13 +477,13 @@ class SentinelOrbit(Base):
         >>> print(s.orbit_type)
         restituted
         """
-        o = self._get_field('orbit type')
-        if o == 'POEORB':
-            return 'precise'
-        elif o == 'RESORB':
-            return 'restituted'
-        elif o == 'PREORB':
-            return 'predicted'
+        o = self._get_field("orbit type")
+        if o == "POEORB":
+            return "precise"
+        elif o == "RESORB":
+            return "restituted"
+        elif o == "PREORB":
+            return "predicted"
         else:
             raise ValueError("unknown orbit type: %s" % self.filename)
 
@@ -507,30 +519,33 @@ class Uavsar(Base):
         >>> parser = Uavsar(fname)
 
     """
-    FILE_REGEX = r'([\w\d]{6})_(\d{3})(\w+)_(\d{2})(\d{3})_(\d{3})_(\d{6})_(\w)(\d{3})(\w{0,4})_(XX|CX)_(\w{2})(_ML\dX\d)?'
-    TIME_FMT = '%y%m%d'
+
+    FILE_REGEX = r"([\w\d]{6})_(\d{3})(\w+)_(\d{2})(\d{3})_(\d{3})_(\d{6})_(\w)(\d{3})(\w{0,4})_(XX|CX)_(\w{2})(_ML\dX\d)?"
+    TIME_FMT = "%y%m%d"
     _FIELD_MEANINGS = (
-        'target site',
-        'heading',
-        'counter',
-        'flight year',
-        'flight number',
-        'flight line',
-        'date',
-        'frequency band',
-        'steering angle',
-        'polarization',
-        'cross talk',
-        'version number',
-        'downsampling',
+        "target site",
+        "heading",
+        "counter",
+        "flight year",
+        "flight number",
+        "flight line",
+        "date",
+        "frequency band",
+        "steering angle",
+        "polarization",
+        "cross talk",
+        "version number",
+        "downsampling",
     )
     # Filetype of real or complex depends on the polarization for .grd, .mlc
-    REAL_POLS = ('HHHH', 'HVHV', 'VVVV')
-    COMPLEX_POLS = ('HHHV', 'HHVV', 'HVVV')
+    REAL_POLS = ("HHHH", "HVHV", "VVVV")
+    COMPLEX_POLS = ("HHHV", "HHVV", "HVVV")
     POLARIZATIONS = REAL_POLS + COMPLEX_POLS
 
     def __str__(self):
-        return "{} {} from {}".format(self.__class__.__name__, self.polarization, self.date)
+        return "{} {} from {}".format(
+            self.__class__.__name__, self.polarization, self.date
+        )
 
     @property
     def date(self):
@@ -546,7 +561,7 @@ class Uavsar(Base):
             >>> parser.date
             datetime.date(2008, 7, 31)
         """
-        date_str = self._get_field('date')
+        date_str = self._get_field("date")
         return datetime.strptime(date_str, self.TIME_FMT).date()
 
     @property
@@ -563,12 +578,12 @@ class Uavsar(Base):
             >>> Uavsar('brazos_14938_17087_004_170831_L090_CX_01_grd.zip').polarization
             ''
         """
-        return self._get_field('polarization')
+        return self._get_field("polarization")
 
     @property
     def target_site(self):
         """Target site of acquisition"""
-        return self._get_field('target site')
+        return self._get_field("target site")
 
     @property
     def downsampling(self):
@@ -582,8 +597,8 @@ class Uavsar(Base):
         >>> Uavsar('brazos_14938_17087_004_170831_L090HHHV_CX_01_ML3X3.grd').downsampling
         '3X3'
         """
-        sample_str = self._get_field('downsampling')
-        return sample_str.replace('_ML', '') if sample_str else None
+        sample_str = self._get_field("downsampling")
+        return sample_str.replace("_ML", "") if sample_str else None
 
     def _make_ann_filename(self):
         """Take the name of a data file and return corresponding .ann name
@@ -600,18 +615,18 @@ class Uavsar(Base):
         # The .mlc and .grd files have polarization added to filename, .ann files don't
         shortname = self.filename
         for p in self.POLARIZATIONS:
-            shortname = shortname.replace(p, '')
+            shortname = shortname.replace(p, "")
 
         ext = os.path.splitext(shortname)[1]
         # If this is a block we split up and names .1.int, remove that since
         # all have the same .ann file
-        shortname = re.sub(r'\.\d' + ext, ext, shortname)
+        shortname = re.sub(r"\.\d" + ext, ext, shortname)
         if ext == ".grd":
             # .int.grd is full ext
-            full_ext = '.'.join(shortname.split('.')[1:])
-            return shortname.replace(full_ext, 'ann')
+            full_ext = ".".join(shortname.split(".")[1:])
+            return shortname.replace(full_ext, "ann")
 
-        return shortname.replace(ext, '.ann')
+        return shortname.replace(ext, ".ann")
 
     @property
     def ann_filename(self):
@@ -628,23 +643,26 @@ class Uavsar(Base):
         return self.parse_ann_file()
 
     def parse_ann_file(self):
-        return parse_ann_file(self.ann_filename, filename=self.filename, verbose=self.verbose)
+        return parse_ann_file(
+            self.ann_filename, filename=self.filename, verbose=self.verbose
+        )
 
 
 class UavsarInt(Uavsar):
     """See https://uavsar.jpl.nasa.gov/science/documents/rpi-format.html"""
-    FILE_REGEX = r'([\w\d]{6})_(\d{2})(\d{3})_(\d{2})(\d{3})-(\d{3})_(\d{5})-(\d{3})_(\d{4})d_s01_([\w\d]{6,8})_(\d{2})'
+
+    FILE_REGEX = r"([\w\d]{6})_(\d{2})(\d{3})_(\d{2})(\d{3})-(\d{3})_(\d{5})-(\d{3})_(\d{4})d_s01_([\w\d]{6,8})_(\d{2})"
     _FIELD_MEANINGS = (
-        'target site',
-        'heading',
-        'counter',
-        'track1 year',
-        'track1 flight number',
-        'track1 flight line',
+        "target site",
+        "heading",
+        "counter",
+        "track1 year",
+        "track1 flight number",
+        "track1 flight line",
         # TODO: fill in rest
-        'flight year',
-        'flight number',
-        'flight line',
+        "flight year",
+        "flight number",
+        "flight line",
     )
 
     def __str__(self):
@@ -661,10 +679,11 @@ def parse_ann_file(ann_filename, filename=None, ext=None, verbose=False):
         dict: the annotation file parsed into a dict. If no annotation file
             can be found, None is returned
     """
+
     def _parse_line(line):
         wordlist = line.split()
         # Pick the entry after the equal sign when splitting the line
-        return wordlist[wordlist.index('=') + 1]
+        return wordlist[wordlist.index("=") + 1]
 
     def _parse_int(line):
         return int(_parse_line(line))
@@ -673,7 +692,7 @@ def parse_ann_file(ann_filename, filename=None, ext=None, verbose=False):
         return float(_parse_line(line))
 
     def _make_line_regex(ext, field):
-        return r'{}.{}'.format(line_keywords.get(ext), field)
+        return r"{}.{}".format(line_keywords.get(ext), field)
 
     if not ext:
         if not filename:
@@ -694,47 +713,47 @@ def parse_ann_file(ann_filename, filename=None, ext=None, verbose=False):
     ann_data = {}
     line_keywords = {
         # ext: line start term
-        '.slc': 'slc_mag',
-        '.mlc': 'mlc_mag',
-        '.int': 'slt',
-        '.unw': 'slt',
-        '.cor': 'slt',
-        '.amp': 'slt',
-        '.grd': 'grd_mag',
+        ".slc": "slc_mag",
+        ".mlc": "mlc_mag",
+        ".int": "slt",
+        ".unw": "slt",
+        ".cor": "slt",
+        ".amp": "slt",
+        ".grd": "grd_mag",
     }
     # Add extra .grd extensions
-    for e in ('.int', '.unw', '.cc', '.cor', '.amp1', '.amp2'):
-        line_keywords[e + '.grd'] = line_keywords['.grd']
+    for e in (".int", ".unw", ".cc", ".cor", ".amp1", ".amp2"):
+        line_keywords[e + ".grd"] = line_keywords[".grd"]
 
-    row_key = line_keywords.get(ext) + '.set_rows'
-    col_key = line_keywords.get(ext) + '.set_cols'
+    row_key = line_keywords.get(ext) + ".set_rows"
+    col_key = line_keywords.get(ext) + ".set_cols"
 
     # Peg position the nadir position of aircraft at middle of datatake
-    with open(ann_filename, 'r') as f:
+    with open(ann_filename, "r") as f:
         for line in f.readlines():
             if line.startswith(row_key):
-                ann_data['rows'] = _parse_int(line)
+                ann_data["rows"] = _parse_int(line)
                 # Also add .rsc equivalent for compatibility
-                ann_data['file_length'] = ann_data['rows']
+                ann_data["file_length"] = ann_data["rows"]
             elif line.startswith(col_key):
-                ann_data['cols'] = _parse_int(line)
-                ann_data['width'] = ann_data['cols']
+                ann_data["cols"] = _parse_int(line)
+                ann_data["width"] = ann_data["cols"]
             # Center Latitude of Upper Left Pixel of GRD image, or
             # range Offset(R0) from Peg in meters
             # Note: using convention of .rsc files for consitency
             # I.E. x_first, x_step, y_first, y_step
-            elif re.match(_make_line_regex(ext, 'row_addr'), line):
-                ann_data['y_first'] = _parse_float(line)
+            elif re.match(_make_line_regex(ext, "row_addr"), line):
+                ann_data["y_first"] = _parse_float(line)
             # Center Longitude of Upper Left Pixel
-            elif re.match(_make_line_regex(ext, 'col_addr'), line):
-                ann_data['x_first'] = _parse_float(line)
+            elif re.match(_make_line_regex(ext, "col_addr"), line):
+                ann_data["x_first"] = _parse_float(line)
             # GRD Latitude Pixel Spacing
             # the step is negative in the y (row) direction
-            elif re.match(_make_line_regex(ext, 'row_mult'), line):
-                ann_data['y_step'] = _parse_float(line)
+            elif re.match(_make_line_regex(ext, "row_mult"), line):
+                ann_data["y_step"] = _parse_float(line)
             # GRD Longitude Pixel Spacing or SLC R (range) Slant Post Spacing
-            elif re.match(_make_line_regex(ext, 'col_mult'), line):
-                ann_data['x_step'] = _parse_float(line)
+            elif re.match(_make_line_regex(ext, "col_mult"), line):
+                ann_data["x_step"] = _parse_float(line)
             # TODO: Add more parsing! whatever is useful from .ann file
 
     if verbose:

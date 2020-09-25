@@ -37,6 +37,7 @@ def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None, filename=N
 
     if filename:
         import rasterio as rio  # only spend import if needed
+
         with rio.open(filename, "r") as src:
             return list(src.bounds)
 
@@ -95,8 +96,7 @@ def extent(geojson):
 
 
 def corners_to_geojson(corners):
-    """Takes in 5 points for the corners, returns geojson
-    """
+    """Takes in 5 points for the corners, returns geojson"""
     return {"type": "Polygon", "coordinates": [corners]}
 
 
@@ -116,14 +116,14 @@ def coords(geojson):
     """
     # First, if given a deeper object (e.g. from geojson.io), extract just polygon
     try:
-        if geojson.get('type') == 'FeatureCollection':
-            geojson = geojson['features'][0]['geometry']
-        elif geojson.get('type') == 'Feature':
-            geojson = geojson['geometry']
+        if geojson.get("type") == "FeatureCollection":
+            geojson = geojson["features"][0]["geometry"]
+        elif geojson.get("type") == "Feature":
+            geojson = geojson["geometry"]
     except KeyError:
         raise ValueError("Invalid geojson")
 
-    return geojson['coordinates'][0]
+    return geojson["coordinates"][0]
 
 
 def format_coords(geojson_dict, decimals=4):
@@ -140,20 +140,21 @@ def format_coords(geojson_dict, decimals=4):
         str: lon,lat points of the Polygon in order as 'lon1,lat1,lon2,lat2,...'
     """
     c = coords(geojson_dict)
-    fmt_str = '{{0:.{decimals}f}}'.format(decimals=decimals)
-    return ','.join(fmt_str.format(coord) for coord in itertools.chain.from_iterable(c))
+    fmt_str = "{{0:.{decimals}f}}".format(decimals=decimals)
+    return ",".join(fmt_str.format(coord) for coord in itertools.chain.from_iterable(c))
 
 
 def kml_string_fmt(gj_dict):
     # Example coord_string:
     # -102.2,29.5 -101.4,29.5 -101.4,28.8 -102.2,28.8 -102.2,29.5
     coord_list = coords(gj_dict)
-    return ' '.join(map(lambda tup: ','.join((str(s) for s in tup)), coord_list))
+    return " ".join(map(lambda tup: ",".join((str(s) for s in tup)), coord_list))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
     import json
+
     try:
         gj_file = sys.argv[1]
     except IndexError:

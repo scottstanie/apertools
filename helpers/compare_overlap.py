@@ -7,7 +7,9 @@ import matplotlib.pyplot as plt
 
 
 def pct_diff_larger(shift, mm_thresh, diff_patch):
-    return np.nansum(np.abs(diff_patch + shift) > mm_thresh) / np.sum(~np.isnan(diff_patch))
+    return np.nansum(np.abs(diff_patch + shift) > mm_thresh) / np.sum(
+        ~np.isnan(diff_patch)
+    )
 
 
 def find_min_shift(diff_patch, mm_thresh=5):
@@ -20,7 +22,9 @@ def find_min_shift(diff_patch, mm_thresh=5):
     return minshift, float(minval)
 
 
-def plot_stuff(asc_patch, desc_patch, axes=None, colorbar=True, cmap="seismic_wide", vm=20):
+def plot_stuff(
+    asc_patch, desc_patch, axes=None, colorbar=True, cmap="seismic_wide", vm=20
+):
     diff_patch = asc_patch - desc_patch
 
     if axes is None:
@@ -59,13 +63,17 @@ if __name__ == "__main__":
         asc_velo = f[dset][:]
         asc_mask = asc_velo == 0
         asc_velo[asc_mask] = np.nan
-        asc_velo = latlon.LatlonImage(data=asc_velo, dem_rsc_file=sario.find_rsc_file(asc_path))
+        asc_velo = latlon.LatlonImage(
+            data=asc_velo, dem_rsc_file=sario.find_rsc_file(asc_path)
+        )
 
     with h5py.File(desc_path) as f:
         desc_velo = f[dset][:]
         desc_mask = desc_velo == 0
         desc_velo[desc_mask] = np.nan
-        desc_velo = latlon.LatlonImage(data=desc_velo, dem_rsc_file=sario.find_rsc_file(desc_path))
+        desc_velo = latlon.LatlonImage(
+            data=desc_velo, dem_rsc_file=sario.find_rsc_file(desc_path)
+        )
         # desc_los = latlon.LatlonImage(data=desc_los_up, dem_rsc=desc_velo.dem_rsc)
 
     # TODO: still need to get better loading of defos vs velocities
@@ -99,7 +107,9 @@ if __name__ == "__main__":
     asc_velo_up = asc_velo / asc_los_up
     desc_velo_up = desc_velo / desc_los_up
 
-    left, right, bottom, top = latlon.intersection_corners(asc_velo.dem_rsc, desc_velo.dem_rsc)
+    left, right, bottom, top = latlon.intersection_corners(
+        asc_velo.dem_rsc, desc_velo.dem_rsc
+    )
     print(left, right, bottom, top)
 
     # asc_patch = asc_velo[32.3:30.71, -104.1:-102.31]
@@ -116,8 +126,10 @@ if __name__ == "__main__":
     # shift, _ = find_min_shift(diff_patch[:, 10:100], mm_thresh=mm_thresh)
     # shift = 1
 
-    print(" %.2f is greater than %f mm/year difference on the two paths" %
-          (pct_diff_larger(shift, mm_thresh, diff_patch), mm_thresh))
+    print(
+        " %.2f is greater than %f mm/year difference on the two paths"
+        % (pct_diff_larger(shift, mm_thresh, diff_patch), mm_thresh)
+    )
 
     # asc_patch += shift
     # diff_patch += shift

@@ -1,4 +1,5 @@
 import unittest
+
 # import os
 # from os.path import join, dirname, exists
 # import tempfile
@@ -17,23 +18,23 @@ class TestLatlonConversion(unittest.TestCase):
 
         self.im_test = np.arange(20).reshape((5, 4))
         self.rsc_info1 = {
-            'x_first': -5.0,
-            'y_first': 4.0,
-            'x_step': 0.5,
-            'y_step': -0.5,
-            'file_length': 5,
-            'width': 4
+            "x_first": -5.0,
+            "y_first": 4.0,
+            "x_step": 0.5,
+            "y_step": -0.5,
+            "file_length": 5,
+            "width": 4,
         }
         self.im1 = latlon.LatlonImage(data=self.im_test, rsc_data=self.rsc_info1)
 
         self.im_test2 = np.arange(30).reshape((6, 5))
         self.rsc_info2 = {
-            'x_first': -4.0,
-            'y_first': 2.5,
-            'x_step': 0.5,
-            'y_step': -0.5,
-            'file_length': 6,
-            'width': 5
+            "x_first": -4.0,
+            "y_first": 2.5,
+            "x_step": 0.5,
+            "y_step": -0.5,
+            "file_length": 6,
+            "width": 5,
         }
         self.im2 = latlon.LatlonImage(data=self.im_test2, rsc_data=self.rsc_info2)
         self.image_list = [self.im1, self.im2]
@@ -56,12 +57,12 @@ class TestLatlonImage(unittest.TestCase):
         self.im_data = np.arange(20).reshape((5, 4))
         self.stack_data = np.arange(60).reshape((3, 5, 4))
         self.rsc_info = {
-            'x_first': -5.0,
-            'y_first': 4.0,
-            'x_step': 0.5,
-            'y_step': -0.5,
-            'file_length': 5,
-            'width': 4
+            "x_first": -5.0,
+            "y_first": 4.0,
+            "x_step": 0.5,
+            "y_step": -0.5,
+            "file_length": 5,
+            "width": 4,
         }
         self.im_ll = latlon.LatlonImage(data=self.im_data, rsc_data=self.rsc_info)
         self.stack_ll = latlon.LatlonImage(data=self.stack_data, rsc_data=self.rsc_info)
@@ -113,16 +114,16 @@ class TestLatlonImage(unittest.TestCase):
         assert_array_almost_equal(out2, expected)
         assert_array_almost_equal(out3, expected)
 
-        out2 = self.im_ll.nearest_pixel(lon=np.arange(-4.9, -4.6, .1), lat=3.6)
-        out3 = self.stack_ll.nearest_pixel(lon=np.arange(-4.9, -4.6, .1), lat=3.6)
+        out2 = self.im_ll.nearest_pixel(lon=np.arange(-4.9, -4.6, 0.1), lat=3.6)
+        out3 = self.stack_ll.nearest_pixel(lon=np.arange(-4.9, -4.6, 0.1), lat=3.6)
         expected = (1, np.array([0, 0, 1, 1]))
         self.assertEquals(out2[0], expected[0])
         self.assertEquals(out3[0], expected[0])
         assert_array_almost_equal(out2[1], expected[1])
         assert_array_almost_equal(out3[1], expected[1])
 
-        out2 = self.im_ll.nearest_pixel(lon=np.arange(-5.3, -4.8, .1), lat=3.6)
-        out3 = self.stack_ll.nearest_pixel(lon=np.arange(-5.3, -4.8, .1), lat=3.6)
+        out2 = self.im_ll.nearest_pixel(lon=np.arange(-5.3, -4.8, 0.1), lat=3.6)
+        out3 = self.stack_ll.nearest_pixel(lon=np.arange(-5.3, -4.8, 0.1), lat=3.6)
         expected = (1, np.array([None, 0, 0, 0, 0]))
         assert_array_almost_equal(out2[1][1:], expected[1][1:])
         self.assertEquals(out2[1][0], expected[1][0])
@@ -138,8 +139,12 @@ class TestLatlonImage(unittest.TestCase):
         # assert_array_almost_equal(self.stack_ll[:, 4.0, -5.0], [0, 20, 40])
         # assert_array_almost_equal(self.stack_ll[:2, 4.0, -5.0], [0, 20])
 
-        assert_array_almost_equal(self.im_ll[4.0:3.3, -5.0:-4.0], np.array([[0, 1], [4, 5]]))
+        assert_array_almost_equal(
+            self.im_ll[4.0:3.3, -5.0:-4.0], np.array([[0, 1], [4, 5]])
+        )
         # First two layers, top left 2 box
 
-        assert_array_almost_equal(self.stack_ll[:2, 4.0:3.3, -5.0:-4.0],
-                                  np.array([[[0, 1], [4, 5]], [[20, 21], [24, 25]]]))
+        assert_array_almost_equal(
+            self.stack_ll[:2, 4.0:3.3, -5.0:-4.0],
+            np.array([[[0, 1], [4, 5]], [[20, 21], [24, 25]]]),
+        )

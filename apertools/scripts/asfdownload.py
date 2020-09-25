@@ -32,12 +32,14 @@ always-resume=true
 import argparse
 import os
 import subprocess
+
 # import apertools.geojson
 # import gdal
 import rasterio as rio
 
 # python 2: urllib.urlencode
 from urllib.parse import urlencode
+
 # urlencode({"intersectsWith":"point(-119.543 37.925)"})
 # Out[51]: 'intersectsWith=point%28-119.543+37.925%29'
 #

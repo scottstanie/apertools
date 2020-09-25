@@ -45,6 +45,7 @@ def which(program):
     """Mimics UNIX which
 
     Used from https://stackoverflow.com/a/377028"""
+
     def is_exe(fpath):
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
@@ -99,7 +100,7 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False):
     if col_cutoff != 0:
         arr = arr[:, :-col_cutoff]
     if np.issubdtype(arr.dtype, np.integer):
-        arr = arr.astype('float')
+        arr = arr.astype("float")
 
     return np.mean(arr.reshape(new_rows, row_looks, new_cols, col_looks), axis=(3, 1))
 
@@ -123,6 +124,7 @@ def take_looks_rsc(rsc_data, row_looks, col_looks):
 
 def scale_dset(filename, dset, scale):
     import h5py
+
     with h5py.File(filename, "r+") as f:
         data = f[dset]
         data[...] *= scale
@@ -151,24 +153,29 @@ def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC
     """
     import gdal
     from osgeo import gdalconst
+
     if row_looks == 1 and col_looks == 1:
         raise ValueError("Must take looks for file on disk")
     in_ds = gdal.Open(src_filename)
     shape = (in_ds.RasterYSize, in_ds.RasterXSize)  # (rows, cols)
     new_rows, new_cols = _find_look_outsize(shape, row_looks, col_looks)
-    return gdal.Translate(outname,
-                          in_ds,
-                          height=new_rows,
-                          width=new_cols,
-                          format=format,
-                          resampleAlg=gdalconst.GRIORA_Average)
+    return gdal.Translate(
+        outname,
+        in_ds,
+        height=new_rows,
+        width=new_cols,
+        format=format,
+        resampleAlg=gdalconst.GRIORA_Average,
+    )
 
 
 def crossmul_gdal(outfile, file1, file2, row_looks, col_looks, format="ROI_PAC"):
     """Uses gdal_calc.py to multiply, then gdal_translate for looks"""
     tmp = "tmp.tif"
     cmd = """gdal_calc.py -A {f1} -B {f1} --outfile={tmp} \
-            --calc="A * conj(B)" --NoDataValue=0 """.format(f1=file1, f2=file2, tmp=tmp)
+            --calc="A * conj(B)" --NoDataValue=0 """.format(
+        f1=file1, f2=file2, tmp=tmp
+    )
     subprocess.check_call(cmd, shell=True)
     take_looks_gdal(outfile, tmp, row_looks, col_looks, format=format)
     os.remove(tmp)
@@ -192,7 +199,7 @@ db = log
 
 def mag(db_image):
     """Reverse of log/db: decibel to magnitude"""
-    return 10**(db_image / 20)
+    return 10 ** (db_image / 20)
 
 
 def mask_zeros(image):
@@ -242,7 +249,7 @@ def percent_zero(arr=None):
         >>> print(percent_zero(arr=a))
         0.25
     """
-    return (np.sum(arr == 0) / arr.size)
+    return np.sum(arr == 0) / arr.size
 
 
 def sliding_window_view(x, shape, step=None):
@@ -288,14 +295,14 @@ def sliding_window_view(x, shape, step=None):
     try:
         shape = np.array(shape, np.int)
     except ValueError:
-        raise TypeError('`shape` must be a sequence of integer')
+        raise TypeError("`shape` must be a sequence of integer")
     else:
         if shape.ndim > 1:
-            raise ValueError('`shape` must be one-dimensional sequence of integer')
+            raise ValueError("`shape` must be one-dimensional sequence of integer")
         if len(x.shape) != len(shape):
             raise ValueError("`shape` length doesn't match with input array dimensions")
         if np.any(shape <= 0):
-            raise ValueError('`shape` cannot contain non-positive value')
+            raise ValueError("`shape` cannot contain non-positive value")
 
     if step is None:
         step = np.ones(len(x.shape), np.intp)
@@ -303,18 +310,20 @@ def sliding_window_view(x, shape, step=None):
         try:
             step = np.array(step, np.intp)
         except ValueError:
-            raise TypeError('`step` must be a sequence of integer')
+            raise TypeError("`step` must be a sequence of integer")
         else:
             if step.ndim > 1:
-                raise ValueError('`step` must be one-dimensional sequence of integer')
+                raise ValueError("`step` must be one-dimensional sequence of integer")
             if len(x.shape) != len(step):
-                raise ValueError("`step` length doesn't match with input array dimensions")
+                raise ValueError(
+                    "`step` length doesn't match with input array dimensions"
+                )
             if np.any(step <= 0):
-                raise ValueError('`step` cannot contain non-positive value')
+                raise ValueError("`step` cannot contain non-positive value")
 
     o = (np.array(x.shape) - shape) // step + 1  # output shape
     if np.any(o <= 0):
-        raise ValueError('window shape cannot larger than input array shape')
+        raise ValueError("window shape cannot larger than input array shape")
 
     strides = x.strides
     view_strides = strides * step
@@ -344,23 +353,30 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
     """
     window_size = window_size or 1
     if not isinstance(window_size, int) or window_size < 1:
-        raise ValueError("Invalid window_size %s: must be odd positive int" % window_size)
+        raise ValueError(
+            "Invalid window_size %s: must be odd positive int" % window_size
+        )
     elif row > stack.shape[1] or col > stack.shape[2]:
-        raise ValueError("(%s, %s) out of bounds reference for stack size %s" %
-                         (row, col, stack.shape))
+        raise ValueError(
+            "(%s, %s) out of bounds reference for stack size %s"
+            % (row, col, stack.shape)
+        )
 
     if window_size % 2 == 0:
         window_size -= 1
         print("Making window_size an odd number (%s) to get square" % window_size)
 
     win_size = window_size // 2
-    return func(stack[:,
-                row - win_size:row + win_size + 1,
-                col - win_size:col + win_size + 1], axis=(1, 2))  # yapf: disable
+    return func(
+        stack[
+            :, row - win_size : row + win_size + 1, col - win_size : col + win_size + 1
+        ],
+        axis=(1, 2),
+    )  # yapf: disable
 
 
 # Randoms using the sentinelapi
-def find_slc_products(api, gj_obj, date_start, date_end, area_relation='contains'):
+def find_slc_products(api, gj_obj, date_start, date_end, area_relation="contains"):
     """Query for Sentinel 1 SCL products with common options
 
     from sentinelsat import SentinelAPI, read_geojson, geojson_to_wkt
@@ -373,15 +389,17 @@ def find_slc_products(api, gj_obj, date_start, date_end, area_relation='contains
     """
     # area_relation : 'Intersection', 'Contains', 'IsWithin'
     # contains means that the Sentinel footprint completely contains your geojson object
-    return api.query(gj_obj,
-                     date=(date_start, date_end),
-                     platformname='Sentinel-1',
-                     producttype='SLC',
-                     area_relation=area_relation)
+    return api.query(
+        gj_obj,
+        date=(date_start, date_end),
+        platformname="Sentinel-1",
+        producttype="SLC",
+        area_relation=area_relation,
+    )
 
 
 def show_titles(products):
-    return [p['title'] for p in products.values()]
+    return [p["title"] for p in products.values()]
 
 
 def fullpath(path):
@@ -466,11 +484,13 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
     Source: https://github.com/pallets/click/blob/master/click/utils.py#L368
     """
     if force_posix:
-        path = os.path.join(os.path.expanduser('~/.' + app_name))
-    if sys.platform == 'darwin':
-        path = os.path.join(os.path.expanduser('~/Library/Application Support'), app_name)
+        path = os.path.join(os.path.expanduser("~/." + app_name))
+    if sys.platform == "darwin":
+        path = os.path.join(
+            os.path.expanduser("~/Library/Application Support"), app_name
+        )
     path = os.path.join(
-        os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.cache')),
+        os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.cache")),
         app_name,
     )
     if not os.path.exists(path):
@@ -478,7 +498,7 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
     return path
 
 
-def az_inc_to_enu(infile, outfile='geo_los_enu.tif'):
+def az_inc_to_enu(infile, outfile="geo_los_enu.tif"):
     cmd = f'gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile tmp_los_east.tif --calc="sin(deg2rad(A)) * cos(deg2rad(B+90))" '
     print(cmd)
     subprocess.run(cmd, check=True, shell=True)
@@ -491,12 +511,14 @@ def az_inc_to_enu(infile, outfile='geo_los_enu.tif'):
     print(cmd)
     subprocess.run(cmd, check=True, shell=True)
 
-    cmd = f'gdal_merge.py -separate -o {outfile} tmp_los_east.tif tmp_los_north.tif tmp_los_up.tif '
+    cmd = f"gdal_merge.py -separate -o {outfile} tmp_los_east.tif tmp_los_north.tif tmp_los_up.tif "
     print(cmd)
     subprocess.run(cmd, check=True, shell=True)
-    subprocess.run('rm -f tmp_los_east.tif tmp_los_north.tif tmp_los_up.tif',
-                   shell=True,
-                   check=True)
+    subprocess.run(
+        "rm -f tmp_los_east.tif tmp_los_north.tif tmp_los_up.tif",
+        shell=True,
+        check=True,
+    )
 
 
 def velo_to_cumulative_scale(geolist):
@@ -510,6 +532,7 @@ def find_largest_component_idxs(binimg, strel_size=2):
     from skimage.morphology import disk, closing
     from skimage import measure
     from collections import Counter
+
     selem = disk(strel_size)
     img = closing(binimg, selem)
     labels, num = measure.label(img, return_num=True, connectivity=2)

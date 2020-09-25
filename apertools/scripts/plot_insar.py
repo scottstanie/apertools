@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+
 # import os
 # import glob
 
@@ -26,9 +27,9 @@ def plot_image(img, title=None, colorbar=True, alpha=0.6):
     img_db = utils.db(img_abs)
 
     fig, axes = plt.subplots()
-    axim = axes.imshow(img_db, cmap='gray')
+    axim = axes.imshow(img_db, cmap="gray")
     if img_phase is not None:
-        axes.imshow(img_phase, cmap='dismph', alpha=alpha)
+        axes.imshow(img_phase, cmap="dismph", alpha=alpha)
 
     if colorbar:
         fig.colorbar(axim)
@@ -36,21 +37,27 @@ def plot_image(img, title=None, colorbar=True, alpha=0.6):
     if title:
         axes.set_title(title)
 
-    print('h')
+    print("h")
     plt.show(block=True)
-    print('i')
+    print("i")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("filename", help="Name of file to open")
-    parser.add_argument("-d",
-                        "--downsample",
-                        type=int,
-                        default=1,
-                        help="Factor to downsample file to display (default=1)")
-    parser.add_argument("--dem-rsc", help="Name of dem.rsc file to use for opening image")
-    parser.add_argument("--colorbar", action="store_true", default=True, help="Show colorbar")
+    parser.add_argument(
+        "-d",
+        "--downsample",
+        type=int,
+        default=1,
+        help="Factor to downsample file to display (default=1)",
+    )
+    parser.add_argument(
+        "--dem-rsc", help="Name of dem.rsc file to use for opening image"
+    )
+    parser.add_argument(
+        "--colorbar", action="store_true", default=True, help="Show colorbar"
+    )
     parser.add_argument("--title", help="Title for figure")
     args = parser.parse_args()
 

@@ -15,6 +15,7 @@ from argparse import (
     RawTextHelpFormatter,
 )
 import subprocess
+
 # from osgeo import gdal
 import rasterio
 import rasterio.features
@@ -27,7 +28,7 @@ def positive_small(argstring):
     try:
         # val = int(argstring)
         val = float(argstring)
-        assert (val > 0 and val < 50)
+        assert val > 0 and val < 50
     except (ValueError, AssertionError):
         raise ArgumentTypeError("--rate must be positive integer < 50")
     return val
@@ -52,7 +53,7 @@ DESCRIPTION = """Form a cropped (upsampled) DEM from SRTM GL1
 
 def cli():
     parser = ArgumentParser(
-        prog='createdem',
+        prog="createdem",
         description=DESCRIPTION,
         formatter_class=RawTextHelpFormatter,
     )
@@ -116,8 +117,8 @@ def cli():
 
 def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     print(left, bottom, right, top, xrate, yrate)
-    xres = (1 / 3600 / xrate)
-    yres = (1 / 3600 / yrate)
+    xres = 1 / 3600 / xrate
+    yres = 1 / 3600 / yrate
 
     # For gdal, the windows are by pixel edges, not centers, so expand rect by half a box
     left -= abs(xres) / 2
@@ -152,7 +153,9 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
 
     # Set nodata (-32768) to 0
     command = """gdal_calc.py --quiet --NoDataValue=0 --calc="A*(A!=-32768)" \
--A elevation_tmp.dem --outfile={} --format=ENVI""".format(outname)
+-A elevation_tmp.dem --outfile={} --format=ENVI""".format(
+        outname
+    )
     print(command)
     subprocess.check_call(command, shell=True)
 
@@ -184,23 +187,23 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # GDAL geotransform looks like:
     # (c, a, b, f, d, e)
     x_step, _, x_edge, _, y_step, y_edge, _, _, _ = tuple(ds.transform)
-    X0 = x_edge + .5 * x_step
-    Y0 = y_edge + .5 * y_step
+    X0 = x_edge + 0.5 * x_step
+    Y0 = y_edge + 0.5 * y_step
     print(X0, Y0, width, length)
 
     #  make a rsc file for processing
-    fd = open('elevation.dem.rsc', 'w')
-    fd.write('WIDTH         ' + str(width) + "\n")
-    fd.write('FILE_LENGTH   ' + str(length) + "\n")
-    fd.write('X_FIRST       ' + str(X0) + "\n")
-    fd.write('Y_FIRST       ' + str(Y0) + "\n")
-    fd.write('X_STEP        ' + str(x_step) + "\n")
-    fd.write('Y_STEP        ' + str(y_step) + "\n")
-    fd.write('X_UNIT        degrees\n')
-    fd.write('Y_UNIT        degrees\n')
-    fd.write('Z_OFFSET      0\n')
-    fd.write('Z_SCALE       1\n')
-    fd.write('PROJECTION    LL\n')
+    fd = open("elevation.dem.rsc", "w")
+    fd.write("WIDTH         " + str(width) + "\n")
+    fd.write("FILE_LENGTH   " + str(length) + "\n")
+    fd.write("X_FIRST       " + str(X0) + "\n")
+    fd.write("Y_FIRST       " + str(Y0) + "\n")
+    fd.write("X_STEP        " + str(x_step) + "\n")
+    fd.write("Y_STEP        " + str(y_step) + "\n")
+    fd.write("X_UNIT        degrees\n")
+    fd.write("Y_UNIT        degrees\n")
+    fd.write("Z_OFFSET      0\n")
+    fd.write("Z_SCALE       1\n")
+    fd.write("PROJECTION    LL\n")
 
     fd.close()
 

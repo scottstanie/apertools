@@ -51,6 +51,7 @@ class LatlonImage(np.ndarray):
         z_scale (1)
         projection (LL)
     """
+
     def __new__(cls, data=None, filename=None, rsc_file=None, rsc_data=None):
         """Can pass in either filenames to load, or 2D arrays/rsc_data dicts
 
@@ -94,11 +95,13 @@ class LatlonImage(np.ndarray):
 
         if obj.rsc_data is not None:
             if (obj.file_length, obj.width) != obj.shape[-2:]:
-                raise ValueError("Shape %s does not equal rsc_data data (%s, %s)" %
-                                 (obj.shape, obj.file_length, obj.width))
+                raise ValueError(
+                    "Shape %s does not equal rsc_data data (%s, %s)"
+                    % (obj.shape, obj.file_length, obj.width)
+                )
 
         # For things like keeping track of GPS points within image
-        if not hasattr(obj, 'points'):
+        if not hasattr(obj, "points"):
             obj.points = []
 
         return obj
@@ -113,14 +116,14 @@ class LatlonImage(np.ndarray):
         """
         if obj is None:
             return
-        self.filename = getattr(obj, 'filename', None)
-        self.rsc_file = getattr(obj, 'rsc_file', None)
-        self.rsc_data = getattr(obj, 'rsc_data', None)
-        self.dem_rsc_is_valid = getattr(obj, 'dem_rsc_is_valid', False)
+        self.filename = getattr(obj, "filename", None)
+        self.rsc_file = getattr(obj, "rsc_file", None)
+        self.rsc_data = getattr(obj, "rsc_data", None)
+        self.dem_rsc_is_valid = getattr(obj, "dem_rsc_is_valid", False)
         if self.rsc_data:
             for k, v in self.rsc_data.items():
                 setattr(self, k, v)
-        self.points = getattr(obj, 'points', None)
+        self.points = getattr(obj, "points", None)
 
     def _disable_dem_rsc(self, sliced):
         """Some slice occurred which makes image data no longer apply"""
@@ -212,8 +215,10 @@ class LatlonImage(np.ndarray):
             dslice = None
             lat, lon = slice_items
         else:
-            raise IndexError("Invalid lat/lon slices for size %s LatlonImage: %s" %
-                             (self.ndim, slice_items))
+            raise IndexError(
+                "Invalid lat/lon slices for size %s LatlonImage: %s"
+                % (self.ndim, slice_items)
+            )
 
         if isinstance(lat, slice):
             # Use class step size if None given
@@ -264,7 +269,9 @@ class LatlonImage(np.ndarray):
         return sliced
 
     @staticmethod
-    def crop_rsc_data(rsc_data, row_start, col_start, nrows, ncols, row_step=1, col_step=1):
+    def crop_rsc_data(
+        rsc_data, row_start, col_start, nrows, ncols, row_step=1, col_step=1
+    ):
         """Adjusts the old rsc_data for a cropped data
 
         Takes the 'file_length' and 'width' keys for a cropped data
@@ -302,16 +309,16 @@ class LatlonImage(np.ndarray):
 
         rsc_copy = copy.copy(rsc_data)
         # Move forward the starting row/col from where it used to be
-        rsc_copy['x_first'] = rsc_copy['x_first'] + rsc_copy['x_step'] * col_start
-        rsc_copy['y_first'] = rsc_copy['y_first'] + rsc_copy['y_step'] * row_start
+        rsc_copy["x_first"] = rsc_copy["x_first"] + rsc_copy["x_step"] * col_start
+        rsc_copy["y_first"] = rsc_copy["y_first"] + rsc_copy["y_step"] * row_start
 
-        rsc_copy['width'] = ncols
-        rsc_copy['cols'] = ncols  # Also include the uavsar versions
-        rsc_copy['file_length'] = nrows
-        rsc_copy['rows'] = nrows
+        rsc_copy["width"] = ncols
+        rsc_copy["cols"] = ncols  # Also include the uavsar versions
+        rsc_copy["file_length"] = nrows
+        rsc_copy["rows"] = nrows
         # After moving start, now adjust step sizes
-        rsc_copy['x_step'] *= col_step
-        rsc_copy['y_step'] *= row_step
+        rsc_copy["x_step"] *= col_step
+        rsc_copy["y_step"] *= row_step
         return rsc_copy
 
     def take_looks(self, row_looks, col_looks):
@@ -415,6 +422,7 @@ class LatlonImage(np.ndarray):
             If array passed for either lon or lat, array is returned
             Otherwise if only one, it is (None, col) or (row, None)
         """
+
         def _check_bounds(idx_arr, bound):
             int_idxs = idx_arr.round().astype(int)
             bad_idxs = np.logical_or(int_idxs < 0, int_idxs >= bound)
@@ -445,7 +453,10 @@ class LatlonImage(np.ndarray):
             # Each of the tuple must contain an answer for the point to be contained
             # return all(num is not None for num in self.nearest_pixel(lon, lat))
         elif lon_lat_point_list is not None:
-            return [grid_contains((lon, lat), **self.rsc_data) for lon, lat in lon_lat_point_list]
+            return [
+                grid_contains((lon, lat), **self.rsc_data)
+                for lon, lat in lon_lat_point_list
+            ]
 
     def distance(self, row_col1, row_col2):
         """Find the distance in km between two points on the image
@@ -481,25 +492,27 @@ class LatlonImage(np.ndarray):
     @property
     def km_per_pixel_sq(self):
         """Approximate area in one square pixel"""
-        return self.pixel_to_km(1)**2
+        return self.pixel_to_km(1) ** 2
 
 
-def load_deformation_img(igram_path=".",
-                         n=1,
-                         filename='deformation.h5',
-                         dset=None,
-                         full_path=None,
-                         rsc_filename='dem.rsc'):
+def load_deformation_img(
+    igram_path=".",
+    n=1,
+    filename="deformation.h5",
+    dset=None,
+    full_path=None,
+    rsc_filename="dem.rsc",
+):
     """Loads mean of last n images of a deformation stack in LatlonImage
     Specify either a directory `igram_path` and `filename`, or `full_path` to file
     """
-    igram_path, filename, full_path = apertools.sario.get_full_path(igram_path, filename, full_path)
+    igram_path, filename, full_path = apertools.sario.get_full_path(
+        igram_path, filename, full_path
+    )
 
-    _, defo_stack = apertools.sario.load_deformation(igram_path=igram_path,
-                                                     filename=filename,
-                                                     full_path=full_path,
-                                                     dset=dset,
-                                                     n=n)
+    _, defo_stack = apertools.sario.load_deformation(
+        igram_path=igram_path, filename=filename, full_path=full_path, dset=dset, n=n
+    )
     if filename.endswith(".h5"):
         rsc_data = apertools.sario.load_dem_from_h5(h5file=full_path)
     else:
@@ -510,7 +523,7 @@ def load_deformation_img(igram_path=".",
 
 
 def rowcol_to_latlon(row, col, rsc_data):
-    """ Takes the row, col of a pixel and finds its lat/lon
+    """Takes the row, col of a pixel and finds its lat/lon
 
     Can also pass numpy arrays of row, col.
     row, col must match size
@@ -595,7 +608,7 @@ def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
     dlon = radians(lon2 - lon1)
     lat1 = radians(lat1)
     lat2 = radians(lat2)
-    a = (sin(dlat / 2)**2) + (cos(lat1) * cos(lat2) * sin(dlon / 2)**2)
+    a = (sin(dlat / 2) ** 2) + (cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2)
     c = 2 * arctan2(sqrt(a), sqrt(1 - a))
     return R * c
 
@@ -641,16 +654,18 @@ def km_to_pixels(km, step, R=6378):
 dist_to_pixel = km_to_pixels
 
 
-def grid(rows=None,
-         cols=None,
-         y_step=None,
-         x_step=None,
-         y_first=None,
-         x_first=None,
-         width=None,
-         file_length=None,
-         sparse=False,
-         **kwargs):
+def grid(
+    rows=None,
+    cols=None,
+    y_step=None,
+    x_step=None,
+    y_first=None,
+    x_first=None,
+    width=None,
+    file_length=None,
+    sparse=False,
+    **kwargs
+):
     """Takes sizes and spacing info, creates a grid of values
 
     Args:
@@ -723,15 +738,17 @@ def from_grid(lons, lats):
     return grid_to_rsc(lons, lats)
 
 
-def grid_extent(rows=None,
-                cols=None,
-                y_step=None,
-                x_step=None,
-                y_first=None,
-                x_first=None,
-                file_length=None,
-                width=None,
-                **kwargs):
+def grid_extent(
+    rows=None,
+    cols=None,
+    y_step=None,
+    x_step=None,
+    y_first=None,
+    x_first=None,
+    file_length=None,
+    width=None,
+    **kwargs
+):
     """Takes sizes and spacing from .rsc info, finds boundaries
 
     Used for `matplotlib.pyplot.imshow` keyword arg `extent`:
@@ -761,7 +778,12 @@ def grid_extent(rows=None,
     """
     rows = rows or file_length
     cols = cols or width
-    return (x_first, x_first + x_step * (cols - 1), y_first + y_step * (rows - 1), y_first)
+    return (
+        x_first,
+        x_first + x_step * (cols - 1),
+        y_first + y_step * (rows - 1),
+        y_first,
+    )
 
 
 def grid_corners(**kwargs):
@@ -891,7 +913,12 @@ def intersect_area(box1, box2):
     _check_valid_box(box1), _check_valid_box(box2)
     left1, right1, bot1, top1 = box1
     left2, right2, bot2, top2 = box2
-    intersect_box = (max(left1, left2), min(right1, right2), max(bot1, bot2), min(top1, top2))
+    intersect_box = (
+        max(left1, left2),
+        min(right1, right2),
+        max(bot1, bot2),
+        min(top1, top2),
+    )
     return box_area(intersect_box)
 
 
@@ -936,6 +963,7 @@ def intersection_corners(dem1, dem2):
         tuple[float]: the boundaries of the intersection box of the 2 areas in order:
         (lon_left,lon_right,lat_bottom,lat_top)
     """
+
     def _max_min(a, b):
         """The max of two iterable mins"""
         return max(min(a), min(b))
@@ -966,8 +994,7 @@ def sort_by_lon(latlon_img_list):
 
 
 def find_img_intersections(image1, image2):
-    """Takes two LatlonImages, finds which pixels mark their intersection
-    """
+    """Takes two LatlonImages, finds which pixels mark their intersection"""
     if not intersects(image1.extent, image2.extent):
         return (None, None)
 
@@ -983,8 +1010,7 @@ def find_img_intersections(image1, image2):
 
 
 def find_total_pixels(image_list):
-    """Get the total number of rows and columns for overlapping images
-    """
+    """Get the total number of rows and columns for overlapping images"""
     # TODO: + 1 needed?
     if any(not img.dem_rsc_is_valid for img in image_list):
         raise ValueError("All images must have rsc_data provided")
@@ -1018,8 +1044,11 @@ def map_overlay_coords(kml_file=None, etree=None):
     root = etree.getroot()
     # point_str looks like:
     # <coordinates>-102.552971,31.482372 -105.191353,31.887299...
-    point_str = list(elem.text for elem in root.iter('coordinates'))[0]
-    return [(float(lon), float(lat)) for lon, lat in [p.split(',') for p in point_str.split()]]
+    point_str = list(elem.text for elem in root.iter("coordinates"))[0]
+    return [
+        (float(lon), float(lat))
+        for lon, lat in [p.split(",") for p in point_str.split()]
+    ]
 
 
 def _is_float(a):
@@ -1040,17 +1069,19 @@ def contains_floats(slice_items):
     return False
 
 
-def load_cropped_masked_deformation(path=".",
-                                    filename="deformation.h5",
-                                    dset=None,
-                                    full_path=None,
-                                    rsc_name="dem.rsc",
-                                    row_start=0,
-                                    row_end=None,
-                                    col_start=0,
-                                    col_end=None,
-                                    n=None,
-                                    perform_mask=True):
+def load_cropped_masked_deformation(
+    path=".",
+    filename="deformation.h5",
+    dset=None,
+    full_path=None,
+    rsc_name="dem.rsc",
+    row_start=0,
+    row_end=None,
+    col_start=0,
+    col_end=None,
+    n=None,
+    perform_mask=True,
+):
     """Returns stack_ll, 3D LatlonImage, and stack_mask, used to mask the data"""
     path, filename, full_path = apertools.sario.get_full_path(path, filename, full_path)
     geo_date_list, deformation = apertools.sario.load_deformation(
@@ -1064,10 +1095,12 @@ def load_cropped_masked_deformation(path=".",
         return
 
     rsc_data = apertools.sario.load(os.path.join(path, rsc_name))
-    stack_mask = apertools.sario.load_mask(geo_date_list=geo_date_list,
-                                           perform_mask=perform_mask,
-                                           directory=path,
-                                           dset=dset)
+    stack_mask = apertools.sario.load_mask(
+        geo_date_list=geo_date_list,
+        perform_mask=perform_mask,
+        directory=path,
+        dset=dset,
+    )
 
     stack_ll = LatlonImage(data=deformation, rsc_data=rsc_data)
     stack_ll[:, stack_mask] = np.nan
@@ -1089,6 +1122,7 @@ def nearest_pixel(rsc_data, lon=None, lat=None, ncols=np.inf, nrows=np.inf):
         If array passed for either lon or lat, array is returned
         Otherwise if only one, it is (None, col) or (row, None)
     """
+
     def _check_bounds(idx_arr, bound):
         int_idxs = idx_arr.round().astype(int)
         bad_idxs = np.logical_or(int_idxs < 0, int_idxs >= bound)
@@ -1113,11 +1147,11 @@ def nearest_pixel(rsc_data, lon=None, lat=None, ncols=np.inf, nrows=np.inf):
 
 def nearest_row(rsc_data, lat):
     """Find the nearest row to a given lat within rsc_data (no OOB checking)"""
-    y_first, y_step = rsc_data['y_first'], rsc_data['y_step']
+    y_first, y_step = rsc_data["y_first"], rsc_data["y_step"]
     return ((np.array(lat) - y_first) / y_step).round().astype(int)
 
 
 def nearest_col(rsc_data, lon):
     """Find the nearest col to a given lon within rsc_data (no OOB checking)"""
-    x_first, x_step = rsc_data['x_first'], rsc_data['x_step']
+    x_first, x_step = rsc_data["x_first"], rsc_data["x_step"]
     return ((np.array(lon) - x_first) / x_step).round().astype(int)

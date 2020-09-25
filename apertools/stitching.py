@@ -11,7 +11,9 @@ import numpy as np
 from apertools import parsers, sario
 
 
-def stitch_same_dates(geo_path=".", output_path=".", reverse=True, overwrite=False, verbose=True):
+def stitch_same_dates(
+    geo_path=".", output_path=".", reverse=True, overwrite=False, verbose=True
+):
     """Combines .geo files of the same date in one directory
 
     The reverse argument is to specify which order the geos get sorted.
@@ -50,17 +52,24 @@ def group_geos_by_date(geo_path, reverse=True):
            Sentinel S1B, path 78 from 2017-10-25])]
 
         """
-        return [(date, list(g)) for date, g in itertools.groupby(geolist, key=lambda x: x.date)]
+        return [
+            (date, list(g))
+            for date, g in itertools.groupby(geolist, key=lambda x: x.date)
+        ]
 
     # Assuming only IW products are used (included IW to differentiate from my date-only naming)
-    geos = [parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "S1*IW*.geo"))]
+    geos = [
+        parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "S1*IW*.geo"))
+    ]
     # Find the dates that have multiple frames/.geos
     date_counts = collections.Counter([g.date for g in geos])
     dates_duped = set([date for date, count in date_counts.items() if count > 1])
 
-    double_geo_files = sorted((g for g in geos if g.date in dates_duped),
-                              key=lambda g: g.start_time,
-                              reverse=reverse)
+    double_geo_files = sorted(
+        (g for g in geos if g.date in dates_duped),
+        key=lambda g: g.start_time,
+        reverse=reverse,
+    )
 
     # Now collapse into groups, sorted by the date
     grouped_geos = _make_groupby(double_geo_files)
@@ -71,9 +80,9 @@ def stitch_geos(geolist, reverse, output_path, overwrite=False, verbose=True):
     """Combines multiple .geo files of the same date into one image"""
     if verbose:
         print("Stitching geos for %s" % geolist[0].date)
-        print('reverse=', reverse)
+        print("reverse=", reverse)
         for g in geolist:
-            print('image:', g.filename, g.start_time)
+            print("image:", g.filename, g.start_time)
 
     g = geolist[0]
     new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
@@ -113,7 +122,9 @@ def combine_complex(img_list, verbose=True):
     if len(img_list) < 2:
         raise ValueError("Must pass more than 1 image to combine")
     # Start with each one where the other is nonzero
-    img1 = img_list[0] if isinstance(img_list[0], np.ndarray) else sario.load(img_list[0])
+    img1 = (
+        img_list[0] if isinstance(img_list[0], np.ndarray) else sario.load(img_list[0])
+    )
     img_shape = img1.shape
 
     total = len(img_list)
@@ -127,8 +138,10 @@ def combine_complex(img_list, verbose=True):
             next_img = sario.load(next_img)
 
         if next_img.shape != img_shape:
-            raise ValueError("All images must have same size. Sizes: %s, %s" %
-                             (img_shape, next_img.shape))
+            raise ValueError(
+                "All images must have same size. Sizes: %s, %s"
+                % (img_shape, next_img.shape)
+            )
         nonzero_mask = next_img != 0
         img_out[nonzero_mask] = next_img[nonzero_mask]
 

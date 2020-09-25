@@ -1,5 +1,5 @@
-get_ipython().run_line_magic('load_ext', 'autoreload')
-get_ipython().run_line_magic('autoreload', '2')
+get_ipython().run_line_magic("load_ext", "autoreload")
+get_ipython().run_line_magic("autoreload", "2")
 import os
 
 
@@ -13,10 +13,12 @@ def in_screen():
 
 
 import matplotlib
+
 if in_screen():
     print("Currently in screen, using agg backend")
     matplotlib.use("agg")
 import matplotlib.pyplot as plt
+
 plt.ion()
 
 # get_ipython().run_line_magic('matplotlib', 'tk')
@@ -28,6 +30,7 @@ import apertools.utils as utils
 import apertools.parsers as parsers
 import apertools.gps as gps
 import apertools.latlon as latlon
+
 # from apertools.scripts import *
 import numpy as np
 import pandas as pd

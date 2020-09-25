@@ -98,17 +98,17 @@ quad_template = """\
 def rsc_nsew(rsc_data):
     """return tuple of (north, south, east, west) from rsc data"""
 
-    north = rsc_data['y_first']
-    west = rsc_data['x_first']
-    east = west + rsc_data['width'] * rsc_data['x_step']
-    south = north + rsc_data['file_length'] * rsc_data['y_step']
+    north = rsc_data["y_first"]
+    west = rsc_data["x_first"]
+    east = west + rsc_data["width"] * rsc_data["x_step"]
+    south = north + rsc_data["file_length"] * rsc_data["y_step"]
     return north, south, east, west
 
 
 def rsc_bounds(rsc_data):
     """Uses the x/y and step data from a .rsc file to generate LatLonBox for .kml"""
     north, south, east, west = rsc_nsew(rsc_data)
-    return {'north': north, 'south': south, 'east': east, 'west': west}
+    return {"north": north, "south": south, "east": east, "west": west}
 
 
 # def parse_quad_kml(quad_kml_filename):
@@ -117,14 +117,16 @@ def rsc_bounds(rsc_data):
 #     root = etree.getroot()
 
 
-def create_kml(rsc_data=None,
-               img_filename=None,
-               gj_dict=None,
-               title=None,
-               desc="Description",
-               shape='box',
-               kml_out=None,
-               lon_lat=None):
+def create_kml(
+    rsc_data=None,
+    img_filename=None,
+    gj_dict=None,
+    title=None,
+    desc="Description",
+    shape="box",
+    kml_out=None,
+    lon_lat=None,
+):
     """Make a kml file to display a image (tif/png) in Google Earth
 
     Args:
@@ -139,30 +141,34 @@ def create_kml(rsc_data=None,
     if title is None:
         title = img_filename
 
-    valid_shapes = ('box', 'quad', 'point', 'polygon')
+    valid_shapes = ("box", "quad", "point", "polygon")
     if shape not in valid_shapes:
-        raise ValueError("shape must be %s" % ', '.join(valid_shapes))
+        raise ValueError("shape must be %s" % ", ".join(valid_shapes))
 
-    if shape == 'box':
-        output = box_template.format(title=title,
-                                     description=desc,
-                                     img_filename=img_filename,
-                                     **rsc_bounds(rsc_data))
-    elif shape == 'quad':
-        output = quad_template.format(title=title,
-                                      description=desc,
-                                      img_filename=img_filename,
-                                      coord_string=geojson.kml_string_fmt(gj_dict))
-    elif shape == 'point':
+    if shape == "box":
+        output = box_template.format(
+            title=title,
+            description=desc,
+            img_filename=img_filename,
+            **rsc_bounds(rsc_data)
+        )
+    elif shape == "quad":
+        output = quad_template.format(
+            title=title,
+            description=desc,
+            img_filename=img_filename,
+            coord_string=geojson.kml_string_fmt(gj_dict),
+        )
+    elif shape == "point":
         if lon_lat is None:
             # TODO: do we want to accept geojson? or overkill?
             raise ValueError("point must include lon_lat tuple")
         output = point_template.format(
             title=title,
             description=desc,
-            coord_string='{},{}'.format(*lon_lat),
+            coord_string="{},{}".format(*lon_lat),
         )
-    elif shape == 'polygon':
+    elif shape == "polygon":
         if gj_dict is None:
             raise ValueError("polygon must include gj_dict tuple")
         output = polygon_template.format(
@@ -173,7 +179,7 @@ def create_kml(rsc_data=None,
 
     if kml_out:
         print("Saving kml to %s" % kml_out)
-        with open(kml_out, 'w') as f:
+        with open(kml_out, "w") as f:
             f.write(output)
 
     return output
@@ -183,8 +189,8 @@ def create_geotiff(
     rsc_data=None,
     kml_file=None,
     img_filename=None,
-    shape='box',
-    outfile='out.tif',
+    shape="box",
+    outfile="out.tif",
 ):
     """Create geotiff from rsc_data and image file
 
@@ -200,12 +206,14 @@ def create_geotiff(
     gdal_translate_box = "gdal_translate -of GTiff -a_nodata 0 -a_srs EPSG:4326 -a_ullr {ullr} {input} {out}"
     gdal_translate_quad = "gdal_translate -of GTiff -a_nodata 0 -a_srs EPSG:4326 -gcp 1 1 {ul} -gcp 1 {nrows} {ll} -gcp {ncols} 1 {ur} {input} {out}"
     # gdalwarp -s_srs EPSG:4326 -t_srs EPSG:3857 out1.tif out2.tif
-    if shape == 'box':
+    if shape == "box":
         # ullr means upper left, lower right (lon, lat) points
         north, south, east, west = rsc_nsew(rsc_data)
         ullr_string = "%f %f %f %f" % (west, north, east, south)
-        cmd = gdal_translate_box.format(ullr=ullr_string, input=img_filename, out=outfile)
-    elif shape == 'quad':
+        cmd = gdal_translate_box.format(
+            ullr=ullr_string, input=img_filename, out=outfile
+        )
+    elif shape == "quad":
         # coords:
         # [(-105.191055, 31.886913),
         #  (-104.869621, 33.508629),
@@ -216,11 +224,12 @@ def create_geotiff(
             ncols, nrows = ds.width, ds.height
 
         # TODO: prob gettable through gdal/rasterio too
-        ll, ul, lr, ur = sorted(latlon.map_overlay_coords(kml_file),
-                                key=lambda tup: (tup[0], -tup[1]))
-        ul = '%s %s' % ul
-        ll = '%s %s' % ll
-        ur = '%s %s' % ur
+        ll, ul, lr, ur = sorted(
+            latlon.map_overlay_coords(kml_file), key=lambda tup: (tup[0], -tup[1])
+        )
+        ul = "%s %s" % ul
+        ll = "%s %s" % ll
+        ur = "%s %s" % ur
         cmd = gdal_translate_quad.format(
             ul=ul,
             ll=ll,
@@ -231,7 +240,7 @@ def create_geotiff(
             out=outfile,
         )
 
-    print('Running:')
+    print("Running:")
     print(cmd)
     subprocess.check_call(cmd, shell=True)
 
@@ -248,13 +257,16 @@ def extract_raster_outline(filename, outfile=None, band=1):
     # First, make into a binary image
     outtmp = "tmp.binary.tif"
     calc_cmd = """gdal_calc.py --outfile={outtmp} -A {fin} --NoDataValue=0 --calc="A>0" """.format(
-        outtmp=outtmp, fin=filename)
+        outtmp=outtmp, fin=filename
+    )
     print("Finding nodata outline:")
     print(calc_cmd)
     subprocess.check_call(calc_cmd, shell=True)
 
     # Then extract polygon: -8 means 8-connected, -b 1 is use band #1
-    poly_cmd = """gdal_polygonize.py -8 {tmp} -b 1 {out} """.format(tmp=outtmp, out=outfile)
+    poly_cmd = """gdal_polygonize.py -8 {tmp} -b 1 {out} """.format(
+        tmp=outtmp, out=outfile
+    )
     print("Extracting polygon with command:")
     print(poly_cmd)
     subprocess.check_call(poly_cmd.split())
