@@ -7,6 +7,18 @@ from apertools.latlon import km_to_deg
 logger = get_log()
 
 
+def copy_vrt(in_fname, out_fname, bbox=None):
+    """Create a VRT for (a subset of) a gdal-readable file
+
+    bbox format: (left, bottom, right, top)"""
+    from gdal import Translate
+
+    # Using Translate... but would use Warp if every reprojecting
+    left, bottom, right, top = bbox
+    projwin = (left, top, right, bottom)  # unclear why Translate does UL LR
+    Translate(out_fname, in_fname, projwin=projwin)
+
+
 def read_subset(bbox, in_fname, driver=None, bands=None):
     # This is a bug right now due to rasterio rounding
     # https://github.com/mapbox/rasterio/issues/2004

@@ -2,6 +2,7 @@
 Main command line entry point to manage all other sub commands
 """
 import os
+from os.path import abspath, join, split
 import glob
 import json
 import click
@@ -9,7 +10,6 @@ import subprocess
 from collections import Counter
 
 # import apertools
-import h5py
 from datetime import datetime
 
 import apertools.log
@@ -46,22 +46,37 @@ def cli(ctx, verbose, path):
 @cli.command("view-stack")
 @click.option(
     "--filename",
+    "-f",
     default="deformation.h5",
     help="Name of saved file containing deformation stack",
+    show_default=True,
 )
-@click.option("--dset", default="stack/1", help="Dataset within hdf5 file")
-@click.option("--cmap", default="seismic", help="Colormap for image display.")
-@click.option("--label", default="Centimeters", help="Label on colorbar/yaxis for plot")
+@click.option(
+    "--dset", default="stack/1", help="Dataset within hdf5 file", show_default=True
+)
+@click.option(
+    "--cmap",
+    default="seismic_wide_y",
+    help="Colormap for image display.",
+    show_default=True,
+)
+@click.option(
+    "--label",
+    default="Centimeters",
+    help="Label on colorbar/yaxis for plot",
+    show_default=True,
+)
 @click.option("--title", help="Title for image plot")
-@click.option("--row-start", default=0)
-@click.option("--row-end", default=-1)
-@click.option("--col-start", default=0)
-@click.option("--col-end", default=-1)
+@click.option("--row-start", default=0, show_default=True)
+@click.option("--row-end", default=-1, show_default=True)
+@click.option("--col-start", default=0, show_default=True)
+@click.option("--col-end", default=-1, show_default=True)
 @click.option(
     "--rowcol",
     help="Use row,col for legened entries (instead of default lat,lon)",
     is_flag=True,
     default=False,
+    show_default=True,
 )
 @click.pass_obj
 def view_stack(
@@ -80,6 +95,7 @@ def view_stack(
     """Explore timeseries on stack of deformation images."""
     import apertools.sario, apertools.latlon, apertools.plotting
     import numpy as np
+    import h5py
 
     with h5py.File(filename, "r") as f:
         deformation = f[dset][:]
@@ -91,7 +107,7 @@ def view_stack(
     if rowcol:
         rsc_data = None
     else:
-        rsc_data = apertools.sario.load(os.path.join(context["path"], "dem.rsc"))
+        rsc_data = apertools.sario.load(join(context["path"], "dem.rsc"))
 
     deformation = apertools.latlon.LatlonImage(data=deformation, rsc_data=rsc_data)
     deformation = deformation[:, row_start:row_end, col_start:col_end]
@@ -321,7 +337,7 @@ def dem_rate(rsc_file, orig_rsc_file):
     import apertools.sario
     import apertools.utils
 
-    # full_file = os.path.join(context['path'], rsc_file)
+    # full_file = join(context['path'], rsc_file)
     if rsc_file is None:
         rsc_file = apertools.sario.find_rsc_file(directory=".")
 
@@ -400,7 +416,7 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     if not os.path.exists(sentinel_path):
         raise ValueError("%s does not exist" % sentinel_path)
 
-    sent_files = glob.glob(os.path.join(sentinel_path, "*.SAFE"))
+    sent_files = glob.glob(join(sentinel_path, "*.SAFE"))
     sent_list = [apertools.parsers.Sentinel(s) for s in sent_files]
     logger.info("%d Sentinel .SAFE files found" % len(sent_list))
 
@@ -649,3 +665,67 @@ def mask_by_elevation(filenames, dem, cutoff, operator, largest_component):
             _log_and_run(cmd)
             _log_and_run(f"mv tmp_out.tif {f}")
             _log_and_run(f"rm {mask_fname} {mask_fname.replace('.bin', '.hdr')}")
+
+
+@cli.command("subset")
+@click.option(
+    "--bbox", nargs=4, type=float, help="Window lat/lon bounds: left bot right top"
+)
+@click.option("--out-dir", "-o", type=click.Path(exists=True))
+@click.option("--in-dir", "-i", type=click.Path(exists=True))
+@click.option("--start-date", "-s", type=click.DateTime(formats=["%Y-%m-%d"]))
+@click.option("--end-date", "-e", type=click.DateTime(formats=["%Y-%m-%d"]))
+def subset(bbox, out_dir, in_dir, start_date, end_date):
+    """Read window subset from .geos in another directory
+
+    Writes the smaller .geos to `outpath`, along with the
+    extra files going with it (elevation.dem, .orbtimings)
+    """
+    import apertools.sario
+    from apertools.utils import force_symlink
+    import apertools.subset
+
+    if abspath(out_dir) == abspath(in_dir):
+        raise ValueError("--in-dir cannot be same as --out-dir")
+
+    # dems:
+    apertools.subset.copy_subset(
+        bbox,
+        join(in_dir, "elevation.dem"),
+        join(out_dir, "elevation.dem"),
+        driver="ROI_PAC",
+    )
+    # Fortran cant read anything but 15-space .rsc file :|
+    apertools.sario.save("elevation.dem.rsc", apertools.sario.load("elevation.dem.rsc"))
+
+    # weird params file
+    with open(join(out_dir, "params"), "w") as f:
+        f.write(f"{join(abspath(out_dir), 'elevation.dem')}\n")
+        f.write(f"{join(abspath(out_dir), 'elevation.dem.rsc')}\n")
+
+    # geos and .orbtimings
+    for in_fname in glob.glob(join(in_dir, "*.geo.vrt")):
+        cur_date = apertools.sario._parse(
+            apertools.sario._strip_geoname(split(in_fname)[1])
+        )
+        if (end_date is not None and cur_date > end_date.date()) or (
+            start_date is not None and cur_date < start_date.date()
+        ):
+            continue
+        img = apertools.subset.read_subset(bbox, in_fname, driver="VRT")
+
+        _, nameonly = split(in_fname)
+        out_fname = join(out_dir, nameonly).replace(".vrt", "")
+        # Can't write vrt?
+        # copy_subset(bbox, in_fname, out_fname, driver="VRT")
+        click.echo(f"Subsetting {in_fname} to {out_fname}")
+        apertools.sario.save(out_fname, img)
+
+        s, d = (
+            in_fname.replace(".geo.vrt", ".orbtiming"),
+            out_fname.replace(".geo", ".orbtiming"),
+        )
+
+        click.echo(f"symlinking {s} to {d}")
+        force_symlink(s, d)
+        # copyfile(s, d)
