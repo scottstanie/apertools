@@ -2,6 +2,7 @@
 """
 from __future__ import division, print_function
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from apertools.log import get_log
@@ -222,8 +223,14 @@ def view_stack(
             return
         # Check if the toolbar has zoom or pan active
         # https://stackoverflow.com/a/20712813
-        if imagefig.canvas.manager.toolbar._active is not None:
-            return
+        # MPL version 3.3: https://stackoverflow.com/a/63447351
+        if matplotlib.__version__ >= "3.3":
+            state = timefig.canvas.manager.toolbar.mode
+            if state != "":  # Zoom/other tool is active
+                return
+        else:
+            if imagefig.canvas.manager.toolbar._active is not None:
+                return
         plt.figure(timefig.number)
         row, col = int(event.ydata), int(event.xdata)
         # Somehow clicked outside image, but in axis
