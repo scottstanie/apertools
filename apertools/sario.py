@@ -923,13 +923,16 @@ def save_geolist_to_h5(
     geo_date_list=None,
     overwrite=False,
 ):
-    if not check_dset(out_file, GEOLIST_DSET, overwrite):
-        return
+    if dset_name is not None:
+        if not check_dset(out_file, dset_name, overwrite, attr_name=GEOLIST_DSET):
+            return
+    else:
+        if not check_dset(out_file, GEOLIST_DSET, overwrite):
+            return
 
     if geo_date_list is None:
         geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
 
-    logger.debug("Saving geo dates to %s / %s" % (out_file, GEOLIST_DSET))
     with h5py.File(out_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
         # f[GEOLIST_DSET] = json.dumps(geolist_to_str(geo_date_list))
@@ -1011,23 +1014,31 @@ def ignore_geo_dates(
     return valid_geos, valid_igrams
 
 
-def check_dset(h5file, dset_name, overwrite):
+def check_dset(h5file, dset_name, overwrite, attr_name=None):
     """Returns false if the dataset exists and overwrite is False
 
     If overwrite is set to true, will delete the dataset to make
     sure a new one can be created
     """
     with h5py.File(h5file, "a") as f:
-        if dset_name in f:
-            logger.info(
-                "{dset} already exists in {file},".format(dset=dset_name, file=h5file)
-            )
-            if overwrite:
-                logger.info("Overwrite true: Deleting.")
-                del f[dset_name]
-            else:
-                logger.info("Skipping.")
-                return False
+        if attr_name is not None:
+            if attr_name in f.get(dset_name, {}):
+                logger.info(f"{dset_name}:{attr_name} already exists in {h5file},")
+                if overwrite:
+                    logger.info("Overwrite true: Deleting.")
+                    del f[dset_name].attrs[attr_name]
+                else:
+                    logger.info("Skipping.")
+                    return False
+        else:
+            if dset_name in f:
+                logger.info(f"{dset_name} already exists in {h5file},")
+                if overwrite:
+                    logger.info("Overwrite true: Deleting.")
+                    del f[dset_name]
+                else:
+                    logger.info("Skipping.")
+                    return False
 
         return True
 
@@ -1183,7 +1194,8 @@ def save_as_vrt(
     band=None,
     num_bands=None,
 ):
-    """
+    """Save a VRT corresponding to a raw raster file
+
     VRT options:
     SourceFilename: The name of the raw file containing the data for this band.
         The relativeToVRT attribute can be used to indicate if the
