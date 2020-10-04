@@ -9,6 +9,7 @@ import datetime
 import fileinput
 import glob
 import math
+import time
 import json
 import os
 import re
@@ -1591,3 +1592,58 @@ def calc_upsample_rate(rsc_filename=None):
     x_spacing = abs(rsc_dict["x_step"])
     y_spacing = abs(rsc_dict["y_step"])
     return default_spacing / x_spacing, default_spacing / y_spacing
+
+
+# TODO: put elsewhere
+def to_datetimes(date_list):
+    return [datetime.datetime(*d.timetuple()[:6]) for d in date_list]
+
+
+def hdf5_stack_to_netcdf(filename, dset_name="stack/1"):
+    """Convert the stack in HDF5 to NetCDF with appropriate metadata"""
+    from netCDF4 import Dataset, date2num
+    from apertools import latlon
+
+    if not filename.endswith(".h5"):
+        raise ValueError(f"{filename} must be an HDF% file")
+
+    outname = filename.replace(".h5", ".nc")
+    with h5py.File(filename) as hf:
+        # Get data and references from HDF% file
+        dset = hf[dset_name]
+        ndates, rows, cols = dset.shape
+        lon_arr, lat_arr = latlon.grid(**load_dem_from_h5(filename), sparse=True)
+        # TODO: chunks? need to specify per Variable?
+        geolist = load_geolist_from_h5(filename, dset=dset_name)
+        gtd = to_datetimes(geolist)
+
+        print("Making dimensions and variables")
+        with Dataset(outname, "w") as f:
+            f.history = "Created " + time.ctime(time.time())
+
+            f.createDimension("lat", rows)
+            f.createDimension("lon", cols)
+            # Could make this unlimited to add to it later?
+            f.createDimension("date", ndates)
+            dates = f.createVariable("date", "f4", ("date",))
+            latitudes = f.createVariable("lat", "f4", ("lat",))
+            longitudes = f.createVariable("lon", "f4", ("lon",))
+            latitudes.units = "degrees north"
+            longitudes.units = "degrees east"
+            dates.units = f"days since {geolist[0]}"
+
+            # Write data
+            latitudes[:] = lat_arr
+            longitudes[:] = lon_arr
+            d2n = date2num(gtd, units=dates.units)
+            dates[:] = d2n
+            # Reverse this:
+            # num2date(d2n, units=dates.units)
+            # array([cftime.DatetimeGregorian(2014, 12, 26, 0, 0, 0, 0),
+            #   cftime.DatetimeGregorian(2015, 1, 19, 0, 0, 0, 0),
+
+            # Finally, the actual stack
+            # stackvar = rootgrp.createVariable("stack/1", "f4", ("date", "lat", "lon"))
+            print("Writing stack data")
+            stackvar = f.createVariable("stack", "f4", ("date", "lat", "lon"))
+            stackvar[:] = dset[:]
