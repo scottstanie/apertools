@@ -541,3 +541,79 @@ def find_largest_component_idxs(binimg, strel_size=2):
     top2 = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:2]
     fg_label, fg_count = top2[0] if top2[0][0] != 0 else top2[1]
     return labels == fg_label
+
+
+# Note
+# https://github.com/h5py/h5py/blob/0076bc4880bfa8b311338b21ddcd0e28cb27c443/h5py/_hl/dataset.py#L264
+# take from latest h5py, which is not released yet, but looks great
+class ChunkIterator(object):
+    """
+    Class to iterate through list of chunks of a given dataset
+
+    Note: will only give tuples for iterating over the rows/cols,
+    not the bands (the depth/time dimension)
+
+    For each chunk within the given region, iterator yields tuple of slices
+
+    A TypeError will be raised if the dataset is not chunked.
+
+    A ValueError will be raised if the selection region is invalid.
+
+    Source:
+    https://github.com/h5py/h5py/blob/0076bc4880bfa8b311338b21ddcd0e28cb27c443/h5py/_hl/dataset.py
+    """
+
+    def __init__(self, dset):
+        self._shape = dset.shape
+        # rank = len(dset.shape)
+
+        if not dset.chunks:
+            # can only use with chunked datasets
+            raise TypeError("Chunked dataset required")
+
+        # Only get last 2, the row/col chunk sizes
+        self._layout = dset.chunks[-2:]
+
+        self._sel = tuple([slice(0, dset.shape[-2]), slice(0, dset.shape[1])])
+
+        self._chunk_index = [0, 0]
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        rank = len(self._sel)
+        slices = []
+        if self._chunk_index[0] * self._layout[0] >= self._sel[0].stop:
+            # ran past the last chunk, end iteration
+            raise StopIteration()
+
+        for dim in range(len(self._sel)):
+            s = self._sel[dim]
+            start = self._chunk_index[dim] * self._layout[dim]
+            stop = (self._chunk_index[dim] + 1) * self._layout[dim]
+            # adjust the start if this is an edge chunk
+            if start < s.start:
+                start = s.start
+            if stop > s.stop:
+                stop = s.stop  # trim to end of the selection
+            s = slice(start, stop, 1)
+            slices.append(s)
+
+        # bump up the last index and carry forward if we run outside the selection
+        dim = rank - 1
+        while dim >= 0:
+            s = self._sel[dim]
+            self._chunk_index[dim] += 1
+
+            chunk_end = self._chunk_index[dim] * self._layout[dim]
+            if chunk_end < s.stop:
+                # we still have room to extend along this dimensions
+                return tuple(slices)
+
+            if dim > 0:
+                # reset to the start and continue iterating with higher dimension
+                self._chunk_index[dim] = 0
+            dim -= 1
+
+        return tuple(slices)
