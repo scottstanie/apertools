@@ -523,6 +523,7 @@ def load_gps_los_data(
     )
     enu_data = df[["east", "north", "up"]].T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
+    los_gps_data = los_gps_data.reshape(-1)
 
     if zero_start:
         logger.debug("Resetting GPS data start to 0")
