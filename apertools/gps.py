@@ -11,6 +11,7 @@ Note: ^^ This file is stored in the `STATION_LLH_FILE`
 
 """
 from __future__ import division, print_function
+import re
 import os
 import difflib  # For station name misspelling checks
 import datetime
@@ -44,11 +45,15 @@ logger = get_log()
 # GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/NA12/{station}.NA12.tenv3"
 # UPDATE 4/20/20: noticed they changed it to
 GPS_BASE_URL = (
-    "http://geodesy.unr.edu/gps_timeseries/tenv3/plates/NA/{station}.NA.tenv3"
+    "http://geodesy.unr.edu/gps_timeseries/tenv3/plates/{plate}/{station}.{plate}.tenv3"
 )
-GPS_FILE = GPS_BASE_URL.split("/")[-1]
+# NOTE: for now i'm assuming all plate-fixed data is the only one i care about...
+# if i also want IGS14, i'll need to divide directories and do more
+GPS_FILE = GPS_BASE_URL.split("/")[-1].replace(".{plate}", "")
+# The main web page per station
+# We'll use this for now to scrape the plate information with a regex :(
+GPS_STATION_URL = "http://geodesy.unr.edu/NGLStationPages/stations/{station}.sta"
 
-# Assuming the master station list is in the
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
 STATION_LLH_FILE = os.environ.get(
     "STATION_LIST",
@@ -393,14 +398,26 @@ def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_filename=None):
 
 def download_station_data(station_name):
     station_name = station_name.upper()
-    url = GPS_BASE_URL.format(station=station_name)
+    plate = get_station_plate(station_name)
+    url = GPS_BASE_URL.format(station=station_name, plate=plate)
     response = requests.get(url)
 
-    filename = "{}/{}".format(GPS_DIR, GPS_FILE.format(station=station_name))
+    filename = "{}/{}".format(
+        GPS_DIR, GPS_FILE.format(station=station_name, plate=plate)
+    )
     logger.info(f"Saving {url} to {filename}")
 
     with open(filename, "w") as f:
         f.write(response.text)
+
+
+def get_station_plate(station_name):
+    url = GPS_STATION_URL.format(station=station_name)
+    response = requests.get(url)
+    match = re.search(r"(?P<plate>[A-Z]{2}) Plate Fixed", response.text)
+    if not match:
+        raise ValueError("Could not find plate name on %s" % url)
+    return match.groupdict()["plate"]
 
 
 def station_std(station, to_cm=True, start_date=START_DATE, end_date=None):
