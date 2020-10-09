@@ -116,16 +116,21 @@ def cli():
 
 
 def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
+    print("Boundaries, xrate, yrate")
     print(left, bottom, right, top, xrate, yrate)
     xres = 1 / 3600 / xrate
     yres = 1 / 3600 / yrate
 
-    # For gdal, the windows are by pixel edges, not centers, so expand rect by half a box
-    left -= abs(xres) / 2
-    right += abs(xres) / 2
-    top += abs(yres) / 2
-    bottom -= abs(yres) / 2
-    print((bottom, top, left, right))
+    # For gdal, the windows are by pixel edges, not centers
+    # If we want it like one SRTM tile (size 3601x3601), need to expand rect by half a box
+    # left -= abs(xres) / 2
+    # right += abs(xres) / 2
+    # top += abs(yres) / 2
+    # bottom -= abs(yres) / 2
+    # print((bottom, top, left, right))
+
+    # Without this, we get a box (3600x3600) for a 1 deg window
+    # which turns out cleaner for taking looks later (no cutting off last pixel)
 
     srtm_url = "https://cloud.sdsc.edu/v1/AUTH_opentopography/Raster/SRTM_GL1_Ellip/SRTM_GL1_Ellip_srtm.vrt"  # noqa
     vsi_url = "/vsicurl/{}".format(srtm_url)
@@ -133,7 +138,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # https://gdal.org/programs/gdal_translate.html
     # -of <format> Select the output format.
     # -ot <type> Force the output image bands to have a specific type. Use type names
-    #  -tr <xres> <yres> set target resolution in georeferenced units
+    # -tr <xres> <yres> set target resolution in georeferenced units
     # -r resampling method
     # -projwin <ulx> <uly> <lrx> <lry> Selects a subwindow from the source image for copying
     command = "gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -a_nodata -32768 \

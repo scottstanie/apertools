@@ -169,6 +169,49 @@ def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC
     )
 
 
+def take_looks_gdal2(
+    infile,
+    outfile,
+    fmt="GTiff",
+    xlooks=None,
+    ylooks=None,
+    noData=None,
+    method="average",
+):
+    """
+    infile - Input file to multilook
+    outfile - Output file to multilook
+    fmt - Output format
+    xlooks - Number of looks in x/range direction
+    ylooks - Number of looks in y/azimuth direction
+    """
+    import gdal
+
+    ds = gdal.Open(infile, gdal.GA_ReadOnly)
+
+    # Input file dimensions
+    xSize = ds.RasterXSize
+    ySize = ds.RasterYSize
+
+    # Output file dimensions
+    outXSize = xSize // xlooks
+    outYSize = ySize // ylooks
+
+    # Set up options for translation
+    gdalTranslateOpts = gdal.TranslateOptions(
+        format=fmt,
+        width=outXSize,
+        height=outYSize,
+        srcWin=[0, 0, outXSize * xlooks, outYSize * ylooks],
+        noData=noData,
+        resampleAlg=method,
+    )
+
+    # Call gdal_translate
+    gdal.Translate(outfile, ds, options=gdalTranslateOpts)
+    ds = None
+
+
 def crossmul_gdal(outfile, file1, file2, row_looks, col_looks, format="ROI_PAC"):
     """Uses gdal_calc.py to multiply, then gdal_translate for looks"""
     tmp = "tmp.tif"
