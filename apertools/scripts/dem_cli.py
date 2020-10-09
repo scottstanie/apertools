@@ -192,6 +192,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # GDAL geotransform looks like:
     # (c, a, b, f, d, e)
     x_step, _, x_edge, _, y_step, y_edge, _, _, _ = tuple(ds.transform)
+    ds.close()
     X0 = x_edge + 0.5 * x_step
     Y0 = y_edge + 0.5 * y_step
     print(X0, Y0, width, length)
