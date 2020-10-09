@@ -137,7 +137,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # -r resampling method
     # -projwin <ulx> <uly> <lrx> <lry> Selects a subwindow from the source image for copying
     command = "gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -a_nodata -32768 \
--r bilinear -projwin {left} {top} {right} {bottom} {url} elevation_tmp.dem"
+-r bilinear -projwin {left} {top} {right} {bottom} {url} tmp_elevation.dem"
 
     command = command.format(
         xres=xres,
@@ -153,13 +153,13 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
 
     # Set nodata (-32768) to 0
     command = """gdal_calc.py --quiet --NoDataValue=0 --calc="A*(A!=-32768)" \
--A elevation_tmp.dem --outfile={} --format=ENVI""".format(
+-A tmp_elevation.dem --outfile={} --format=ENVI""".format(
         outname
     )
     print(command)
     subprocess.check_call(command, shell=True)
 
-    for f in glob.glob("elevation_tmp*"):
+    for f in glob.glob("tmp_elevation*"):
         os.remove(f)
 
     # ds = gdal.Open('elevation.dem')
@@ -178,7 +178,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # print((X0, Y0, xsize, ysize))
 
     # rasterio way:
-    ds = rasterio.open("elevation.dem")
+    ds = rasterio.open(outname)
     length, width = ds.shape
     # affine.Affine(a, b, c,
     #               d, e, f)
@@ -192,7 +192,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     print(X0, Y0, width, length)
 
     #  make a rsc file for processing
-    fd = open("elevation.dem.rsc", "w")
+    fd = open(outname + ".rsc", "w")
     fd.write("WIDTH         " + str(width) + "\n")
     fd.write("FILE_LENGTH   " + str(length) + "\n")
     fd.write("X_FIRST       " + str(X0) + "\n")
