@@ -38,3 +38,11 @@ def get_top_mag_dates(df, n=None):
     )
     dailydf["bbox"] = subset.bbox_around_point(dailydf["lon"], failydf["lat"])
     return dailydf
+
+
+# from geopandas.tools import sjoin
+# counties = gpd.read_file("countyl010g_shp_nt00964/countyl010g.shp")
+# states = gpd.read_file("state_boundaries/cb_2018_us_state_5m.shp")
+# texas = states[states.NAME == 'Texas']
+# texas_counties = sjoin(counties, texas, how='inner', op='within')
+# gdf = gpd.GeoDataFrame(topdf, geometry=gpd.points_from_xy(topdf.lon, topdf.lat))
