@@ -619,7 +619,7 @@ def km_to_deg(km, R=6378):
     Assumes distance along great circle arc
 
     Args:
-        km (float): distance in degrees
+        km (float, ndarray[float]): distance in degrees
         R (float): default 6378, Radius of Earth in km
 
     Returns:

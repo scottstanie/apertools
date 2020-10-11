@@ -7,16 +7,24 @@ from apertools.latlon import km_to_deg
 logger = get_log()
 
 
-def copy_vrt(in_fname, out_fname, bbox=None):
+def copy_vrt(in_fname, out_fname=None, bbox=None, verbose=True):
     """Create a VRT for (a subset of) a gdal-readable file
 
     bbox format: (left, bottom, right, top)"""
     from gdal import Translate
 
+    if out_fname is None:
+        out_fname = in_fname + ".vrt"
+
     # Using Translate... but would use Warp if every reprojecting
-    left, bottom, right, top = bbox
-    projwin = (left, top, right, bottom)  # unclear why Translate does UL LR
-    Translate(out_fname, in_fname, projwin=projwin)
+    if bbox:
+        left, bottom, right, top = bbox
+        projwin = (left, top, right, bottom)  # unclear why Translate does UL LR
+    else:
+        projwin = None
+    if verbose:
+        logger.info(f"Creating {out_fname}, subset bbox: {bbox}")
+    Translate(out_fname, in_fname, projWin=projwin)
 
 
 def read_subset(bbox, in_fname, driver=None, bands=None):
@@ -25,9 +33,8 @@ def read_subset(bbox, in_fname, driver=None, bands=None):
     # bbox: left, bot, right, top
     with rio.open(in_fname, driver=driver) as src:
         w = src.window(*bbox)
-        bands = bands or range(1, src.count + 1)
         # TODO: do i want to make this 2d if one band requested?
-        return np.stack([src.read(b, window=w) for b in bands], axis=0)
+        return src.read(bands, window=w)
 
 
 def copy_subset(
@@ -123,24 +130,17 @@ def read_intersections(fname1, fname2, band1=None, band2=None):
     with rio.open(fname1) as src1, rio.open(fname2) as src2:
         w1 = src1.window(*bounds)
         w2 = src2.window(*bounds)
-        if band1 is None:
-            r1 = np.stack(
-                [src1.read(n, window=w1) for n in range(1, src1.count + 1)], axis=0
-            )
-        else:
-            r1 = src1.read(band1, window=w1)
-
-        if band2 is None:
-            r2 = np.stack(
-                [src2.read(n, window=w2) for n in range(1, src2.count + 1)], axis=0
-            )
-        else:
-            r2 = src2.read(band2, window=w2)
+        r1 = src1.read(window=w1) if band1 is None else src1.read(band1, window=w1)
+        r2 = src2.read(window=w2) if band2 is None else src2.read(band2, window=w2)
         return r1, r2
 
 
-def bbox_around_point(lon, lat, side_km=25):
-    """ Finds (left, bot, right top) in deg around a lon, lat point"""
+def bbox_around_point(lons, lats, side_km=25):
+    """Finds (left, bot, right top) in deg around arrays of lons, lats
+
+    Returns (N, 4) array, where N = len(lons)"""
     side_deg = km_to_deg(side_km)
     r = side_deg / 2
-    return (lon - r, lat - r, lon + r, lat + r)
+    return np.array(
+        [(lon - r, lat - r, lon + r, lat + r) for (lon, lat) in zip(lons, lats)]
+    )

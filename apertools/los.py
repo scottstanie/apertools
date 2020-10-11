@@ -32,6 +32,7 @@ def find_enu_coeffs(lon, lat, los_map_file=None, verbose=False):
         col = _find_nearest_idx(lons, lon)
         return stack[:, row, col]
     elif los_map_file.endswith(".tif"):
+        # note: could also do this with xarray... but prob would be using rio anyway
         import rasterio as rio
 
         with rio.open(los_map_file) as src:
@@ -97,9 +98,12 @@ def read_los_map_file(los_map_file):
         import rasterio as rio
 
         with rio.open(los_map_file) as src:
-            return np.stack([src.read(i) for i in (1, 2, 3)], axis=0)
-    with h5py.File(los_map_file, "r") as f:
-        return f["lats"][:], f["lons"][:], f["stack"][:]
+            return src.read()
+    elif los_map_file.endswith(".h5"):
+        with h5py.File(los_map_file, "r") as f:
+            return f["lats"][:], f["lons"][:], f["stack"][:]
+    else:
+        raise ValueError("Expected los_map_file to be HDF5 or .tif")
 
 
 def _find_nearest_idx(array, value):
