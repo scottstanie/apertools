@@ -983,18 +983,18 @@ def intlist_to_filenames(int_date_list, ext=".int"):
     ]
 
 
-def load_geolist_intlist(directory, geolist_ignore_file=None, parse=True):
-    """Load the geo_date_list and int_date_list from a directory with igrams
+def load_geolist_intlist(igram_dir, geo_dir=None, geolist_ignore_file=None, parse=True):
+    """Load the geo_date_list and int_date_list from a igram_dir with igrams
 
-    Assumes that the .geo files are one diretory up from the igrams
+    if geo_dir is None, assumes that the .geo files are one diretory up from the igrams
     """
-    int_date_list = find_igrams(directory, parse=parse)
-    geo_date_list = find_geos(
-        directory=apertools.utils.get_parent_dir(directory), parse=parse
-    )
+    int_date_list = find_igrams(igram_dir, parse=parse)
+    if geo_dir is None:
+        geo_dir = apertools.utils.get_parent_dir(igram_dir)
+    geo_date_list = find_geos(directory=geo_dir, parse=parse)
 
     if geolist_ignore_file is not None:
-        ignore_filepath = os.path.join(directory, geolist_ignore_file)
+        ignore_filepath = os.path.join(igram_dir, geolist_ignore_file)
         geo_date_list, int_date_list = ignore_geo_dates(
             geo_date_list, int_date_list, ignore_file=ignore_filepath, parse=parse
         )

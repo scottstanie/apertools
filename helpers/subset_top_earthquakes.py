@@ -1,6 +1,8 @@
-# from datetime import date
-# import numpy as np
-# import apertools.sario as sario
+from datetime import datetime
+import os
+
+import apertools.sario as sario
+import coseismic_stack
 import apertools.latlon as latlon
 import apertools.subset as subset
 import shapely.geometry
@@ -74,7 +76,48 @@ def setup_folders(
     eqdf = read_eqs(eq_fname)
     topeqdf = get_top_mag_dates(eqdf)
     df = get_eqs_in_bounds(sar_fname, topeqdf, mag_thresh=mag_thresh)
+    df.index = pd.to_datetime(df.index)
 
-    df["bbox"] = df.geometry.buffer(latlon.km_to_deg(15))
-    bboxes = subset.bbox_around_point(df["lon"], df["lat"])
+    df["bbox"] = df.geometry.buffer(latlon.km_to_deg(20))
+    df["folder"] = df.index.strftime("%Y%m%d").str.cat(df.event_id, sep="_")
+    for (index, row) in df.iterrows():
+        print(f"Creating folder {row.folder}")
+        os.makedirs(row.folder, exist_ok=True)
     return df
+
+
+def subset_unws(
+    event_date, row, igram_dir, geo_dir, ignore_geos=True, num_igrams=10, verbose=True
+):
+    """
+    event_date is from index of df
+    row has columns: max_mag,lat,lon,event_id,geometry,bbox,folder
+    """
+    gi_file = "geolist_ignore.txt" if ignore_geos else None
+    geolist, intlist = sario.load_geolist_intlist(
+        igram_dir, geo_dir=geo_dir, geolist_ignore_file=gi_file
+    )
+    stack_igrams = coseismic_stack.select_igrams(
+        geolist, intlist, event_date, num_igrams=num_igrams
+    )
+    # stack_igrams = coseismic_stack.select_pre_event(geolist, intlist, event_date)
+    # stack_igrams = select_post_event(geolist, intlist, event_date)
+
+    stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
+    stack_fullpaths = [
+        os.path.join(os.path.abspath(igram_dir), f) for f in stack_fnames
+    ]
+    vrt_fnames = [
+        os.path.join(os.path.abspath(row.folder), f + ".vrt") for f in stack_fnames
+    ]
+    if verbose:
+        print("Using the following igrams in stack:")
+        for (fin, fout) in zip(stack_fullpaths, vrt_fnames):
+            print(fout, "->", fin)
+
+    for (in_fname, out_fname) in zip(stack_fullpaths, vrt_fnames):
+        subset.copy_vrt(
+            in_fname, out_fname=out_fname, bbox=row.bbox.bounds, verbose=verbose
+        )
+
+    return vrt_fnames

@@ -168,11 +168,11 @@ def subset_stack(
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
 
-    # stack_igrams = select_igrams(geolist, intlist, event_date, nigrams)
+    stack_igrams = select_igrams(geolist, intlist, event_date, nigrams)
     # stack_igrams = select_pre_event(geolist, intlist, event_date, min_date=date(2019, 7, 1))
-    stack_igrams = select_post_event(
-        geolist, intlist, event_date, max_date=date(2020, 5, 1)
-    )
+    # stack_igrams = select_post_event(
+    #     geolist, intlist, event_date, max_date=date(2020, 5, 1)
+    # )
 
     stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
     # dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
