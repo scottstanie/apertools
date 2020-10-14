@@ -26,7 +26,7 @@ def stack_igrams(
 
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
-    # stack_igrams = select_igrams(geolist, intlist, event_date, num_igrams=num_igrams)
+    # stack_igrams = select_cross_event(geolist, intlist, event_date, num_igrams=num_igrams)
     stack_igrams = select_pre_event(geolist, intlist, event_date)
     # stack_igrams = select_post_event(geolist, intlist, event_date)
 
@@ -39,7 +39,6 @@ def stack_igrams(
     dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
 
     cur_phase_sum, cc_stack = create_stack(
-        stack_igrams,
         stack_fnames,
         dts,
         rate=rate,
@@ -60,7 +59,8 @@ def stack_igrams(
     return cur_phase_sum, cc_stack
 
 
-def select_igrams(geolist, intlist, event_date, num_igrams=None):
+def select_cross_event(geolist, intlist, event_date, num_igrams=None):
+    """Choose a list of independent igrams spanning `event_date`"""
 
     insert_idx = np.searchsorted(geolist, event_date)
     num_igrams = num_igrams or len(geolist) - insert_idx
@@ -73,6 +73,7 @@ def select_igrams(geolist, intlist, event_date, num_igrams=None):
     return stack_igrams
 
 
+# TODO: make these independent like cross
 def select_pre_event(geolist, intlist, event_date, min_date=None):
     ifgs = [ifg for ifg in intlist if (ifg[0] < event_date and ifg[1] < event_date)]
     return _filter_min_max_date(ifgs, min_date, None)
@@ -92,7 +93,6 @@ def _filter_min_max_date(ifgs, min_date, max_date):
 
 
 def create_stack(
-    stack_igrams,
     stack_fnames,
     dts,
     rate=False,
@@ -168,7 +168,7 @@ def subset_stack(
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
 
-    stack_igrams = select_igrams(geolist, intlist, event_date, nigrams)
+    stack_igrams = select_cross_event(geolist, intlist, event_date, nigrams)
     # stack_igrams = select_pre_event(geolist, intlist, event_date, min_date=date(2019, 7, 1))
     # stack_igrams = select_post_event(
     #     geolist, intlist, event_date, max_date=date(2020, 5, 1)
