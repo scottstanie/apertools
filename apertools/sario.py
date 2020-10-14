@@ -824,17 +824,29 @@ def parse_intlist_strings(date_pairs):
     return [(_parse(early), _parse(late)) for early, late in date_pairs]
 
 
+def load_geolist_from_nc(ncfile, dim="date", parse=True):
+    import xarray as xr
+
+    with xr.open_dataset(ncfile) as ds:
+        dts = ds[dim].values.astype("datetime64[D]")
+    if parse is True:
+        return dts.tolist()
+    else:
+        return [d.item().strftime().strftime("%Y%m%d") for d in dts]
+
+
 def _parse(datestr):
     return datetime.datetime.strptime(datestr, DATE_FMT).date()
 
 
-def find_geos(directory=".", parse=True, filename=None):
+def find_geos(directory=".", ext=".geo", parse=True, filename=None):
     """Reads in the list of .geo files used, in time order
 
     Can also pass a filename containing .geo files as lines.
 
     Args:
         directory (str): path to the geolist file or directory
+        ext (str): file extension when searching a directory
         parse (bool): output as parsed datetime tuples. False returns the filenames
         filename (string): name of a file with .geo filenames
 
@@ -846,7 +858,7 @@ def find_geos(directory=".", parse=True, filename=None):
         with open(filename) as f:
             geo_file_list = f.read().splitlines()
     else:
-        geo_file_list = find_files(directory, "*.geo")
+        geo_file_list = find_files(directory, "*" + ext)
 
     if not parse:
         return geo_file_list
@@ -858,6 +870,7 @@ def find_geos(directory=".", parse=True, filename=None):
         # raise ValueError("No .geo files found in %s" % directory)
 
     if re.match(r"S1[AB]_\d{8}\.geo", geolist[0]):  # S1A_YYYYmmdd.geo
+        # Note: will match even if file is S1A_YYYYmmdd.geo.vrt
         return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
     elif re.match(r"\d{8}", geolist[0]):  # YYYYmmdd , just a date string
         return sorted([_parse(geo) for geo in geolist if geo])
@@ -877,13 +890,14 @@ def _strip_geoname(name):
     )
 
 
-def find_igrams(directory=".", parse=True, filename=None):
+def find_igrams(directory=".", ext=".int", parse=True, filename=None):
     """Reads the list of igrams to return dates of images as a tuple
 
     Args:
         directory (str): path to the igram directory
+        ext (str): file extension when searching a directory
         parse (bool): output as parsed datetime tuples. False returns the filenames
-        filename (string): name of a file with .geo filenames
+        filename (str): name of a file with .geo filenames
 
     Returns:
         tuple(date, date) of (early, late) dates for all igrams (if parse=True)
@@ -894,7 +908,7 @@ def find_igrams(directory=".", parse=True, filename=None):
         with open(filename) as f:
             igram_file_list = f.read().splitlines()
     else:
-        igram_file_list = find_files(directory, "*.int")
+        igram_file_list = find_files(directory, "*" + ext)
 
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
@@ -1511,46 +1525,6 @@ def gdal_to_numpy_type(gdal_dtype=None, band=None):
     return gdal_array.GDALTypeCodeToNumericTypeCode(gdal_dtype)
 
 
-def testt(fn):
-    # TODO: not quite working to add a colorbar to grayscale tif...
-    import gdal
-
-    ds = gdal.Open(fn, 1)
-    band = ds.GetRasterBand(1)
-
-    # create color table
-    colors = gdal.ColorTable()
-
-    # set color for each value
-    colors.SetColorEntry(1, (112, 153, 89))
-    colors.SetColorEntry(2, (242, 238, 162))
-    colors.SetColorEntry(3, (242, 206, 133))
-    colors.SetColorEntry(4, (194, 140, 124))
-    colors.SetColorEntry(5, (214, 193, 156))
-
-    # set color table and color interpretation
-    band.SetRasterColorTable(colors)
-    band.SetRasterColorInterpretation(gdal.GCI_PaletteIndex)
-
-
-def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=".unw"):
-    import gdal
-
-    if unw_filelist is None:
-        unw_filelist = glob.glob(os.path.join(directory, "*" + ext))
-
-    gdal.BuildVRT(output, unw_filelist, separate=True, srcNodata="nan 0.0")
-    # But we want the 2nd band (not an option on build for some reason)
-    with fileinput.FileInput(output, inplace=True) as f:
-        for line in f:
-            print(
-                line.replace(
-                    "<SourceBand>1</SourceBand>", "<SourceBand>2</SourceBand>"
-                ),
-                end="",
-            )
-
-
 def find_looks_taken(
     igram_path,
     geo_path=None,
@@ -1599,51 +1573,189 @@ def to_datetimes(date_list):
     return [datetime.datetime(*d.timetuple()[:6]) for d in date_list]
 
 
-def hdf5_stack_to_netcdf(filename, dset_name="stack/1"):
+def _get_latlon_arrs(h5_filename=None, dem_rsc_file=None, gdal_file=None, bbox=None):
+    from apertools import latlon, sario
+
+    if h5_filename is not None:
+        lon_arr, lat_arr = latlon.grid(**load_dem_from_h5(h5_filename), sparse=True)
+    elif dem_rsc_file is not None:
+        lon_arr, lat_arr = latlon.grid(**sario.load(dem_rsc_file), sparse=True)
+    elif gdal_file is not None:
+        import rasterio as rio
+
+        with rio.open(gdal_file) as src:
+            rows, cols = src.shape
+            max_len = max(rows, cols)
+            lon_list, lat_list = src.xy(np.arange(max_len), np.arange(max_len))
+            lon_arr = np.arange(lon_list[:cols])
+            lat_arr = np.arange(lat_list[:rows])
+
+    lon_arr, lat_arr = lon_arr.reshape(-1), lat_arr.reshape(-1)
+    return lon_arr.reshape(-1), lat_arr.reshape(-1)
+
+
+def _window_rowcol(lon_arr, lat_arr, bbox=None):
+    if bbox is None:
+        return (0, len(lat_arr)), (0, len(lon_arr))
+
+    # TODO: this should def be in latlon
+    left, bot, right, top = bbox
+    lat_step = np.diff(lat_arr)[0]
+    lon_step = np.diff(lon_arr)[0]
+    row_top = np.clip(int(round(((top - lat_arr[0]) / lat_step))), 0, len(lat_arr))
+    row_bot = np.clip(int(round(((bot - lat_arr[0]) / lat_step))), 0, len(lat_arr))
+    col_left = np.clip(int(round(((left - lon_arr[0]) / lon_step))), 0, len(lon_arr))
+    col_right = np.clip(int(round(((right - lon_arr[0]) / lon_step))), 0, len(lon_arr))
+    # lat_arr = lon_arr[row_top:row_bot]
+    # lon_arr = lon_arr[col_left:col_right]
+    return (row_top, row_bot), (col_left, col_right)
+
+
+def hdf5_to_netcdf(
+    filename,
+    stack_dset_list=["stack/1"],
+    stack_dim_list=["idx"],
+    outname=None,
+    bbox=None,
+):
     """Convert the stack in HDF5 to NetCDF with appropriate metadata"""
-    from netCDF4 import Dataset, date2num
-    from apertools import latlon
+    import netCDF4 as nc
 
     if not filename.endswith(".h5"):
-        raise ValueError(f"{filename} must be an HDF% file")
+        raise ValueError(f"{filename} must be an HDF5 file")
 
-    outname = filename.replace(".h5", ".nc")
+    if outname is None:
+        outname = filename.replace(".h5", ".nc")
+    if not outname.endswith(".nc"):
+        raise ValueError(f"{outname} must be an .nc filename")
+
     with h5py.File(filename) as hf:
         # Get data and references from HDF% file
-        dset = hf[dset_name]
-        ndates, rows, cols = dset.shape
-        lon_arr, lat_arr = latlon.grid(**load_dem_from_h5(filename), sparse=True)
-        # TODO: chunks? need to specify per Variable?
-        geolist = load_geolist_from_h5(filename, dset=dset_name)
-        gtd = to_datetimes(geolist)
+
+        # Just get one example for shape
+        nstack, rows, cols = hf[stack_dset_list[0]].shape
+        lon_arr, lat_arr = _get_latlon_arrs(h5_filename=filename, bbox=bbox)
+
+        (row_top, row_bot), (col_left, col_right) = _window_rowcol(
+            lon_arr, lat_arr, bbox=bbox
+        )
+        lat_arr = lat_arr[row_top:row_bot]
+        lon_arr = lon_arr[col_left:col_right]
+        rows, cols = len(lat_arr), len(lon_arr)
+
+        stack_arrs = []
+        for dset_name, stack_dim in zip(stack_dset_list, stack_dim_list):
+            nstack, _, _ = hf[dset_name].shape
+            if stack_dim == "date":
+                try:
+                    geolist = load_geolist_from_h5(filename, dset=dset_name)
+                except KeyError:  # Give this one a shot too
+                    geolist = load_geolist_from_h5(filename)
+                stack_dim_arr = to_datetimes(geolist)
+            else:
+                stack_dim_arr = np.arange(nstack)
+            stack_arrs.append(stack_dim_arr)
+
+        # TODO: store the int dates as dims... somehow
 
         print("Making dimensions and variables")
-        with Dataset(outname, "w") as f:
+        with nc.Dataset(outname, "w") as f:
             f.history = "Created " + time.ctime(time.time())
 
             f.createDimension("lat", rows)
             f.createDimension("lon", cols)
             # Could make this unlimited to add to it later?
-            f.createDimension("date", ndates)
-            dates = f.createVariable("date", "f4", ("date",))
-            latitudes = f.createVariable("lat", "f4", ("lat",))
-            longitudes = f.createVariable("lon", "f4", ("lon",))
+            latitudes = f.createVariable("lat", "f4", ("lat",), zlib=True)
+            longitudes = f.createVariable("lon", "f4", ("lon",), zlib=True)
             latitudes.units = "degrees north"
             longitudes.units = "degrees east"
-            dates.units = f"days since {geolist[0]}"
 
-            # Write data
-            latitudes[:] = lat_arr
-            longitudes[:] = lon_arr
-            d2n = date2num(gtd, units=dates.units)
-            dates[:] = d2n
-            # Reverse this:
-            # num2date(d2n, units=dates.units)
-            # array([cftime.DatetimeGregorian(2014, 12, 26, 0, 0, 0, 0),
-            #   cftime.DatetimeGregorian(2015, 1, 19, 0, 0, 0, 0),
+            for dset_name, stack_dim_name, stack_arr in zip(
+                stack_dset_list, stack_dim_list, stack_arrs
+            ):
+                dset = hf[dset_name]
+                nstack, _, _ = dset.shape
+                if stack_dim_name not in f.dimensions:
+                    f.createDimension(stack_dim_name, nstack)
+                if stack_dim_name not in f.variables:
+                    if stack_dim_name == "date":
+                        idxs = f.createVariable(
+                            stack_dim_name, "f4", (stack_dim_name,), zlib=True
+                        )
+                        idxs.units = f"days since {geolist[0]}"
+                    else:
+                        idxs = f.createVariable(stack_dim_name, "i4", (stack_dim_name,))
 
-            # Finally, the actual stack
-            # stackvar = rootgrp.createVariable("stack/1", "f4", ("date", "lat", "lon"))
-            print("Writing stack data")
-            stackvar = f.createVariable("stack", "f4", ("date", "lat", "lon"))
-            stackvar[:] = dset[:]
+                # Write data
+                latitudes[:] = lat_arr
+                longitudes[:] = lon_arr
+                if stack_dim_name == "date":
+                    d2n = nc.date2num(stack_arr, units=idxs.units)
+                    idxs[:] = d2n
+                else:
+                    idxs[:] = stack_arr
+
+                # Finally, the actual stack
+                # stackvar = rootgrp.createVariable("stack/1", "f4", ("date", "lat", "lon"))
+                print(f"Writing {dset_name} data")
+                if hf[dset_name].dtype == np.dtype("bool"):
+                    bool_type = "i1"
+                    # bool_type = f.createEnumType(
+                    #     np.uint8, "bool_t", {"FALSE": 0, "TRUE": 1}
+                    # )
+                    dt = bool_type
+                    fill_value = 0
+                else:
+                    dt = hf[dset_name].dtype
+                    fill_value = 0
+
+                stackvar = f.createVariable(
+                    dset_name,
+                    dt,
+                    (stack_dim_name, "lat", "lon"),
+                    fill_value=fill_value,
+                    zlib=True,
+                )
+                d = dset[:, row_top:row_bot, col_left:col_right]
+                print(f"d shape: {d.shape}")
+                stackvar[:] = d
+
+
+def testt(fn):
+    # TODO: not quite working to add a colorbar to grayscale tif...
+    import gdal
+
+    ds = gdal.Open(fn, 1)
+    band = ds.GetRasterBand(1)
+
+    # create color table
+    colors = gdal.ColorTable()
+
+    # set color for each value
+    colors.SetColorEntry(1, (112, 153, 89))
+    colors.SetColorEntry(2, (242, 238, 162))
+    colors.SetColorEntry(3, (242, 206, 133))
+    colors.SetColorEntry(4, (194, 140, 124))
+    colors.SetColorEntry(5, (214, 193, 156))
+
+    # set color table and color interpretation
+    band.SetRasterColorTable(colors)
+    band.SetRasterColorInterpretation(gdal.GCI_PaletteIndex)
+
+
+def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=".unw"):
+    import gdal
+
+    if unw_filelist is None:
+        unw_filelist = glob.glob(os.path.join(directory, "*" + ext))
+
+    gdal.BuildVRT(output, unw_filelist, separate=True, srcNodata="nan 0.0")
+    # But we want the 2nd band (not an option on build for some reason)
+    with fileinput.FileInput(output, inplace=True) as f:
+        for line in f:
+            print(
+                line.replace(
+                    "<SourceBand>1</SourceBand>", "<SourceBand>2</SourceBand>"
+                ),
+                end="",
+            )
