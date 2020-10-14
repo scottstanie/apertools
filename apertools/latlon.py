@@ -702,24 +702,32 @@ def grid(
     return np.meshgrid(x, y, sparse=sparse)
 
 
-def grid_to_rsc(lons, lats):
+def grid_to_rsc(lons, lats, sparse=False):
     """Reverses the `grid` function to get an rsc dict
 
     Takes the meshgrid output `lons` and `lats` and calculates the rsc data
     """
-    assert lons.shape == lats.shape
-    rows, cols = lons.shape
+    if sparse is False:
+        assert lons.shape == lats.shape
+        rows, cols = lons.shape
+        y_first = lats[0][0]
+        y_step = lats[1][0] - lats[0][0]
+
+        x_first = lons[0][0]
+        x_step = lons[0][1] - lons[0][0]
+    else:
+        lats, lons = lats.reshape(-1), lons.reshape(-1)
+        rows, cols = len(lats), len(lons)
+        y_first = lats[0]
+        y_step = lats[1] - lats[0]
+        x_first = lons[0]
+        x_step = lons[1] - lons[0]
+
     file_length, width = rows, cols
 
     # Check that the northern most latitude is on the top row for lats
-    if lats[0][0] < lats[-1][0]:
-        raise ValueError("Need top row of lats to be the northern most lats")
-
-    y_first = lats[0][0]
-    y_step = lats[1][0] - lats[0][0]
-
-    x_first = lons[0][0]
-    x_step = lons[0][1] - lons[0][0]
+    # if lats[0][0] < lats[-1][0]:
+    # raise ValueError("Need top row of lats to be the northern most lats")
 
     return dict(
         x_first=x_first,
@@ -733,9 +741,9 @@ def grid_to_rsc(lons, lats):
     )
 
 
-def from_grid(lons, lats):
+def from_grid(lons, lats, sparse=False):
     """Alias for grid_to_rsc"""
-    return grid_to_rsc(lons, lats)
+    return grid_to_rsc(lons, lats, sparse=sparse)
 
 
 def grid_extent(
