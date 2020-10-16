@@ -437,3 +437,45 @@ def plot_img_diff(
     if show:
         plt.show(block=False)
     return fig, axes
+
+
+def rescale_and_color(in_name, outname, vmin=None, vmax=None, cmap=None):
+    import rasterio as rio
+
+    with rio.open(in_name) as src:
+        arr = src.read(1)
+        mask = arr == src.nodata
+        meta = src.meta
+    out_dt = "uint8"
+    meta["dtype"] = out_dt
+
+    if vmax is None:
+        arr_valid = arr[~mask]
+        vmin, vmax = np.min(arr_valid), np.max(arr_valid)
+
+    arr = np.clip(arr, vmin, vmax)  # range: [-vmin, vmax]
+    arr = (vmin + arr) / (vmax - vmin)  # [-1, 1]
+    arr = 1 + 255 * (1 + arr)  # [1, 255]
+    arr = np.clip(arr, 1, 255).astype(out_dt)
+    arr[mask] = 0  # reset nodata
+    with rio.open(outname, "w", **meta) as dst:
+        dst.write(arr.astype(out_dt), 1)
+
+        if cmap:
+            dst.write_colormap(1, cmap_to_dict(cmap))
+    return arr
+
+
+def cmap_to_dict(cmap_name, vmin=None, vmax=None):
+    # for matplotlib.colors.LinearSegmentedColormap
+    # syd = {r: tuple(256*np.array(sy(r))) for r in range(256) }
+    # cmy(.4, bytes=True)
+    # (219, 237, 200, 255)
+    cmap = matplotlib.cm.get_cmap(cmap_name)
+    if vmin is None or vmax is None:
+        vmin, vmax = 0, 1
+    norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+    vals = np.linspace(vmin, vmax, cmap.N)
+    color_tuple_dict = {idx: cmap(norm(v), bytes=True) for idx, v in enumerate(vals)}
+    # {1: (219, 237, 200, 255),... }
+    return color_tuple_dict
