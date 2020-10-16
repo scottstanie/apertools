@@ -16,32 +16,27 @@ from apertools import sario
 from insar.prepare import remove_ramp
 
 
-def main():
+def get_cli_args():
     p = argparse.ArgumentParser()
-    p.add_argument(
-        "--outfile",
-        default="tiles",
-        help="Name of output file (default=%(default)s)",
-    )
-    p.add_argument(
-        "--out-pct",
-        type=float,
-        default=1,
-        help="pct size of original igrams (default=%(default)s)",
-    )
     p.add_argument(
         "--deramp",
         action="store_true",
         default=True,
         help="remove a linear ramp from phase after averaging (default=%(default)s)",
     )
-    args = p.parse_args()
+    p.add_argument(
+        "--ext",
+        default=".unw",
+        help="filename extension of unwrapped igrams to average (default=%(default)s)",
+    )
+    return p.parse_args()
+
+
+def create_averages(deramp, ext):
 
     # gdal_translate -outsize 2% 2% S1B_20190325.geo.vrt looked_S1B_20190325.geo.tif
-    ifg_date_list = sario.find_igrams(".")
-    unw_file_list = [
-        f.replace(".int", ".unw") for f in sario.find_igrams(".", parse=False)
-    ]
+    ifg_date_list = sario.find_igrams(directory=".", ext=args.ext)
+    unw_file_list = sario.find_igrams(".", ext=args.ext, parse=False)
     # unw_file_list = [f.replace(".int", ".unwflat") for f in sario.find_igrams(".", parse=False)]
 
     geo_dates = sorted(set(itertools.chain.from_iterable(ifg_date_list)))
@@ -133,5 +128,6 @@ def plot_avgs(avgs=None, fnames=None, cmap="seismic"):
     return fig, axes
 
 
-# if __name__ == "__main__":
-# main()
+if __name__ == "__main__":
+    args = get_cli_args()
+    create_averages(args.deramp, args.ext)

@@ -493,10 +493,12 @@ def save_vrt(filenames, rsc_file, cols, rows, dtype, band, interleave, num_bands
     help="Downsampling beyond the 30m SRTM resolution",
     show_default=True,
 )
+@click.option("--out-dir", "-o", type=click.Path(exists=True), default="./")
 def smallslc(
     filenames,
     rsc_file,
     downrate,
+    out_dir,
 ):
     """Save complex binary .geo/.slc as small version for quick look in dismph
 
@@ -508,21 +510,14 @@ def smallslc(
     pct_x = int(100 / x_uprate / downrate)
     pct_y = int(100 / y_uprate / downrate)
     for f in filenames:
-        dest = "small_" + f
+        dest_name = os.path.split(f)[1]
         # For ROI_PAC driver, it only recognizes .slc, not .geo
-        dest = dest.replace(".geo", ".slc")
+        dest_path = os.path.join(out_dir, "small_" + dest_name.replace(".geo", ".slc"))
         apertools.sario.save_as_vrt(
             filename=f,
             rsc_file=rsc_file,
         )
-        cmd = (
-            """gdal_translate -of ROI_PAC {src} {dest} -outsize {px}% {py}% """.format(
-                src=f + ".vrt",
-                dest=dest,
-                px=pct_x,
-                py=pct_y,
-            )
-        )
+        cmd = f"gdal_translate -of ROI_PAC {f + '.vrt'} {dest_path} -outsize {pct_x}% {pct_y}% "
         _log_and_run(cmd)
 
 
@@ -729,3 +724,21 @@ def subset(bbox, out_dir, in_dir, start_date, end_date):
         click.echo(f"symlinking {s} to {d}")
         force_symlink(s, d)
         # copyfile(s, d)
+
+
+@cli.command("subset-vrt")
+@click.argument("filenames", nargs=-1)
+@click.option(
+    "--bbox", nargs=4, type=float, help="Window lat/lon bounds: left bot right top"
+)
+@click.option(
+    "--out-dir", "-o", type=click.Path(exists=True), default=".", show_default=True
+)
+# @click.option("--start-date", "-s", type=click.DateTime(formats=["%Y-%m-%d"]))
+# @click.option("--end-date", "-e", type=click.DateTime(formats=["%Y-%m-%d"]))
+def subset_vrt(filenames, bbox, out_dir):  # , start_date, end_date):
+    import apertools.subset
+
+    for f in filenames:
+        out_fname = os.path.join(out_dir, os.path.split(f)[1] + ".vrt")
+        apertools.subset.copy_vrt(f, out_fname=out_fname, bbox=bbox, verbose=True)
