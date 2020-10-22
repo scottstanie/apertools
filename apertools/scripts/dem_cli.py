@@ -132,8 +132,10 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # Without this, we get a box (3600x3600) for a 1 deg window
     # which turns out cleaner for taking looks later (no cutting off last pixel)
 
-    srtm_url = "https://cloud.sdsc.edu/v1/AUTH_opentopography/Raster/SRTM_GL1_Ellip/SRTM_GL1_Ellip_srtm.vrt"  # noqa
-    vsi_url = "/vsicurl/{}".format(srtm_url)
+    srtm_url = f"https://portal.opentopography.org/API/globaldem?demtype=SRTMGL3&west={left}&south={bottom}&east={right}&north={top}&outputFormat=GTiff"  # noqa
+    command = f'curl -o tmp_elevation.tif "{srtm_url}"'
+    print(command)
+    subprocess.check_call(command, shell=True)
 
     # https://gdal.org/programs/gdal_translate.html
     # -of <format> Select the output format.
@@ -142,16 +144,11 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # -r resampling method
     # -projwin <ulx> <uly> <lrx> <lry> Selects a subwindow from the source image for copying
     command = "gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -a_nodata -32768 \
--r bilinear -projwin {left} {top} {right} {bottom} {url} tmp_elevation.dem"
+-r bilinear tmp_elevation.tif tmp_elevation.dem"
 
     command = command.format(
         xres=xres,
         yres=yres,
-        left=left,
-        bottom=bottom,
-        right=right,
-        top=top,
-        url=vsi_url,
     )
     print(command)
     subprocess.check_call(command, shell=True)
