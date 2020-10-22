@@ -132,7 +132,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # Without this, we get a box (3600x3600) for a 1 deg window
     # which turns out cleaner for taking looks later (no cutting off last pixel)
 
-    srtm_url = f"https://portal.opentopography.org/API/globaldem?demtype=SRTMGL3&west={left}&south={bottom}&east={right}&north={top}&outputFormat=GTiff"  # noqa
+    srtm_url = f"https://portal.opentopography.org/API/globaldem?demtype=SRTMGL1_E&west={left}&south={bottom}&east={right}&north={top}&outputFormat=GTiff"  # noqa
     command = f'curl -o tmp_elevation.tif "{srtm_url}"'
     print(command)
     subprocess.check_call(command, shell=True)
