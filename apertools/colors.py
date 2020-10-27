@@ -177,7 +177,7 @@ SEISMIC_WIDE_Y = LinearSegmentedColormap.from_list(
         (1, 0, 0, 1),
         (0.7, 0, 0, 1),
     ],
-    N=450,
+    N=256,
 )
 plt.register_cmap("seismic_wide_y", SEISMIC_WIDE_Y)
 
