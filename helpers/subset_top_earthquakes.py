@@ -158,7 +158,7 @@ def subset_unws(
     return vrt_fnames
 
 
-def read_eqs(fname="../../fracking-qgis-data/texnet_events_20200726.csv"):
+def read_eqs(fname=TEXNET_DATA):
     df = pd.read_csv(
         fname,
         usecols=(
