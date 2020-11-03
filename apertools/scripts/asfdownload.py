@@ -97,7 +97,7 @@ def query_only(output="geojson", **kwargs):
     return outname
 
 
-def downlaod_data(output="metalink", **kwargs):
+def download_data(output="metalink", **kwargs):
     # Start by saving data available as a metalink file
     outname = query_only(output="metalink", **kwargs)
 
@@ -176,7 +176,7 @@ def cli():
     if args.query_only:
         query_only(**vars(args))
     else:
-        downlaod_data(**vars(args))
+        download_data(**vars(args))
 
 
 if __name__ == "__main__":
