@@ -132,7 +132,18 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # Without this, we get a box (3600x3600) for a 1 deg window
     # which turns out cleaner for taking looks later (no cutting off last pixel)
 
-    srtm_url = f"https://portal.opentopography.org/API/globaldem?demtype=SRTMGL1_E&west={left}&south={bottom}&east={right}&north={top}&outputFormat=GTiff"  # noqa
+    # add small padding for new API. use gdal_translate later for exact bounds
+    # API can only give 30m pixel bounds (instead of upsampled window bounds)
+    pleft = left - 0.1
+    pbottom = bottom - 0.1
+    pright = right + 0.1
+    ptop = top + 0.1
+
+    srtm_url = (
+        f"https://portal.opentopography.org/API/globaldem?"
+        f"demtype=SRTMGL1_E&west={pleft}&south={pbottom}&east={pright}&north={ptop}"
+        "&outputFormat=GTiff"
+    )
     command = f'curl -o tmp_elevation.tif "{srtm_url}"'
     print(command)
     subprocess.check_call(command, shell=True)
@@ -143,8 +154,11 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # -tr <xres> <yres> set target resolution in georeferenced units
     # -r resampling method
     # -projwin <ulx> <uly> <lrx> <lry> Selects a subwindow from the source image for copying
-    command = "gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -a_nodata -32768 \
--r bilinear tmp_elevation.tif tmp_elevation.dem"
+    command = (
+        f"gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -a_nodata -32768 "
+        f"-projwin {left} {top} {right} {bottom} "
+        "-r bilinear tmp_elevation.tif tmp_elevation.dem"
+    )
 
     command = command.format(
         xres=xres,
@@ -154,9 +168,9 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     subprocess.check_call(command, shell=True)
 
     # Set nodata (-32768) to 0
-    command = """gdal_calc.py --quiet --NoDataValue=0 --calc="A*(A!=-32768)" \
--A tmp_elevation.dem --outfile={} --format=ENVI""".format(
-        outname
+    command = (
+        f'gdal_calc.py --quiet --NoDataValue=0 --calc="A*(A!=-32768)" '
+        f"-A tmp_elevation.dem --outfile={outname} --format=ENVI"
     )
     print(command)
     subprocess.check_call(command, shell=True)

@@ -503,12 +503,14 @@ def save_vrt(filenames, rsc_file, cols, rows, dtype, band, interleave, num_bands
     show_default=True,
 )
 @click.option("--out-dir", "-o", type=click.Path(exists=True), default="./")
+@click.option("--overwrite/--no-overwrite", default=False)
 def smallslc(
     filenames,
     rsc_file,
     downrate,
     resample,
     out_dir,
+    overwrite,
 ):
     """Save complex binary .geo/.slc as small version for quick look in dismph
 
@@ -523,20 +525,29 @@ def smallslc(
         dest_name = os.path.split(f)[1]
         # For ROI_PAC driver, it only recognizes .slc, not .geo
         dest_path = os.path.join(out_dir, "small_" + dest_name.replace(".geo", ".slc"))
+        if os.path.exists(dest_path) and not overwrite:
+            print(f"{dest_path} exists, overwrite={overwrite}: skipping.")
+            continue
+
         apertools.sario.save_as_vrt(
             filename=f,
             rsc_file=rsc_file,
         )
         if resample == "average":
-            rl, cl = round(downrate * x_uprate), round(y_uprate * downrate)
-            print(f"Downlooking {f} by {rl}, {cl} into {dest_path}")
+            col_looks = round(downrate * x_uprate)
+            row_looks = round(downrate * y_uprate)
+            print(f"Downlooking {f} by {row_looks}, {col_looks} into {dest_path}")
             apertools.sario.save(
                 dest_path,
                 apertools.sario.load(
                     f,
-                    looks=(rl, cl),
+                    looks=(row_looks, col_looks),
                     separate_complex=True,
                 ),
+            )
+            apertools.sario.save(
+                dest_path + ".rsc",
+                apertools.sario.load(rsc_file, looks=(row_looks, col_looks)),
             )
         else:
             cmd = (
