@@ -7,7 +7,8 @@ import itertools
 import subprocess
 
 # import multiprocessing
-# import os
+import os
+import h5py
 import numpy as np
 import argparse
 import rasterio as rio
@@ -29,44 +30,93 @@ def get_cli_args():
         default=".unw",
         help="filename extension of unwrapped igrams to average (default=%(default)s)",
     )
+    p.add_argument(
+        "--search-path",
+        "-p",
+        default=".",
+        help="location of igram files. (default=%(default)s)",
+    )
+    p.add_argument(
+        "--overwrite",
+        action="store_true",
+        default=False,
+        help="Overwrite existing averaged files (default=%(default)s)",
+    )
+    p.add_argument(
+        "--normalize-time",
+        "-n",
+        action="store_true",
+        default=False,
+        help="Divide igram phase by temporal baseline (default=%(default)s)",
+    )
     return p.parse_args()
 
 
-def create_averages(deramp, ext):
+def create_averages(
+    deramp, ext, search_path=".", overwrite=False, normalize_time=False
+):
 
     # gdal_translate -outsize 2% 2% S1B_20190325.geo.vrt looked_S1B_20190325.geo.tif
-    ifg_date_list = sario.find_igrams(directory=".", ext=args.ext)
-    unw_file_list = sario.find_igrams(".", ext=args.ext, parse=False)
+    ifg_date_list = sario.find_igrams(directory=search_path, ext=ext)
+    unw_file_list = sario.find_igrams(directory=search_path, ext=ext, parse=False)
     # unw_file_list = [f.replace(".int", ".unwflat") for f in sario.find_igrams(".", parse=False)]
 
-    geo_dates = sorted(set(itertools.chain.from_iterable(ifg_date_list)))
+    geo_date_list = sorted(set(itertools.chain.from_iterable(ifg_date_list)))
+    geo_date_list, ifg_date_list = sario.ignore_geo_dates(
+        geo_date_list,
+        ifg_date_list,
+        ignore_file=os.path.join(search_path, "geolist_ignore.txt"),
+    )
     with rio.open(unw_file_list[0]) as ds:
         out = np.zeros((ds.height, ds.width))
         transform = ds.transform
         crs = ds.crs
 
-    for (idx, gdate) in enumerate(geo_dates):
+    mask_fname = os.path.join(search_path, "masks.h5")
+    with h5py.File(mask_fname, "r") as f:
+        mask_stack = f["igram"][:].astype(bool)
+
+    out_mask = np.zeros_like(out).astype(bool)
+
+    # Get masks for deramping
+    mask_igram_date_list = sario.load_intlist_from_h5(mask_fname)
+
+    for (idx, gdate) in enumerate(geo_date_list):
+        outfile = "avg_" + gdate.strftime("%Y%m%d") + ".tif"
+        if os.path.exists(outfile) and not overwrite:
+            print(f"{outfile} exists: skipping")
+            continue
+
         cur_unws = [
-            f for (pair, f) in zip(ifg_date_list, unw_file_list) if gdate in pair
+            (f, date_pair)
+            for (date_pair, f) in zip(ifg_date_list, unw_file_list)
+            if gdate in date_pair
         ]
         # reset the matrix to all zeros
         out = 0
-        for unwf in cur_unws:
+        for unwf, date_pair in cur_unws:
             with rio.open(unwf) as ds:
                 # phase band is #2, amplitde is 1
-                out += ds.read(2)
+                img = ds.read(2)
+                if normalize_time:
+                    img /= (date_pair[1] - date_pair[0]).days
+                out += img
+
+            mask_idx = mask_igram_date_list.index(date_pair)
+            out_mask |= mask_stack[mask_idx]
 
         print(
             "Averaging {} unwrapped igrams for {} ({} out of {})".format(
-                len(cur_unws), gdate, idx + 1, len(geo_dates)
+                len(cur_unws), gdate, idx + 1, len(geo_date_list)
             )
         )
         out /= len(cur_unws)
 
         if args.deramp:
-            out = remove_ramp(out, deramp_order=1, mask=np.ma.nomask)
+            out = remove_ramp(out, deramp_order=1, mask=out_mask)
+        else:
+            out[out_mask] = np.nan
 
-        outfile = "avg_" + gdate.strftime("%Y%m%d") + ".tif"
         with rio.open(
             outfile,
             "w",
@@ -130,4 +180,9 @@ def plot_avgs(avgs=None, fnames=None, cmap="seismic"):
 
 if __name__ == "__main__":
     args = get_cli_args()
-    create_averages(args.deramp, args.ext)
+    create_averages(
+        args.deramp,
+        args.ext,
+        search_path=args.search_path,
+        overwrite=args.overwrite,
+    )
