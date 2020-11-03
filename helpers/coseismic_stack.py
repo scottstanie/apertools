@@ -26,8 +26,8 @@ def stack_igrams(
 
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
-    # stack_igrams = select_cross_event(geolist, intlist, event_date, num_igrams=num_igrams)
-    stack_igrams = select_pre_event(geolist, intlist, event_date)
+    stack_igrams = select_cross_event(geolist, intlist, event_date, num_igrams=num_igrams)
+    # stack_igrams = select_pre_event(geolist, intlist, event_date)
     # stack_igrams = select_post_event(geolist, intlist, event_date)
 
     stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
