@@ -664,6 +664,7 @@ def grid(
     width=None,
     file_length=None,
     sparse=False,
+    fname=None,
     **kwargs
 ):
     """Takes sizes and spacing info, creates a grid of values
@@ -695,11 +696,32 @@ def grid(
      [ 19.3  19.3]
      [ 19.1  19.1]]
     """
+    if fname is not None:
+        transform_data = get_tif_transform(fname)
+        return grid(sparse=sparse, **transform_data)
+
     rows = rows or file_length
     cols = cols or width
     x = np.linspace(x_first, x_first + (cols - 1) * x_step, cols).reshape((1, cols))
     y = np.linspace(y_first, y_first + (rows - 1) * y_step, rows).reshape((rows, 1))
     return np.meshgrid(x, y, sparse=sparse)
+
+
+def get_tif_transform(fname):
+    """Make a dict containing similar info to .rsc file from GDAL-readable file"""
+    import rasterio as rio
+
+    with rio.open(fname) as src:
+        x_step, _, x_first, _, y_step, y_first, _, _, _ = tuple(src.transform)
+        rows, cols = src.shape
+        return dict(
+            rows=rows,
+            cols=cols,
+            x_step=x_step,
+            x_first=x_first,
+            y_step=y_step,
+            y_first=y_first,
+        )
 
 
 def grid_to_rsc(lons, lats, sparse=False):

@@ -80,6 +80,10 @@ def solve_east_up(
     east_up_rows = np.einsum("ijk, ki -> ij", Apinv, asc_desc_img)
     east = east_up_rows[:, 0].reshape(asc_img.shape).astype(np.float32)
     up = east_up_rows[:, 1].reshape(asc_img.shape).astype(np.float32)
+
+    mask = np.logical_or(asc_img == 0, desc_img == 0)
+    east[mask] = 0
+    up[mask] = 0
     if outfile:
         transform = subset.get_intersect_transform(asc_img_fname, desc_img_fname)
         crs = subset.get_crs(asc_img_fname)
@@ -90,6 +94,15 @@ def solve_east_up(
         )
 
     return east, up
+
+
+def save_east_up_mat(east_up_fname):
+    import rasterio as rio
+
+    with rio.open(east_up_fname) as src:
+        east = src.read(1)
+        up = src.read(2)
+        lons, lats = latlon.grid(fname="east_up_202006.tif", sparse=True)
 
 
 def read_los_map_file(los_map_file):

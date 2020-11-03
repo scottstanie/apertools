@@ -817,10 +817,10 @@ def parse_geolist_strings(geolist_str):
     return [_parse(g) for g in geolist_str]
 
 
-def parse_intlist_strings(date_pairs):
+def parse_intlist_strings(date_pairs, ext=".int"):
     # If we passed filename YYYYmmdd_YYYYmmdd.int
     if isinstance(date_pairs, basestring):
-        date_pairs = [date_pairs.strip(".int").split("_")[:2]]
+        date_pairs = [date_pairs.strip(ext).split("_")[:2]]
     return [(_parse(early), _parse(late)) for early, late in date_pairs]
 
 
@@ -912,8 +912,8 @@ def find_igrams(directory=".", ext=".int", parse=True, filename=None):
 
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
-        date_pairs = [intname.strip(".int").split("_")[:2] for intname in igram_fnames]
-        return parse_intlist_strings(date_pairs)
+        date_pairs = [intname.strip(ext).split("_")[:2] for intname in igram_fnames]
+        return parse_intlist_strings(date_pairs, ext=ext)
     else:
         return igram_file_list
 
@@ -1719,6 +1719,31 @@ def hdf5_to_netcdf(
                 d = dset[:, row_top:row_bot, col_left:col_right]
                 print(f"d shape: {d.shape}")
                 stackvar[:] = d
+
+
+def save_east_up_mat(east_up_fname, outname=None, units="cm"):
+    """From los.solve_east_up results, save a new .mat file for MATLAB use"""
+    import rasterio as rio
+    import apertools.latlon as latlon
+    from scipy.io import savemat
+
+    if outname is None:
+        outname = east_up_fname + ".mat"
+
+    with rio.open(east_up_fname) as src:
+        east = src.read(1)
+        up = src.read(2)
+        lons, lats = latlon.grid(fname=east_up_fname, sparse=True)
+    savemat(
+        outname,
+        dict(
+            lons=lons,
+            lats=lats,
+            east=east,
+            up=up,
+            units=units,
+        ),
+    )
 
 
 def testt(fn):
