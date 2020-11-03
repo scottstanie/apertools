@@ -89,6 +89,7 @@ def write_outfile(
 
 
 def get_intersection_bounds(fname1, fname2):
+    """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2"""
     with rio.open(fname1) as src1, rio.open(fname2) as src2:
         if src1.crs != src2.crs:
             raise ValueError(
@@ -126,7 +127,35 @@ def get_nodata(fname):
 
 
 def read_intersections(fname1, fname2, band1=None, band2=None):
+    from gdal import Translate, Open, Unlink
+
     bounds = get_intersection_bounds(fname1, fname2)
+    print(f"bounds: {bounds}")
+    left, bottom, right, top = bounds
+    projwin = (left, top, right, bottom)  # Translate does UL LR
+
+    ds1 = Open(fname1)
+    ds2 = Open(fname2)
+    outname1 = "/vsimem/overlap1.vrt"
+    outname2 = "/vsimem/overlap2.vrt"
+
+    ds_overlap1 = Translate(outname1, ds1, format="VRT", projWin=projwin)
+    ds_overlap2 = Translate(outname2, ds2, format="VRT", projWin=projwin)
+    r1 = ds_overlap1.ReadAsArray()
+    r2 = ds_overlap2.ReadAsArray()
+
+    Unlink(outname1)
+    Unlink(outname2)
+    ds1 = ds2 = None
+    ds1 = ds2 = None
+
+    return r1, r2
+
+
+# NOTE: appears broken from bad rounding of rasterio
+def read_intersections_rio(fname1, fname2, band1=None, band2=None):
+    bounds = get_intersection_bounds(fname1, fname2)
+    print(f"bounds: {bounds}")
     with rio.open(fname1) as src1, rio.open(fname2) as src2:
         w1 = src1.window(*bounds)
         w2 = src2.window(*bounds)
