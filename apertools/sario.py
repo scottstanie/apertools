@@ -282,6 +282,7 @@ def load_file(
                 cols=cols,
             ),
             *looks,
+            **kwargs,
         )
     else:
         return _take_looks(
@@ -869,9 +870,11 @@ def find_geos(directory=".", ext=".geo", parse=True, filename=None):
         return []
         # raise ValueError("No .geo files found in %s" % directory)
 
-    if re.match(r"S1[AB]_\d{8}\.geo", geolist[0]):  # S1A_YYYYmmdd.geo
+    pat = r"\w*S1[AB]_(?P<date>\d{8})" + ext
+    if re.match(pat, geolist[0]):  # S1A_YYYYmmdd.geo
         # Note: will match even if file is S1A_YYYYmmdd.geo.vrt
-        return sorted([_parse(_strip_geoname(geo)) for geo in geolist])
+        dates = [re.match(pat, geo).groupdict()["date"] for geo in geolist]
+        return sorted([_parse(d) for d in dates])
     elif re.match(r"\d{8}", geolist[0]):  # YYYYmmdd , just a date string
         return sorted([_parse(geo) for geo in geolist if geo])
     else:  # Full sentinel product name
@@ -1719,6 +1722,36 @@ def hdf5_to_netcdf(
                 d = dset[:, row_top:row_bot, col_left:col_right]
                 print(f"d shape: {d.shape}")
                 stackvar[:] = d
+
+
+def save_slc_amp_stack(
+    directory=".", ext=".slc", dtype="float32", outname="slc_stack.nc"
+):
+    """Save a bunch of SLCs into one NetCDF stack"""
+    import xarray as xr
+
+    fnames = glob.glob("*" + ext)
+    date_list = find_geos(directory=directory, ext=ext, parse=True)
+    date_list = np.array(date_list, dtype="datetime64[D]")
+    with xr.open_rasterio(fnames[0]) as ds1:
+        _, rows, cols = ds1.shape
+
+        data = xr.DataArray(
+            np.empty((len(fnames), rows, cols), dtype=dtype),
+            dims=("date", "lat", "lon"),
+            coords={
+                "date": date_list,
+                "lat": ds1.coords["y"].data,
+                "lon": ds1.coords["x"].data,
+            },
+            attrs=ds1.attrs,
+        )
+
+    for idx, f in enumerate(fnames):
+        with xr.open_rasterio(f) as ds:
+            data[idx, :, :] = np.abs(ds[0])
+    data.to_netcdf(outname)
+    return data
 
 
 def save_east_up_mat(east_up_fname, outname=None, units="cm"):

@@ -62,7 +62,7 @@ def which(program):
     return None
 
 
-def take_looks(arr, row_looks, col_looks, separate_complex=False):
+def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
     """Downsample a numpy matrix by summing blocks of (row_looks, col_looks)
 
     Cuts off values if the size isn't divisible by num looks

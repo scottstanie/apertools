@@ -493,11 +493,21 @@ def save_vrt(filenames, rsc_file, cols, rows, dtype, band, interleave, num_bands
     help="Downsampling beyond the 30m SRTM resolution",
     show_default=True,
 )
+@click.option(
+    "--resample",
+    default="nearest",
+    type=click.Choice(
+        ["nearest", "bilinear", "cubic", "cubicspline", "lanczos", "average", "mode"]
+    ),
+    help="GDAL Resampling method",
+    show_default=True,
+)
 @click.option("--out-dir", "-o", type=click.Path(exists=True), default="./")
 def smallslc(
     filenames,
     rsc_file,
     downrate,
+    resample,
     out_dir,
 ):
     """Save complex binary .geo/.slc as small version for quick look in dismph
@@ -517,8 +527,23 @@ def smallslc(
             filename=f,
             rsc_file=rsc_file,
         )
-        cmd = f"gdal_translate -of ROI_PAC {f + '.vrt'} {dest_path} -outsize {pct_x}% {pct_y}% "
-        _log_and_run(cmd)
+        if resample == "average":
+            rl, cl = round(downrate * x_uprate), round(y_uprate * downrate)
+            print(f"Downlooking {f} by {rl}, {cl} into {dest_path}")
+            apertools.sario.save(
+                dest_path,
+                apertools.sario.load(
+                    f,
+                    looks=(rl, cl),
+                    separate_complex=True,
+                ),
+            )
+        else:
+            cmd = (
+                f"gdal_translate -of ROI_PAC {f + '.vrt'} {dest_path}"
+                f" -r {resample} -outsize {pct_x}% {pct_y}% "
+            )
+            _log_and_run(cmd)
 
 
 @cli.command("looked-dem")
