@@ -165,8 +165,8 @@ def rotate_xyz_to_enu(xyz, lat, lon):
         lat (float): latitude (deg) of point to rotate into
         lon (float): longitude (deg) of point to rotate into
 
-    Reference: https://gssc.esa.int/navipedia/index.php/\
-Transformations_between_ECEF_and_ENU_coordinates
+    Reference:
+    https://gssc.esa.int/navipedia/index.php/Transformations_between_ECEF_and_ENU_coordinates
 
     """
     # Rotate about axis 3 with longitude, then axis 1 with latitude
