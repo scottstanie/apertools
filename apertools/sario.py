@@ -200,7 +200,7 @@ def load_file(
     if ext in ELEVATION_EXTS:
         return _take_looks(load_elevation(filename), *looks)
     elif ext == ".rsc":
-        return load_dem_rsc(filename, **kwargs)
+        return _take_looks(load_dem_rsc(filename, **kwargs), *looks)
     elif ext == ".h5":
         with h5py.File(filename, "r") as f:
             if len(f.keys()) > 1:
