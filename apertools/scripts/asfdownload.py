@@ -35,7 +35,6 @@ import subprocess
 
 # import apertools.geojson
 # import gdal
-import rasterio as rio
 
 # python 2: urllib.urlencode
 from urllib.parse import urlencode
@@ -99,7 +98,7 @@ def query_only(output="geojson", **kwargs):
 
 def download_data(output="metalink", **kwargs):
     # Start by saving data available as a metalink file
-    outname = query_only(output="metalink", **kwargs)
+    outname = query_only(output=output, **kwargs)
 
     aria2_conf = os.path.expanduser("~/.aria2/asf.conf")
     download_cmd = """aria2c --http-auth-challenge=true --continue=true --conf-path={} {}""".format(
@@ -116,9 +115,10 @@ def cli():
     # Only care for now about platform="S1",
     # Only care for now about beamMode="IW",
     p.add_argument(
-        "--query-only",
-        action="store_true",
-        help="display available data in format of --output, no download",
+        "--output",
+        "-o",
+        help="Path to directory for saving output files (default=%(default)s)",
+        default="./",
     )
     p.add_argument(
         "--bbox",
@@ -141,12 +141,6 @@ def cli():
         help="Ending date for query (recommended: YYYY-MM-DD)",
     )
     p.add_argument(
-        "--output",
-        "-o",
-        default="kml",
-        help="Type of output file to save query to (default=%(default)s)",
-    )
-    p.add_argument(
         "--processingLevel",
         choices=["RAW", "SLC"],
         default="RAW",
@@ -163,12 +157,25 @@ def cli():
         default=2000,
         help="Limit of number of products to download (default=%(default)s)",
     )
+    p.add_argument(
+        "--query-only",
+        action="store_true",
+        help="display available data in format of --output, no download",
+    )
+    p.add_argument(
+        "--query-file",
+        default="metalink",
+        choices=["metalink", "geojson", "kml"],
+        help="Type of output file to save query to (default=%(default)s)",
+    )
     args = p.parse_args()
     if args.bbox is None and args.dem is None:
         raise ValueError("Need either --bbox or --dem options")
 
     arg_dict = vars(args)
     if args.dem:
+        import rasterio as rio
+
         with rio.open(args.dem) as ds:
             # left, bottom, right, top = ds.bounds
             arg_dict["bbox"] = ds.bounds
