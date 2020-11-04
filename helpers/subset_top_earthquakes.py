@@ -1,14 +1,19 @@
 import datetime
+import glob
 import os
+import subprocess
+
 import numpy as np
-import apertools.sario as sario
-import coseismic_stack
-import apertools.latlon as latlon
-import apertools.subset as subset
 import shapely.geometry
 import rasterio as rio
 import pandas as pd
 import geopandas as gpd
+
+import coseismic_stack
+import apertools.sario as sario
+import apertools.latlon as latlon
+import apertools.utils as utils
+import apertools.subset as subset
 
 from insar.prepare import remove_ramp
 from insar.timeseries import PHASE_TO_CM
@@ -32,16 +37,17 @@ def setup_folders(
 
 def load_eq_df(
     eq_fname=TEXNET_DATA,
-    sar_fname="../S1A_20141215.geo.vrt",
     mag_thresh=3,
     box_size=20,
+    sar_fname="../S1A_20141215.geo.vrt",
 ):
     """Create a DataFrame of the top weekly earthquakes, limited to the
     area within sar_fname and above magnitude mag_thresh
     """
     eqdf = read_eqs(eq_fname)
-    topeqdf = get_top_mag_dates(eqdf)
-    df = get_eqs_in_bounds(sar_fname, topeqdf, mag_thresh=mag_thresh)
+    df = get_top_mag_dates(eqdf)
+    if sar_fname is not None:
+        df = get_eqs_in_bounds(sar_fname, df, mag_thresh=mag_thresh)
     df.index = pd.to_datetime(df.index)
 
     df["bbox"] = df.geometry.buffer(latlon.km_to_deg(box_size))
@@ -215,3 +221,63 @@ def get_eqs_in_bounds(insar_fname, eqdf, mag_thresh=3):
         idxs = eqdf.within(shapely.geometry.box(*src.bounds))
         outdf = eqdf[idxs]
     return outdf[outdf.max_mag > mag_thresh] if mag_thresh else outdf
+
+
+def eq_dirname(df):
+    names = []
+    for row in df.itertuples():
+        dt = row.Index.strftime("%Y%m%d")
+        ll = utils.pprint_lon_lat(row.lon, row.lat)
+        names.append(f"{dt}_{ll}_{row.event_id}")
+    return names
+
+
+def download_and_process(df, xrate=7, yrate=2, looks=3):
+    from apertools import asfdownload
+    from apertools import createdem
+
+    #                     event_id  mag lat lon depth geometry bbox
+    # dt
+    # 2018-10-20 13:04:31  texnet2018uomw  4.2  35.3549 -101.7199 ...
+    # 1: get bbox for DEM generation
+    bbox = df.iloc[0].bbox.bounds
+    dem_fname = "elevation.dem"
+    if not os.path.exists(dem_fname):
+        createdem.main(*bbox, xrate=xrate, yrate=yrate, outname=dem_fname)
+
+    # 2: get download time range
+    time_pad = datetime.timedelta(days=180)
+    event_time = df.index[0]
+    start, end = event_time - time_pad, event_time + time_pad
+    query_fname = asfdownload.query_only(
+        start=start, end=end, dem=dem_fname, query_filetype="geojson"
+    )
+    path_nums, starts = asfdownload.parse_query_results(query_fname)
+    new_dirs = []
+    for path_num, direction in path_nums.keys():
+        dirname = f"path_{path_num}_{direction}"
+        utils.mkdir_p(dirname)
+        new_dirs.append(dirname)
+
+    for dirname in new_dirs:
+        print(f"Downloading data for {dirname}")
+        asfdownload.download_data(start=start, end=end, dem=dem_fname, out_dir=dirname)
+        for f in glob.glob(dem_fname + "*"):
+            utils.force_symlink(f, os.path.join(dirname, f))
+
+    process_dirs(new_dirs, xrate, yrate, looks)
+
+
+def process_dirs(new_dirs, xrate, yrate, looks, ref_row=5, ref_col=5):
+    # Process results
+    xlooks = looks * xrate
+    ylooks = looks * yrate
+
+    for dirname in new_dirs:
+        os.chdir(dirname)
+        cmd = (
+            f"insar process --start 3 --xlooks {xlooks} --ylooks {ylooks} "
+            f" --ref-row {ref_row} --ref-col {ref_col}"
+        )
+        subprocess.check_call(cmd, shell=True)
+        os.chdir("..")

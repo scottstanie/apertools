@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="apertools",
-    version="0.6.0",
+    version="0.6.1",
     author="Scott Staniewicz",
     author_email="scott.stanie@utexas.com",
     description="Tools for gathering and processing InSAR data",
@@ -40,8 +40,8 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             "aper=apertools.scripts.cli:cli",
-            "createdem=apertools.scripts.dem_cli:cli",
-            "asfdownload=apertools.scripts.asfdownload:cli",
+            "createdem=apertools.createdem:cli",
+            "asfdownload=apertools.asfdownload:cli",
         ],
     },
     zip_safe=False,

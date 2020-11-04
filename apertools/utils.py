@@ -586,6 +586,14 @@ def find_largest_component_idxs(binimg, strel_size=2):
     return labels == fg_label
 
 
+def pprint_lon_lat(lon, lat):
+    hemi_ns = "N" if lat >= 0 else "S"
+    lat_str = f"{hemi_ns}{int(round(abs(lat))):02d}"
+    hemi_ew = "E" if lon >= 0 else "W"
+    lon_str = f"{hemi_ew}{int(round(abs(lon))):03d}"
+    return f"{lat_str}{lon_str}"
+
+
 # Note
 # https://github.com/h5py/h5py/blob/0076bc4880bfa8b311338b21ddcd0e28cb27c443/h5py/_hl/dataset.py#L264
 # take from latest h5py, which is not released yet, but looks great
