@@ -1636,6 +1636,8 @@ def hdf5_to_netcdf(
         # Get data and references from HDF% file
 
         # Just get one example for shape
+        if any(d not in hf for d in stack_dset_list):
+            raise ValueError(f"Dset keys available in {filename}: {hf.keys()}")
         nstack, rows, cols = hf[stack_dset_list[0]].shape
         lon_arr, lat_arr = _get_latlon_arrs(h5_filename=filename, bbox=bbox)
 

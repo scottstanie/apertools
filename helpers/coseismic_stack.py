@@ -24,15 +24,18 @@ def stack_igrams(
     sigma_filter=0.3,
 ):
 
+    print(f"Event date: {event_date}")
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
-    stack_igrams = select_cross_event(geolist, intlist, event_date, num_igrams=num_igrams)
+    stack_igrams = select_cross_event(
+        geolist, intlist, event_date, num_igrams=num_igrams
+    )
     # stack_igrams = select_pre_event(geolist, intlist, event_date)
     # stack_igrams = select_post_event(geolist, intlist, event_date)
 
     stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
     if verbose:
-        print("Using the following igrams in stack:")
+        print(f"Using the following {len(stack_fnames)} igrams in stack:")
         for f in stack_fnames:
             print(f)
 
@@ -63,11 +66,15 @@ def select_cross_event(geolist, intlist, event_date, num_igrams=None):
     """Choose a list of independent igrams spanning `event_date`"""
 
     insert_idx = np.searchsorted(geolist, event_date)
+    import ipdb
+
     num_igrams = num_igrams or len(geolist) - insert_idx
 
     # Since `event_date` will fit in the sorted array at `insert_idx`, then
     # geolist[insert_idx] is the first date AFTER the event
-    geo_subset = geolist[insert_idx - num_igrams : insert_idx + num_igrams]
+    start_idx = np.clip(insert_idx - num_igrams, 0, None)
+    end_idx = insert_idx + num_igrams
+    geo_subset = geolist[start_idx:end_idx]
 
     stack_igrams = list(zip(geo_subset[:num_igrams], geo_subset[num_igrams:]))
     return stack_igrams

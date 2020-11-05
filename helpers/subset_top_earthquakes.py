@@ -277,7 +277,7 @@ def process_dirs(new_dirs, xrate, yrate, looks, ref_row=5, ref_col=5):
         os.chdir(dirname)
         cmd = (
             f"insar process --start 3 --xlooks {xlooks} --ylooks {ylooks} "
-            f" --ref-row {ref_row} --ref-col {ref_col}"
+            f" --ref-row {ref_row} --ref-col {ref_col} --gpu"
         )
         subprocess.check_call(cmd, shell=True)
         os.chdir("..")
