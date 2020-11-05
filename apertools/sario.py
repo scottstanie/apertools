@@ -1616,7 +1616,7 @@ def _window_rowcol(lon_arr, lat_arr, bbox=None):
 
 def hdf5_to_netcdf(
     filename,
-    stack_dset_list=["stack/1"],
+    stack_dset_list=["stack"],
     stack_dim_list=["idx"],
     outname=None,
     bbox=None,
@@ -1637,7 +1637,9 @@ def hdf5_to_netcdf(
 
         # Just get one example for shape
         if any(d not in hf for d in stack_dset_list):
-            raise ValueError(f"Dset keys available in {filename}: {hf.keys()}")
+            raise ValueError(
+                f"Requested dsets: {stack_dset_list}. Dset keys available in {filename}: {list(hf.keys())}"
+            )
         nstack, rows, cols = hf[stack_dset_list[0]].shape
         lon_arr, lat_arr = _get_latlon_arrs(h5_filename=filename, bbox=bbox)
 

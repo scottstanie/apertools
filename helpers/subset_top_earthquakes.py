@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+import argparse
 import datetime
 import glob
 import os
@@ -23,15 +25,43 @@ from insar.timeseries import PHASE_TO_CM
 TEXNET_DATA = "/home/scott/cisr-data/texnet_events_20201012.csv"
 
 
+def run_vrt_subset(
+    igram_dir,
+    geo_dir,
+    mag_thresh=3,
+    eq_fname=TEXNET_DATA,
+    sar_fname="../S1A_20141215.geo.vrt",
+    box_size=20,
+    ignore_geos=True,
+    num_igrams=10,
+    igram_type="cross",
+    verbose=True,
+):
+    df = setup_folders(eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh)
+    all_vrts = subset_all_folders(
+        df,
+        igram_dir,
+        geo_dir,
+        ignore_geos=ignore_geos,
+        num_igrams=num_igrams,
+        igram_type=igram_type,
+        verbose=verbose,
+    )
+    plot_stacks(all_vrts)
+
+
 def setup_folders(
     eq_fname=TEXNET_DATA,
     sar_fname="../S1A_20141215.geo.vrt",
     mag_thresh=3,
+    box_size=20,
 ):
-    df = load_eq_df(eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh)
+    df = load_eq_df(
+        eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh, box_size=box_size
+    )
     for (index, row) in df.iterrows():
-        print(f"Creating folder {row.folder}")
-        os.makedirs(row.folder, exist_ok=True)
+        print(f"Creating directory: {row.dirname}")
+        os.makedirs(row.dirname, exist_ok=True)
     return df
 
 
@@ -51,8 +81,18 @@ def load_eq_df(
     df.index = pd.to_datetime(df.index)
 
     df["bbox"] = df.geometry.buffer(latlon.km_to_deg(box_size))
-    df["folder"] = df.index.strftime("%Y%m%d").str.cat(df.event_id, sep="_")
+    # df["dirname"] = df.index.strftime("%Y%m%d").str.cat(df.event_id, sep="_")
+    df["dirname"] = eq_dirname(df)
     return df
+
+
+def eq_dirname(df):
+    names = []
+    for row in df.itertuples():
+        dt = row.Index.strftime("%Y%m%d")
+        ll = utils.pprint_lon_lat(row.lon, row.lat)
+        names.append(f"{dt}_{ll}_{row.event_id}")
+    return names
 
 
 def subset_all_folders(df, igram_dir, geo_dir, **kwargs):
@@ -121,7 +161,7 @@ def subset_unws(
 ):
     """
     event_date is from index of df
-    row has columns: max_mag,lat,lon,event_id,geometry,bbox,folder
+    row has columns: max_mag,lat,lon,event_id,geometry,bbox,dirname
     """
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(
@@ -149,7 +189,7 @@ def subset_unws(
         os.path.join(os.path.abspath(igram_dir), f) for f in stack_fnames
     ]
     vrt_fnames = [
-        os.path.join(os.path.abspath(row.folder), f + ".vrt") for f in stack_fnames
+        os.path.join(os.path.abspath(row.dirname), f + ".vrt") for f in stack_fnames
     ]
     if verbose:
         print("Using the following igrams in stack:")
@@ -223,13 +263,8 @@ def get_eqs_in_bounds(insar_fname, eqdf, mag_thresh=3):
     return outdf[outdf.max_mag > mag_thresh] if mag_thresh else outdf
 
 
-def eq_dirname(df):
-    names = []
-    for row in df.itertuples():
-        dt = row.Index.strftime("%Y%m%d")
-        ll = utils.pprint_lon_lat(row.lon, row.lat)
-        names.append(f"{dt}_{ll}_{row.event_id}")
-    return names
+### PART 2
+# Downloading new stuff
 
 
 def download_and_process(df, xrate=7, yrate=2, looks=3):
@@ -281,3 +316,60 @@ def process_dirs(new_dirs, xrate, yrate, looks, ref_row=5, ref_col=5):
         )
         subprocess.check_call(cmd, shell=True)
         os.chdir("..")
+
+
+def get_cli_args():
+    p = argparse.ArgumentParser()
+    p.add_argument(
+        "--igram-dir",
+        default=".",
+        help="location of igram files. (default=%(default)s)",
+    )
+    p.add_argument(
+        "--geo-dir",
+        default="..",
+        help="location of .geo SLC files. (default=%(default)s)",
+    )
+    p.add_argument(
+        "--mag-thresh",
+        default=3,
+        help="Magnitude of earthquakes to threshold (default=%(default)s)",
+    )
+    p.add_argument(
+        "--sar-fname",
+        help="SLC filename of TexNet earthquake data (default=%(default)s)",
+    )
+    p.add_argument(
+        "--box-size",
+        default=20,
+        help="Size (in km) of box to subset around EQ hypocenter (default=%(default)s)",
+    )
+    p.add_argument(
+        "--eq-fname",
+        default=TEXNET_DATA,
+        help="filename of TexNet earthquake data (default=%(default)s)",
+    )
+    p.add_argument(
+        "--ignore-geos",
+        action="store_true",
+        default=True,
+        help="Apply the geolist_ignore.txt file (default=%(default)s)",
+    )
+    return p.parse_args()
+
+
+if __name__ == "__main__":
+    print("ok")
+    args = get_cli_args()
+    run_vrt_subset(
+        args.igram_dir,
+        args.geo_dir,
+        mag_thresh=args.mag_thresh,
+        eq_fname=args.eq_fname,
+        sar_fname=args.sar_fname,
+        box_size=args.box_size,
+        ignore_geos=args.ignore_geos,
+        num_igrams=10,
+        igram_type="cross",
+        verbose=True,
+    )
