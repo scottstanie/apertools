@@ -17,9 +17,6 @@ from argparse import (
 import subprocess
 
 # from osgeo import gdal
-import rasterio
-import rasterio.features
-import shapely.wkt
 
 PATH = os.path.dirname(os.path.abspath(sys.argv[0]))
 
@@ -105,6 +102,9 @@ def cli():
         parser.print_usage(sys.stderr)
         sys.exit(1)
 
+    import rasterio.features
+    import shapely.wkt
+
     if args.bbox is not None:
         left, bottom, right, top = args.bbox
     elif args.geojson is not None:
@@ -116,6 +116,8 @@ def cli():
 
 
 def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
+    import rasterio
+
     print("Boundaries, xrate, yrate")
     print(left, bottom, right, top, xrate, yrate)
     xres = 1 / 3600 / xrate

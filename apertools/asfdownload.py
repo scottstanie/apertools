@@ -30,8 +30,10 @@ auto-file-renaming=false
 always-resume=true
 """
 import argparse
+import datetime
 import os
 import subprocess
+from collections import Counter
 
 # import apertools.geojson
 # import gdal
@@ -47,26 +49,34 @@ from urllib.parse import urlencode
 
 def form_url(
     bbox=None,
+    dem=None,
     # geojson=None,
     start=None,
     end=None,
     processingLevel="RAW",
     relativeOrbit=None,
     maxResults=2000,
-    output="geojson",
+    query_filetype="geojson",
     platform="S1",
     beamMode="IW",
     **kwargs,
 ):
     """
+    dem (str): Name of DEM filename (will parse bbox)
     bbox(tuple): lower left lon, lat, upper right format
         e.g. bbox=(-150.2,65.0,-150.1,65.5)
-    processingLevel (string): options, "RAW", "SLC" for sentinel
-    start (string): Starting time for search. Many acceptable inputs
+    processingLevel (str): options, "RAW", "SLC" for sentinel
+    start (str): Starting time for search. Many acceptable inputs
         e.g. "3 months and a day ago" "May 30, 2018", "2010-10-30T11:59:59UTC"
-    end (string): Ending time for search, see "start" for options
-    output (string): default="geojson". options: "csv", "kml", "geojson"
+    end (str): Ending time for search, see "start" for options
+    query_filetype (str): default="geojson". options: "csv", "kml", "geojson"
     """
+    if dem is not None:
+        bbox = get_dem_bbox(dem)
+
+    if bbox is None:
+        raise ValueError("Need bbox (or dem) to constrain query area.")
+
     # TODO: geojson to WKT for intersection
     params = dict(
         bbox=",".join(map(str, bbox)),
@@ -75,7 +85,7 @@ def form_url(
         processingLevel=processingLevel,
         relativeOrbit=relativeOrbit,
         maxResults=maxResults,
-        output=output.upper(),
+        output=query_filetype.upper(),
         platform=platform,
         beamMode=beamMode,
     )
@@ -84,11 +94,11 @@ def form_url(
     return base_url.format(params=urlencode(params))
 
 
-def query_only(output="geojson", **kwargs):
+def query_only(query_filetype="geojson", **kwargs):
     # Save files into correct output type:
-    outname = "asfquery.{}".format(output.lower())
+    outname = "asfquery.{}".format(query_filetype.lower())
 
-    url = form_url(output=output, **kwargs)
+    url = form_url(query_filetype=query_filetype, **kwargs)
     data_cmd = """ curl "{url}" > {outname} """.format(url=url, outname=outname)
     print("Running command:")
     print(data_cmd)
@@ -96,18 +106,57 @@ def query_only(output="geojson", **kwargs):
     return outname
 
 
-def download_data(output="metalink", **kwargs):
+def download_data(query_filetype="metalink", out_dir=".", **kwargs):
     # Start by saving data available as a metalink file
-    outname = query_only(output=output, **kwargs)
+    outname = query_only(query_filetype=query_filetype, **kwargs)
 
     aria2_conf = os.path.expanduser("~/.aria2/asf.conf")
-    download_cmd = """aria2c --http-auth-challenge=true --continue=true --conf-path={} {}""".format(
-        aria2_conf,
-        outname,
+    download_cmd = (
+        f"aria2c --http-auth-challenge=true --continue=true "
+        f"--conf-path={aria2_conf} --dir={out_dir} {outname}"
     )
     print("Running command:")
     print(download_cmd)
     subprocess.check_call(download_cmd, shell=True)
+
+
+def get_dem_bbox(fname):
+    import rasterio as rio
+
+    with rio.open(fname) as ds:
+        # left, bottom, right, top = ds.bounds
+        return ds.bounds
+
+
+def parse_query_results(fname="asfquery.geojson"):
+    """Extract the path number counts and date ranges from a geojson query result"""
+    import geojson
+
+    with open(fname) as f:
+        results = geojson.load(f)
+    features = results["features"]
+    # In[128]: pprint(results["features"])
+    # [{'geometry': {'coordinates': [[[-101.8248, 34.1248],...
+    #            'type': 'Polygon'},
+    # 'properties': {'beamModeType': 'IW', 'pathNumber': '85',
+    # 'type': 'Feature'}, ...
+    print(f"Found {len(features)} results:")
+    if len(features) == 0:
+        return Counter(), []
+
+    # Include both the number and direction (asc/desc) in Counter key
+    path_nums = Counter(
+        [
+            (f["properties"]["pathNumber"], f["properties"]["flightDirection"].lower())
+            for f in features
+        ]
+    )
+    print(f"Count by pathNumber: {path_nums.most_common()}")
+    starts = Counter([f["properties"]["startTime"] for f in features])
+    starts = [datetime.datetime.fromisoformat(s) for s in starts]
+    print(f"Dates ranging from {min(starts)} to {max(starts)}")
+
+    return path_nums, starts
 
 
 def cli():
@@ -115,7 +164,7 @@ def cli():
     # Only care for now about platform="S1",
     # Only care for now about beamMode="IW",
     p.add_argument(
-        "--output",
+        "--out-dir",
         "-o",
         help="Path to directory for saving output files (default=%(default)s)",
         default="./",
@@ -160,7 +209,7 @@ def cli():
     p.add_argument(
         "--query-only",
         action="store_true",
-        help="display available data in format of --output, no download",
+        help="display available data in format of --query-file, no download",
     )
     p.add_argument(
         "--query-file",
@@ -171,14 +220,6 @@ def cli():
     args = p.parse_args()
     if args.bbox is None and args.dem is None:
         raise ValueError("Need either --bbox or --dem options")
-
-    arg_dict = vars(args)
-    if args.dem:
-        import rasterio as rio
-
-        with rio.open(args.dem) as ds:
-            # left, bottom, right, top = ds.bounds
-            arg_dict["bbox"] = ds.bounds
 
     if args.query_only:
         query_only(**vars(args))
