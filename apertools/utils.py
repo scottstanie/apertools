@@ -542,6 +542,10 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
 
 
 def az_inc_to_enu(infile, outfile="geo_los_enu.tif"):
+    """azimuth/inclination to ENU
+
+    Source: http://earthdef.caltech.edu/boards/4/topics/327
+    """
     cmd = f'gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile tmp_los_east.tif --calc="sin(deg2rad(A)) * cos(deg2rad(B+90))" '
     print(cmd)
     subprocess.run(cmd, check=True, shell=True)
