@@ -496,8 +496,8 @@ def save_vrt(
     import apertools.sario
 
     for f in filenames:
-        if out_dir:
-            outfile = os.path.join(out_dir, os.path.split(f)[1])
+        if out_dir and out_dir != ".":
+            outfile = os.path.join(out_dir, os.path.split(f)[1]) + ".vrt"
             relative = False
         else:
             outfile = None

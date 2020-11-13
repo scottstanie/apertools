@@ -1212,7 +1212,7 @@ def save_as_vrt(
     band=None,
     num_bands=None,
     relative=True,
-    verbose=False,
+    verbose=True,
 ):
     """Save a VRT corresponding to a raw raster file
 
