@@ -465,13 +465,29 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
 )
 @click.option("--num-bands", type=int, help="Number of bands in file")
 @click.option(
+    "--out-dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    default=".",
+    help="Location of output file",
+    show_default=True,
+)
+@click.option(
     "--relative/--no-relative",
     default=False,
     help="Use relative paths for VRT source filename",
     show_default=True,
 )
 def save_vrt(
-    filenames, rsc_file, cols, rows, dtype, band, interleave, num_bands, relative
+    filenames,
+    rsc_file,
+    cols,
+    rows,
+    dtype,
+    band,
+    interleave,
+    num_bands,
+    out_dir,
+    relative,
 ):
     """Save GDAL .vrt file binary raster loading
 
@@ -480,6 +496,11 @@ def save_vrt(
     import apertools.sario
 
     for f in filenames:
+        if out_dir:
+            outfile = os.path.join(out_dir, os.path.split(f)[1])
+            relative = False
+        else:
+            outfile = None
         apertools.sario.save_as_vrt(
             filename=f,
             rows=rows,
@@ -489,6 +510,7 @@ def save_vrt(
             band=band,
             interleave=interleave,
             num_bands=num_bands,
+            outfile=outfile,
             relative=relative,
         )
 
