@@ -1211,8 +1211,14 @@ def save_as_vrt(
     interleave=None,
     band=None,
     num_bands=None,
+    relative=True,
 ):
     """Save a VRT corresponding to a raw raster file
+
+    Args:
+        TODO
+        relative (bool): default True, save the VRT with a relative filename.
+            False will save with the source filename as abspath
 
     VRT options:
     SourceFilename: The name of the raw file containing the data for this band.
@@ -1302,14 +1308,20 @@ def save_as_vrt(
         rows,
         num_bands,
     )
+    if relative:
+        rel = "1"
+        source_filename = os.path.split(filename)[1]
+    else:
+        rel = "0"
+        source_filename = os.path.abspath(filename)
     options = [
         "subClass=VRTRawRasterBand",
         # split, since relative to file, so remove directory name
-        "SourceFilename={}".format(os.path.split(filename)[1]),
-        "relativeToVRT=1",  # location of file: make it relative to the VRT file
-        "ImageOffset={}".format(image_offset),
-        "PixelOffset={}".format(pixel_offset),
-        "LineOffset={}".format(line_offset),
+        f"SourceFilename={source_filename}",
+        f"relativeToVRT={rel}",
+        f"ImageOffset={image_offset}",
+        f"PixelOffset={pixel_offset}",
+        f"LineOffset={line_offset}",
         # 'ByteOrder=LSB'
     ]
     gdal_dtype = numpy_to_gdal_type(dtype)
