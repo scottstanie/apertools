@@ -1212,6 +1212,7 @@ def save_as_vrt(
     band=None,
     num_bands=None,
     relative=True,
+    verbose=False,
 ):
     """Save a VRT corresponding to a raw raster file
 
@@ -1241,6 +1242,8 @@ def save_as_vrt(
     if outfile is None:
         raise ValueError("Need outfile or filename to save")
 
+    if verbose:
+        print(f"Saving {filename} to {outfile}, {relative = }")
     # Get geotransform and project based on rsc data, or existing GDAL info
     if rsc_data is None:
         if rsc_file is None:
