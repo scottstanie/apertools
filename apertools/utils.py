@@ -590,11 +590,25 @@ def find_largest_component_idxs(binimg, strel_size=2):
     return labels == fg_label
 
 
-def pprint_lon_lat(lon, lat):
+def pprint_lon_lat(lon, lat, decimals=0):
+    """Pretty print a lat and and lon
+
+    Examples:
+    >>> pprint_lon_lat(-104.52, 31.123)
+    'N31W105'
+    >>> pprint_lon_lat(-104.52, 31.123, decimals=1)
+    'N31.1W104.5'
+    """
+    # Note: strings must be formatted twice:
+    # ff = f"{{:02.1f}}" ; f"{hemi_ew}{ff}".format(32.123)
+    # 'E32.1
     hemi_ns = "N" if lat >= 0 else "S"
-    lat_str = f"{hemi_ns}{int(round(abs(lat))):02d}"
+    format_lat = "{:02." + str(decimals) + "f}"
+    lat_str = f"{hemi_ns}{format_lat}".format(abs(lat))
+
     hemi_ew = "E" if lon >= 0 else "W"
-    lon_str = f"{hemi_ew}{int(round(abs(lon))):03d}"
+    format_lon = "{:03." + str(decimals) + "f}"
+    lon_str = f"{hemi_ew}{format_lon}".format(abs(lon))
     return f"{lat_str}{lon_str}"
 
 

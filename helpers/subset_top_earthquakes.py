@@ -36,6 +36,7 @@ def run_vrt_subset(
     num_igrams=10,
     igram_type="cross",
     verbose=True,
+    plot_block=True,
 ):
     df = setup_folders(eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh)
     all_vrts = subset_all_folders(
@@ -47,7 +48,7 @@ def run_vrt_subset(
         igram_type=igram_type,
         verbose=verbose,
     )
-    plot_stacks(all_vrts)
+    plot_stacks(all_vrts, block=plot_block)
 
 
 def setup_folders(
@@ -70,6 +71,7 @@ def load_eq_df(
     mag_thresh=3,
     box_size=20,
     sar_fname="../S1A_20141215.geo.vrt",
+    decimals=1,  # How many lat/lon decimals should the directories have?
 ):
     """Create a DataFrame of the top weekly earthquakes, limited to the
     area within sar_fname and above magnitude mag_thresh
@@ -82,16 +84,19 @@ def load_eq_df(
 
     df["bbox"] = df.geometry.buffer(latlon.km_to_deg(box_size))
     # df["dirname"] = df.index.strftime("%Y%m%d").str.cat(df.event_id, sep="_")
-    df["dirname"] = eq_dirname(df)
+    df["dirname"] = eq_dirname(df, decimals=decimals)
     return df
 
 
-def eq_dirname(df):
+def eq_dirname(df, decimals=1):
     names = []
+    # row looks like:
+    # Pandas(Index=Timestamp('2020-03-29 00:00:00'), max_mag=4.6, lat=31.7025, lon=-104.0521,
+    # depth=6.2, event_id='texnet2020galz', geometry=..., bbox=..)
     for row in df.itertuples():
         dt = row.Index.strftime("%Y%m%d")
-        ll = utils.pprint_lon_lat(row.lon, row.lat)
-        names.append(f"{dt}_{ll}_{row.event_id}")
+        ll = utils.pprint_lon_lat(row.lon, row.lat, decimals=decimals)
+        names.append(f"{dt}_{ll}_mag{row.max_mag:.1f}_{row.event_id}")
     return names
 
 
@@ -108,20 +113,28 @@ def subset_all_folders(df, igram_dir, geo_dir, **kwargs):
     return all_vrts
 
 
-def plot_stacks(all_vrts):
+def plot_stacks(all_vrts, block=False):
     import matplotlib.pyplot as plt
 
-    nimgs = len(all_vrts)
+    imgs = []
+    for aa in all_vrts:
+        if len(aa) < 2:
+            # TODO: no name for empty... maybe pass dict {folder: [unws...]}
+            print(f"{len(aa)} igrams for {aa}, skipping...")
+            continue
+        p = stack_vrts(aa)
+        imgs.append(p)
+        print(f"averaged {len(aa)} done with {aa[0]}...")
+
+    nimgs = len(imgs)
     ntiles = int(np.ceil(np.sqrt(nimgs)))
     fig, axes = plt.subplots(ntiles, ntiles)
-    for (aa, ax) in zip(all_vrts, axes.ravel()):
-        p = stack_vrts(aa)
-        axim = ax.imshow(p, vmax=1, vmin=-1, cmap="seismic_wide_y")
-
-        print(f"averaged {len(aa)} igrams, done with {aa[0]}...")
+    for (aa, ax, img) in zip(all_vrts, axes.ravel(), imgs):
+        axim = ax.imshow(img, vmax=1, vmin=-1, cmap="seismic_wide_y")
         ax.set_title(aa[0].split("/")[-2])
 
     fig.colorbar(axim, ax=axes.ravel()[nimgs - 1])
+    plt.show(block=block)
 
 
 # TODO: refactor coseismic_stack functions to not dupe this code
@@ -322,17 +335,18 @@ def get_cli_args():
     p = argparse.ArgumentParser()
     p.add_argument(
         "--igram-dir",
-        default=".",
+        required=True,
         help="location of igram files. (default=%(default)s)",
     )
     p.add_argument(
         "--geo-dir",
-        default="..",
+        required=True,
         help="location of .geo SLC files. (default=%(default)s)",
     )
     p.add_argument(
         "--mag-thresh",
         default=3,
+        type=float,
         help="Magnitude of earthquakes to threshold (default=%(default)s)",
     )
     p.add_argument(
@@ -342,6 +356,7 @@ def get_cli_args():
     p.add_argument(
         "--box-size",
         default=20,
+        type=float,
         help="Size (in km) of box to subset around EQ hypocenter (default=%(default)s)",
     )
     p.add_argument(
@@ -355,11 +370,16 @@ def get_cli_args():
         default=True,
         help="Apply the geolist_ignore.txt file (default=%(default)s)",
     )
+    p.add_argument(
+        "--plot",
+        action="store_true",
+        default=True,
+        help="Show plots of results (default=%(default)s)",
+    )
     return p.parse_args()
 
 
 if __name__ == "__main__":
-    print("ok")
     args = get_cli_args()
     run_vrt_subset(
         args.igram_dir,
@@ -372,4 +392,5 @@ if __name__ == "__main__":
         num_igrams=10,
         igram_type="cross",
         verbose=True,
+        plot_block=args.plot,
     )
