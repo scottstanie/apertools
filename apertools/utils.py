@@ -568,6 +568,37 @@ def az_inc_to_enu(infile, outfile="geo_los_enu.tif"):
     )
 
 
+def enu_to_az_inc(infile, outfile="los_az_inc.tif"):
+    """Convert 3-band ENU LOS to ISCE convention of azimuth-elevation
+
+    Here, LOS points FROM ground, TO satellite (reveresed from our other convention).
+    Channel 1: Incidence angle measured from vertical at target (always positive)
+    Channel 2: Azimuth angle is measured from North in the anti-clockwise direction.
+
+    References:
+        http://earthdef.caltech.edu/boards/4/topics/1915?r=1919#message-1919
+        http://earthdef.caltech.edu/boards/4/topics/327
+    """
+    # Note: A = xEast, B = yNorth, C = zUp
+    # inc = atan2(sqrt(x**2 + y**2), abs(z))
+    tmp_inc = "tmp_los_inc.tif"
+    cmd = (
+        f"gdal_calc.py --quiet -A {infile} -B {infile} -C {infile} --A_band=1 --B_band=2 --C_band=3 "
+        f'--outfile {tmp_inc} --calc="rad2deg(arctan2(sqrt(A **2 + B**2), abs(C)))" '
+    )
+    subprocess.run(cmd, check=True, shell=True)
+    # -90 + rad2deg(arctan2( -yNorth, -xEast ))
+    tmp_az = "tmp_los_az.tif"
+    cmd = (
+        f"gdal_calc.py --quiet -A {infile} -B {infile}  --A_band=1 --B_band=2  "
+        f'--outfile {tmp_az} --calc=" -90 + rad2deg(arctan2(-B, -A ))" '
+    )
+    subprocess.run(cmd, check=True, shell=True)
+    cmd = f"gdal_merge.py -separate -o {outfile} {tmp_inc} {tmp_az} "
+    subprocess.run(cmd, check=True, shell=True)
+    subprocess.run(f"rm -f {tmp_inc} {tmp_az}", shell=True, check=True)
+
+
 def velo_to_cumulative_scale(geolist):
     ndays = (geolist[-1] - geolist[0]).days
     # input is MM/year
