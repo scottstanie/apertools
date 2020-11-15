@@ -594,6 +594,7 @@ def find_insar_ts(defo_filename="deformation.h5", station_name_list=[], window_s
         lon, lat = station_lonlat(station_name)
         # row, col = defo_img.nearest_pixel(lat=lat, lon=lon)
         dem_rsc = apertools.sario.load_dem_from_h5(defo_filename)
+        # TODO: use gdal/xarray here
         row, col = apertools.latlon.nearest_pixel(dem_rsc, lon=lon, lat=lat)
         insar_ts_list.append(
             get_stack_timeseries(
