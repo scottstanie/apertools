@@ -8,6 +8,12 @@ from insar.timeseries import PHASE_TO_CM
 
 MENTONE_EQ_DATE = date(2020, 3, 26)
 
+# TODO: Make a cli version...
+# TODO: make pre/post independent like cross
+# TODO: add variance checking for square to remove
+# TODO: add jackknife for std estimates
+# TODO: integrate with the other subset_top_eq
+
 
 def stack_igrams(
     event_date=MENTONE_EQ_DATE,
@@ -20,7 +26,7 @@ def stack_igrams(
     window=5,
     ignore_geos=True,
     cc_thresh=None,
-    avg_cc_thresh=0.35,
+    avg_cc_thresh=0.0,
     sigma_filter=0.3,
 ):
 
@@ -66,8 +72,6 @@ def select_cross_event(geolist, intlist, event_date, num_igrams=None):
     """Choose a list of independent igrams spanning `event_date`"""
 
     insert_idx = np.searchsorted(geolist, event_date)
-    import ipdb
-
     num_igrams = num_igrams or len(geolist) - insert_idx
 
     # Since `event_date` will fit in the sorted array at `insert_idx`, then
@@ -80,7 +84,6 @@ def select_cross_event(geolist, intlist, event_date, num_igrams=None):
     return stack_igrams
 
 
-# TODO: make these independent like cross
 def select_pre_event(geolist, intlist, event_date, min_date=None):
     ifgs = [ifg for ifg in intlist if (ifg[0] < event_date and ifg[1] < event_date)]
     return _filter_min_max_date(ifgs, min_date, None)

@@ -36,9 +36,12 @@ def run_vrt_subset(
     num_igrams=10,
     igram_type="cross",
     verbose=True,
+    save=True,
     plot_block=True,
 ):
     df = setup_folders(eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh)
+    if len(df) < 1:
+        return
     all_vrts = subset_all_folders(
         df,
         igram_dir,
@@ -48,7 +51,9 @@ def run_vrt_subset(
         igram_type=igram_type,
         verbose=verbose,
     )
-    plot_stacks(all_vrts, block=plot_block)
+    imgs = calculate_stacks(all_vrts, save=save)
+    vrt_names = get_vrt_names(all_vrts)
+    plot_stacks(imgs, vrt_names, block=plot_block)
 
 
 def setup_folders(
@@ -60,6 +65,7 @@ def setup_folders(
     df = load_eq_df(
         eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh, box_size=box_size
     )
+    print(f"Found {df.shape[0]} earthquake rows")
     for (index, row) in df.iterrows():
         print(f"Creating directory: {row.dirname}")
         os.makedirs(row.dirname, exist_ok=True)
@@ -102,6 +108,7 @@ def eq_dirname(df, decimals=1):
 
 def subset_all_folders(df, igram_dir, geo_dir, **kwargs):
     all_vrts = []
+    print(df)
     for event_date, row in df.iterrows():
         try:
             vrts = subset_unws(event_date, row, igram_dir, geo_dir, **kwargs)
@@ -113,25 +120,38 @@ def subset_all_folders(df, igram_dir, geo_dir, **kwargs):
     return all_vrts
 
 
-def plot_stacks(all_vrts, block=False):
-    import matplotlib.pyplot as plt
-
+def calculate_stacks(all_vrts, outname="stackavg.tif"):
     imgs = []
-    for aa in all_vrts:
-        if len(aa) < 2:
+    for vrt_group in all_vrts:
+        if len(vrt_group) < 2:
             # TODO: no name for empty... maybe pass dict {folder: [unws...]}
-            print(f"{len(aa)} igrams for {aa}, skipping...")
+            print(f"{len(vrt_group)} igrams for {vrt_group}, skipping...")
             continue
-        p = stack_vrts(aa)
-        imgs.append(p)
-        print(f"averaged {len(aa)} done with {aa[0]}...")
+        avg_velo = stack_vrts(vrt_group)
+        imgs.append(avg_velo)
+        directory = os.path.dirname(vrt_group[0])
+
+        print(f"averaged {len(vrt_group)} done in {directory}...")
+        if outname:
+            out_filename = os.path.join(directory, outname)
+            print(f"Saving to {out_filename}")
+            utils.save_image_like(avg_velo, out_filename, vrt_group[0])
+    return imgs
+
+
+def get_vrt_names(all_vrts):
+    return [aa[0].split("/")[-2] for aa in all_vrts]
+
+
+def plot_stacks(imgs, vrt_names, block=False):
+    import matplotlib.pyplot as plt
 
     nimgs = len(imgs)
     ntiles = int(np.ceil(np.sqrt(nimgs)))
-    fig, axes = plt.subplots(ntiles, ntiles)
-    for (aa, ax, img) in zip(all_vrts, axes.ravel(), imgs):
+    fig, axes = plt.subplots(ntiles, ntiles, squeeze=False)
+    for (name, ax, img) in zip(vrt_names, axes.ravel(), imgs):
         axim = ax.imshow(img, vmax=1, vmin=-1, cmap="seismic_wide_y")
-        ax.set_title(aa[0].split("/")[-2])
+        ax.set_title(name)
 
     fig.colorbar(axim, ax=axes.ravel()[nimgs - 1])
     plt.show(block=block)
@@ -204,6 +224,7 @@ def subset_unws(
     vrt_fnames = [
         os.path.join(os.path.abspath(row.dirname), f + ".vrt") for f in stack_fnames
     ]
+    print("OK!")
     if verbose:
         print("Using the following igrams in stack:")
         for (fin, fout) in zip(stack_fullpaths, vrt_fnames):
