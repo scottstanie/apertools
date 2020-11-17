@@ -2,13 +2,20 @@ import numpy as np
 import xarray as xr
 import apertools.sario as sario
 import apertools.utils as utils
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 
 
 # TODO: lat, lon...
-def create_cor_matrix(row, col, filename="cor_stack.nc"):
+def create_cor_matrix(row_col=None, lat_lon=None, filename="cor_stack.nc"):
     with xr.open_dataset(filename) as ds:
         filenames = ds.filenames
-        corr_values = ds["stack"][:, row, col]
+        if row_col is not None:
+            row, col = row_col
+            corr_values = ds["stack"][:, row, col]
+        elif lat_lon is not None:
+            lat, lon = lat_lon
+            corr_values = ds["stack"].sel(lat=lat, lon=lon, method="nearest")
 
     intlist = np.array(sario.parse_intlist_strings(filenames))
     geolist = np.array(utils.geolist_from_igrams(intlist))
@@ -32,7 +39,38 @@ def create_cor_matrix(row, col, filename="cor_stack.nc"):
 
     rows, cols = np.triu_indices(ngeos, k=1)
     out[rows, cols] = full_corr_values
-    return out
+    return out, geolist
 
 
 # TODO: plot with dates
+def plot_corr_matrix(corrmatrix, geolist, vmax=None, vmin=0):
+    if vmax is None:
+        # Make it slightly different color than the 1s on the diag
+        vmax = 1.05 * np.nanmax(np.triu(corrmatrix, k=1))
+
+    # Source for plot: https://stackoverflow.com/a/23142190
+    x_lims = y_lims = mdates.date2num(geolist)
+
+    fig, ax = plt.subplots()
+    axim = ax.imshow(
+        corrmatrix,
+        # Note: limits on y are reversed since top row is earliest
+        extent=[x_lims[0], x_lims[-1], y_lims[-1], y_lims[0]],
+        aspect="auto",
+        vmax=vmax,
+        vmin=vmin,
+    )
+    fig.colorbar(axim, ax=ax)
+    ax.set_xlabel("Reference (early)")
+    ax.set_ylabel("Secondary (late)")
+
+    ax.xaxis_date()
+    ax.yaxis_date()
+    date_format = mdates.DateFormatter("%Y%m%d")
+
+    ax.xaxis.set_major_formatter(date_format)
+    ax.yaxis.set_major_formatter(date_format)
+    # Tilt x diagonal:
+    fig.autofmt_xdate()
+    # fig.autofmt_ydate() # No y equivalent :(
+    return fig, ax
