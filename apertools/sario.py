@@ -857,7 +857,7 @@ def find_geos(directory=".", ext=".geo", parse=True, filename=None):
     """
     if filename is not None:
         with open(filename) as f:
-            geo_file_list = f.read().splitlines()
+            geo_file_list = [line for line in f.read().splitlines() if not line.strip().startswith('#')]
     else:
         geo_file_list = find_files(directory, "*" + ext)
 
@@ -909,7 +909,7 @@ def find_igrams(directory=".", ext=".int", parse=True, filename=None):
     """
     if filename is not None:
         with open(filename) as f:
-            igram_file_list = f.read().splitlines()
+            igram_file_list = [line for line in f.read().splitlines() if not line.strip().startswith('#')]
     else:
         igram_file_list = find_files(directory, "*" + ext)
 
@@ -1019,7 +1019,7 @@ def load_geolist_intlist(igram_dir, geo_dir=None, geolist_ignore_file=None, pars
 
 
 def ignore_geo_dates(
-    geo_date_list, int_date_list, ignore_file="geolist_missing.txt", parse=True
+    geo_date_list, int_date_list, ignore_file="geolist_ignore.txt", parse=True
 ):
     """Read extra file to ignore certain dates of interferograms"""
     ignore_geos = set(find_geos(filename=ignore_file, parse=parse))
@@ -1174,8 +1174,12 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
     out_raster = None
 
 
-def save_image_using_existing(arr, outname, input_fname, out_dtype=None, nodata=None):
-    """Writes out an array using the georeferencing data from `input_fname`"""
+def save_image_like(arr, outname, input_fname, out_dtype=None, nodata=None):
+    """Writes out array `arr` to gdal-readable file `outname`
+    using the georeferencing data from `input_fname`
+
+    Used when saving a new image arr to the same lat/lon grid
+    """
     import rasterio as rio
 
     with rio.open(input_fname) as src:
