@@ -857,7 +857,11 @@ def find_geos(directory=".", ext=".geo", parse=True, filename=None):
     """
     if filename is not None:
         with open(filename) as f:
-            geo_file_list = [line for line in f.read().splitlines() if not line.strip().startswith('#')]
+            geo_file_list = [
+                line
+                for line in f.read().splitlines()
+                if not line.strip().startswith("#")
+            ]
     else:
         geo_file_list = find_files(directory, "*" + ext)
 
@@ -909,7 +913,11 @@ def find_igrams(directory=".", ext=".int", parse=True, filename=None):
     """
     if filename is not None:
         with open(filename) as f:
-            igram_file_list = [line for line in f.read().splitlines() if not line.strip().startswith('#')]
+            igram_file_list = [
+                line
+                for line in f.read().splitlines()
+                if not line.strip().startswith("#")
+            ]
     else:
         igram_file_list = find_files(directory, "*" + ext)
 
@@ -1174,7 +1182,9 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
     out_raster = None
 
 
-def save_image_like(arr, outname, input_fname, out_dtype=None, nodata=None):
+def save_image_like(
+    arr, outname, input_fname, driver=None, out_dtype=None, nodata=None
+):
     """Writes out array `arr` to gdal-readable file `outname`
     using the georeferencing data from `input_fname`
 
@@ -1182,6 +1192,7 @@ def save_image_like(arr, outname, input_fname, out_dtype=None, nodata=None):
     """
     import rasterio as rio
 
+    # print(f"{arr=}, {outname=}, {input_fname=}")
     with rio.open(input_fname) as src:
         if (src.height, src.width) != arr.shape:
             raise ValueError(
@@ -1191,14 +1202,14 @@ def save_image_like(arr, outname, input_fname, out_dtype=None, nodata=None):
         with rio.open(
             outname,
             "w",
-            driver=src.driver,
+            driver=(driver or src.driver),
             height=arr.shape[0],
             width=arr.shape[1],
             transform=src.transform,
             count=1,
             dtype=(out_dtype or arr.dtype),
             crs=src.crs,
-            nodata=nodata,
+            nodata=(nodata or src.nodata),
         ) as dest:
             dest.write(arr, 1)
 
