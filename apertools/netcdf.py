@@ -298,6 +298,7 @@ def create_nc_stack(
         gdal_driver (str): optional, driver for opening files
 
     """
+    file_list = sorted(file_list)
     create_empty_nc_stack(
         outname,
         stack_dim_name=stack_dim_name,
@@ -321,14 +322,16 @@ def create_nc_stack(
 
         buf = np.empty((chunk_depth, rows, cols), dtype=dtype)
         lastidx = 0
+        cur_chunk_size = 0  # runs from 0 to chunk_depth
         for idx, in_fname in enumerate(file_list):
             if idx % 100 == 0:
                 logger.info(f"Processing {in_fname} -> {idx+1} out of {len(file_list)}")
 
             if idx % chunk_depth == 0 and idx > 0:
                 logger.info(f"Writing {lastidx}:{lastidx+chunk_depth}")
-                stack_var[lastidx : lastidx + chunk_depth, :, :] = buf
+                stack_var[lastidx : lastidx + cur_chunk_size, :, :] = buf
 
+                cur_chunk_size = 0
                 lastidx = idx
 
             if use_gdal:
@@ -339,4 +342,9 @@ def create_nc_stack(
                 data = sario.load(in_fname)
 
             curidx = idx % chunk_depth
+            cur_chunk_size += 1
             buf[curidx, :, :] = data
+
+        if cur_chunk_size > 0:
+            # Write the final part of the buffer:
+            stack_var[lastidx : lastidx + cur_chunk_size, :, :] = buf[:cur_chunk_size]

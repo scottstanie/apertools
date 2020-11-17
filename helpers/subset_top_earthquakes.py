@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import argparse
-import itertools
 import datetime
 import glob
 import os
@@ -164,8 +163,8 @@ def average_geo(vrts):
 # def run_jackknife(stack_igrams, igram_dir, bbox, outdir="jackknife", ext=".unw"):
 def calc_avg_geos(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=".unw"):
     stack_igrams, _ = select_subset_igrams(event_date, igram_dir, geo_dir)
-    geos = stack_geolist(stack_igrams)
-    fully_connected_igrams = full_igram_list(geos)
+    geos = utils.geolist_from_igrams(stack_igrams)
+    fully_connected_igrams = utils.full_igram_list(geos)
     src_fullpaths = [
         os.path.join(os.path.abspath(igram_dir), f)
         for f in sario.intlist_to_filenames(fully_connected_igrams, ext)
@@ -199,7 +198,7 @@ def calc_avg_geos(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=
 
 def run_jackknife(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=".unw"):
     stack_igrams, _ = select_subset_igrams(event_date, igram_dir, geo_dir)
-    geos = stack_geolist(stack_igrams)
+    geos = utils.geolist_from_igrams(stack_igrams)
     imgs = []
     for idx, g in enumerate(geos):
         stack_igrams, src_fullpaths = select_subset_igrams(
@@ -361,20 +360,7 @@ def plot_stacks(imgs, vrt_names, block=False):
     plt.show(block=block)
 
 
-#### Jackknife stuff... really need to merge and clean up with coseismic_stack.py
-
-
-def stack_geolist(stack_igrams):
-    return sorted(list(set(itertools.chain(*stack_igrams))))
-
-
-def full_igram_list(geolist):
-    return [
-        (early, late)
-        for (idx, early) in enumerate(geolist[:-1])
-        for late in geolist[idx + 1 :]
-    ]
-
+# ### Jackknife stuff... really need to merge and clean up with coseismic_stack.py
 
 #####################
 
@@ -394,7 +380,7 @@ def get_eqs_in_bounds(insar_fname, eqdf, mag_thresh=3):
     return outdf[outdf.max_mag > mag_thresh] if mag_thresh else outdf
 
 
-### PART 2
+# i## PART 2
 # Downloading new stuff
 
 

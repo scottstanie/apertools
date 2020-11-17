@@ -9,6 +9,7 @@ import sys
 import os
 import subprocess
 import numpy as np
+import itertools
 
 from apertools.log import get_log
 
@@ -128,6 +129,19 @@ def scale_dset(filename, dset, scale):
     with h5py.File(filename, "r+") as f:
         data = f[dset]
         data[...] *= scale
+
+
+def geolist_from_igrams(igram_list):
+    return sorted(list(set(itertools.chain(*igram_list))))
+
+
+def full_igram_list(geolist):
+    """Create the list of all possible igram pairs from geolist"""
+    return [
+        (early, late)
+        for (idx, early) in enumerate(geolist[:-1])
+        for late in geolist[idx + 1 :]
+    ]
 
 
 def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC"):

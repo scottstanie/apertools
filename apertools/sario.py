@@ -5,6 +5,7 @@ Email: scott.stanie@utexas.edu
 """
 
 from __future__ import division, print_function
+from collections.abc import Iterable
 import datetime
 import fileinput
 import glob
@@ -27,12 +28,6 @@ from .demloading import format_dem_rsc, load_dem_rsc, load_elevation
 from apertools.log import get_log
 
 logger = get_log()
-
-# 2to3 compat.
-try:
-    basestring
-except NameError:
-    basestring = str
 
 _take_looks = apertools.utils.take_looks
 
@@ -820,8 +815,12 @@ def parse_geolist_strings(geolist_str):
 
 def parse_intlist_strings(date_pairs, ext=".int"):
     # If we passed filename YYYYmmdd_YYYYmmdd.int
-    if isinstance(date_pairs, basestring):
-        date_pairs = [date_pairs.strip(ext).split("_")[:2]]
+    if isinstance(date_pairs, str):
+        # TODO: isn't this better than stripping 'ext'?
+        date_pairs = [date_pairs.split(".")[0].split("_")[:2]]
+    elif isinstance(date_pairs, Iterable) and isinstance(date_pairs[0], str):
+        date_pairs = [f.split(".")[0].split("_")[:2] for f in date_pairs]
+
     return [(_parse(early), _parse(late)) for early, late in date_pairs]
 
 

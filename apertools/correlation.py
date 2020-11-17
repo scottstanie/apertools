@@ -33,3 +33,6 @@ def create_cor_matrix(row, col, filename="cor_stack.nc"):
     rows, cols = np.triu_indices(ngeos, k=1)
     out[rows, cols] = full_corr_values
     return out
+
+
+# TODO: plot with dates
