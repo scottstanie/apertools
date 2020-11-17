@@ -280,6 +280,27 @@ def grid_to_rsc(lons, lats, sparse=False):
     )
 
 
+def get_latlon_arrs(h5_filename=None, dem_rsc_file=None, gdal_file=None, bbox=None):
+    if h5_filename is not None:
+        lon_arr, lat_arr = grid(
+            **apertools.sario.load_dem_from_h5(h5_filename), sparse=True
+        )
+    elif dem_rsc_file is not None:
+        lon_arr, lat_arr = grid(**apertools.sario.load(dem_rsc_file), sparse=True)
+    elif gdal_file is not None:
+        import rasterio as rio
+
+        with rio.open(gdal_file) as src:
+            rows, cols = src.shape
+            max_len = max(rows, cols)
+            lon_list, lat_list = src.xy(np.arange(max_len), np.arange(max_len))
+            lon_arr = np.arange(lon_list[:cols])
+            lat_arr = np.arange(lat_list[:rows])
+
+    lon_arr, lat_arr = lon_arr.reshape(-1), lat_arr.reshape(-1)
+    return lon_arr.reshape(-1), lat_arr.reshape(-1)
+
+
 def from_grid(lons, lats, sparse=False):
     """Alias for grid_to_rsc"""
     return grid_to_rsc(lons, lats, sparse=sparse)
@@ -383,6 +404,28 @@ def grid_contains(point, **kwargs):
     point_x, point_y = point
     left, right, bot, top = grid_extent(**kwargs)
     return (left < point_x < right) and (bot < point_y < top)
+
+
+def window_rowcol(lon_arr, lat_arr, bbox=None):
+    """Get the row bounds an col bounds of a box in lat/lon arrays
+
+    Returns:
+        (row_top, row_bot), (col_left, col_right)
+    """
+    if bbox is None:
+        return (0, len(lat_arr)), (0, len(lon_arr))
+
+    # TODO: this should def be in latlon
+    left, bot, right, top = bbox
+    lat_step = np.diff(lat_arr)[0]
+    lon_step = np.diff(lon_arr)[0]
+    row_top = np.clip(int(round(((top - lat_arr[0]) / lat_step))), 0, len(lat_arr))
+    row_bot = np.clip(int(round(((bot - lat_arr[0]) / lat_step))), 0, len(lat_arr))
+    col_left = np.clip(int(round(((left - lon_arr[0]) / lon_step))), 0, len(lon_arr))
+    col_right = np.clip(int(round(((right - lon_arr[0]) / lon_step))), 0, len(lon_arr))
+    # lat_arr = lon_arr[row_top:row_bot]
+    # lon_arr = lon_arr[col_left:col_right]
+    return (row_top, row_bot), (col_left, col_right)
 
 
 def intersects1d(low1, high1, low2, high2):
