@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import itertools
 import datetime
 import glob
 import os
@@ -36,7 +37,7 @@ def run_vrt_subset(
     num_igrams=10,
     igram_type="cross",
     verbose=True,
-    save=True,
+    outname="stackavg.tif",
     plot_block=True,
 ):
     df = setup_folders(eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh)
@@ -51,7 +52,11 @@ def run_vrt_subset(
         igram_type=igram_type,
         verbose=verbose,
     )
-    imgs = calculate_stacks(all_vrts, save=save)
+    imgs = []
+    for vrt_group in all_vrts:
+        img = calculate_stack(vrt_group, outname=outname)
+        if img is not None:
+            imgs.append(img)
     vrt_names = get_vrt_names(all_vrts)
     plot_stacks(imgs, vrt_names, block=plot_block)
 
@@ -106,55 +111,24 @@ def eq_dirname(df, decimals=1):
     return names
 
 
-def subset_all_folders(df, igram_dir, geo_dir, **kwargs):
-    all_vrts = []
-    print(df)
-    for event_date, row in df.iterrows():
-        try:
-            vrts = subset_unws(event_date, row, igram_dir, geo_dir, **kwargs)
-            all_vrts.append(vrts)
-        except Exception as e:
-            print(f"Failed on {event_date}: {e}")
-            continue
+def calculate_stack(vrt_group, outname="stackavg.tif"):
+    if len(vrt_group) < 2:
+        # TODO: no name for empty... maybe pass dict {folder: [unws...]}
+        print(f"{len(vrt_group)} igrams for {vrt_group}, skipping...")
+        return None
+    avg_velo = stack_vrts(vrt_group)
+    directory = os.path.dirname(vrt_group[0])
 
-    return all_vrts
-
-
-def calculate_stacks(all_vrts, outname="stackavg.tif"):
-    imgs = []
-    for vrt_group in all_vrts:
-        if len(vrt_group) < 2:
-            # TODO: no name for empty... maybe pass dict {folder: [unws...]}
-            print(f"{len(vrt_group)} igrams for {vrt_group}, skipping...")
-            continue
-        avg_velo = stack_vrts(vrt_group)
-        imgs.append(avg_velo)
-        directory = os.path.dirname(vrt_group[0])
-
-        print(f"averaged {len(vrt_group)} done in {directory}...")
-        if outname:
-            out_filename = os.path.join(directory, outname)
-            print(f"Saving to {out_filename}")
-            utils.save_image_like(avg_velo, out_filename, vrt_group[0])
-    return imgs
+    print(f"averaged {len(vrt_group)} done in {directory}...")
+    if outname:
+        out_filename = os.path.join(directory, outname)
+        print(f"Saving to {out_filename}")
+        sario.save_image_like(avg_velo, out_filename, vrt_group[0], driver="GTiff")
+    return avg_velo
 
 
 def get_vrt_names(all_vrts):
     return [aa[0].split("/")[-2] for aa in all_vrts]
-
-
-def plot_stacks(imgs, vrt_names, block=False):
-    import matplotlib.pyplot as plt
-
-    nimgs = len(imgs)
-    ntiles = int(np.ceil(np.sqrt(nimgs)))
-    fig, axes = plt.subplots(ntiles, ntiles, squeeze=False)
-    for (name, ax, img) in zip(vrt_names, axes.ravel(), imgs):
-        axim = ax.imshow(img, vmax=1, vmin=-1, cmap="seismic_wide_y")
-        ax.set_title(name)
-
-    fig.colorbar(axim, ax=axes.ravel()[nimgs - 1])
-    plt.show(block=block)
 
 
 # TODO: refactor coseismic_stack functions to not dupe this code
@@ -182,24 +156,107 @@ def stack_vrts(
     return phase_subset_stack
 
 
-def subset_unws(
+# TODO: merge this with "avg_igram" script
+def average_geo(vrts):
+    pass
+
+
+# def run_jackknife(stack_igrams, igram_dir, bbox, outdir="jackknife", ext=".unw"):
+def calc_avg_geos(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=".unw"):
+    stack_igrams, _ = select_subset_igrams(event_date, igram_dir, geo_dir)
+    geos = stack_geolist(stack_igrams)
+    fully_connected_igrams = full_igram_list(geos)
+    src_fullpaths = [
+        os.path.join(os.path.abspath(igram_dir), f)
+        for f in sario.intlist_to_filenames(fully_connected_igrams, ext)
+    ]
+
+    print(f"Creating directory: {outdir}")
+    os.makedirs(outdir, exist_ok=True)
+    vrt_filenames = subset_unws(src_fullpaths, outdir, bbox, verbose=False)
+
+    geo_to_igram_dict = {
+        geo: [pair for pair in fully_connected_igrams if geo in pair] for geo in geos
+    }
+    vrt_ext = ext + ".vrt"  # TODO: extract from vrt_filenames?
+    geo_to_fname_dict = {
+        geo: [
+            os.path.join(outdir, f)
+            for f in sario.intlist_to_filenames(ig_list, vrt_ext)
+        ]
+        for (geo, ig_list) in geo_to_igram_dict.items()
+    }
+    avg_imgs = []
+    for (geo, fname_list) in geo_to_fname_dict.items():
+        outname = f"avg_{geo.strftime('%Y%m%d')}.tif"
+        img = calculate_stack(fname_list, outname=outname)
+        if img is not None:
+            avg_imgs.append(img)
+
+    return geos, np.array(avg_imgs)
+    # plt.figure(); plt.plot(geos,  np.var(avg_imgs, axis=(1,2)))
+
+
+def run_jackknife(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=".unw"):
+    stack_igrams, _ = select_subset_igrams(event_date, igram_dir, geo_dir)
+    geos = stack_geolist(stack_igrams)
+    imgs = []
+    for idx, g in enumerate(geos):
+        stack_igrams, src_fullpaths = select_subset_igrams(
+            event_date,
+            igram_dir,
+            geo_dir,
+            extra_geo_ignores=[g],
+        )
+        od = f"outdir{idx}"
+        utils.mkdir_p(od)
+        vrts = subset_unws(src_fullpaths, od, bbox, verbose=False)
+        img = calculate_stack(vrts, outname=None)
+        imgs.append(img)
+    return imgs
+
+
+def subset_all_folders(df, igram_dir, geo_dir, **kwargs):
+    all_vrts = []
+    print(df)
+    for event_date, row in df.iterrows():
+        try:
+            stack_igrams, src_fullpaths = select_subset_igrams(
+                event_date,
+                igram_dir,
+                geo_dir,
+                **kwargs,
+            )
+            vrts = subset_unws(src_fullpaths, row.dirname, row.bbox.bounds, **kwargs)
+            all_vrts.append(vrts)
+        except Exception as e:
+            print(f"Failed on {event_date}: {e}")
+            continue
+
+    return all_vrts
+
+
+def select_subset_igrams(
     event_date,
-    row,
     igram_dir,
     geo_dir,
     ignore_geos=True,
+    extra_geo_ignores=None,
     num_igrams=10,
     igram_type="cross",
-    verbose=True,
+    ext=".unw",
+    **kwargs,
 ):
-    """
-    event_date is from index of df
-    row has columns: max_mag,lat,lon,event_id,geometry,bbox,dirname
-    """
+    """Pick the igrams to use for the stack, and form full filepaths """
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(
         igram_dir, geo_dir=geo_dir, geolist_ignore_file=gi_file
     )
+    if extra_geo_ignores:
+        geolist = [g for g in geolist if g not in extra_geo_ignores]
+        intlist = [
+            pair for pair in intlist if all(g not in pair for g in extra_geo_ignores)
+        ]
     if igram_type == "cross":
         stack_igrams = coseismic_stack.select_cross_event(
             geolist, intlist, event_date, num_igrams=num_igrams
@@ -216,24 +273,33 @@ def subset_unws(
         )
     else:
         raise ValueError("igram_type must be 'cross', 'pre', 'post")
+    stack_fnames = sario.intlist_to_filenames(stack_igrams, ext)
+    src_fullpaths = [os.path.join(os.path.abspath(igram_dir), f) for f in stack_fnames]
+    return stack_igrams, src_fullpaths
 
-    stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
-    stack_fullpaths = [
-        os.path.join(os.path.abspath(igram_dir), f) for f in stack_fnames
-    ]
+
+def subset_unws(
+    src_fullpaths,
+    out_dirname,
+    bbox,
+    verbose=True,
+    **kwargs,
+):
+    """
+    row has columns: max_mag,lat,lon,event_id,geometry,bbox,dirname
+    """
+    stack_fnames = [os.path.split(f)[1] for f in src_fullpaths]
+
     vrt_fnames = [
-        os.path.join(os.path.abspath(row.dirname), f + ".vrt") for f in stack_fnames
+        os.path.join(os.path.abspath(out_dirname), f + ".vrt") for f in stack_fnames
     ]
-    print("OK!")
     if verbose:
         print("Using the following igrams in stack:")
-        for (fin, fout) in zip(stack_fullpaths, vrt_fnames):
+        for (fin, fout) in zip(src_fullpaths, vrt_fnames):
             print(fout, "->", fin)
 
-    for (in_fname, out_fname) in zip(stack_fullpaths, vrt_fnames):
-        subset.copy_vrt(
-            in_fname, out_fname=out_fname, bbox=row.bbox.bounds, verbose=verbose
-        )
+    for (in_fname, out_fname) in zip(src_fullpaths, vrt_fnames):
+        subset.copy_vrt(in_fname, out_fname=out_fname, bbox=bbox, verbose=verbose)
 
     return vrt_fnames
 
@@ -280,6 +346,37 @@ def get_top_mag_dates(df, n=None):
         weeklydf, geometry=gpd.points_from_xy(weeklydf.lon, weeklydf.lat)
     )
 
+
+def plot_stacks(imgs, vrt_names, block=False):
+    import matplotlib.pyplot as plt
+
+    nimgs = len(imgs)
+    ntiles = int(np.ceil(np.sqrt(nimgs)))
+    fig, axes = plt.subplots(ntiles, ntiles, squeeze=False)
+    for (name, ax, img) in zip(vrt_names, axes.ravel(), imgs):
+        axim = ax.imshow(img, vmax=1, vmin=-1, cmap="seismic_wide_y")
+        ax.set_title(name)
+
+    fig.colorbar(axim, ax=axes.ravel()[nimgs - 1])
+    plt.show(block=block)
+
+
+#### Jackknife stuff... really need to merge and clean up with coseismic_stack.py
+
+
+def stack_geolist(stack_igrams):
+    return sorted(list(set(itertools.chain(*stack_igrams))))
+
+
+def full_igram_list(geolist):
+    return [
+        (early, late)
+        for (idx, early) in enumerate(geolist[:-1])
+        for late in geolist[idx + 1 :]
+    ]
+
+
+#####################
 
 # Getting counties within texas shape
 # from geopandas.tools import sjoin
