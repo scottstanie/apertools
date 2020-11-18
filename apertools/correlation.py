@@ -7,15 +7,20 @@ import matplotlib.pyplot as plt
 
 
 # TODO: lat, lon...
-def create_cor_matrix(row_col=None, lat_lon=None, filename="cor_stack.nc"):
+def create_cor_matrix(row_col=None, lat_lon=None, filename="cor_stack.nc", window=3):
     with xr.open_dataset(filename) as ds:
         filenames = ds.filenames
+        win = window // 2
         if row_col is not None:
             row, col = row_col
-            corr_values = ds["stack"][:, row, col]
         elif lat_lon is not None:
             lat, lon = lat_lon
-            corr_values = ds["stack"].sel(lat=lat, lon=lon, method="nearest")
+            # corr_values = ds["stack"].sel(lat=lat, lon=lon, method="nearest")
+            latarr, lonarr = ds.lat, ds.lon
+            row = abs(latarr - lat).argmin()
+            col = abs(lonarr - lon).argmin()
+        cv_cube = ds["stack"][:, row - win : row + win + 1, col - win : col + win + 1]
+        corr_values = cv_cube.mean(dim=("lat", "lon"))
 
     intlist = np.array(sario.parse_intlist_strings(filenames))
     geolist = np.array(utils.geolist_from_igrams(intlist))
