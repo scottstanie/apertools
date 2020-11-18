@@ -30,16 +30,20 @@ def run_vrt_subset(
     geo_dir,
     mag_thresh=3,
     eq_fname=TEXNET_DATA,
-    sar_fname="../S1A_20141215.geo.vrt",
+    sar_fname=None,
     box_size=20,
-    remove_outliers=True,
+    remove_outliers=False,
     ignore_geos=True,
+    ref=(5, 5),
     num_igrams=10,
     igram_type="cross",
     verbose=True,
     outname="stackavg.tif",
     plot_block=True,
 ):
+    if sar_fname is None:
+        sar_fname = glob.glob(os.path.join(geo_dir, "*.geo.vrt"))[0]
+        print(f"Using bbox area {sar_fname = } to bound search for EQs.")
     df = setup_folders(eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh)
     if len(df) < 1:
         return
@@ -55,7 +59,8 @@ def run_vrt_subset(
     )
     imgs = []
     for vrt_group in all_vrts:
-        img = calculate_stack(vrt_group, outname=outname)
+        print(vrt_group)
+        img = calculate_stack(vrt_group, ref=ref, outname=outname, overwrite=True)
         if img is not None:
             imgs.append(img)
     vrt_names = get_vrt_names(all_vrts)
@@ -64,7 +69,7 @@ def run_vrt_subset(
 
 def setup_folders(
     eq_fname=TEXNET_DATA,
-    sar_fname="../S1A_20141215.geo.vrt",
+    sar_fname=None,
     mag_thresh=3,
     box_size=20,
 ):
@@ -82,7 +87,7 @@ def load_eq_df(
     eq_fname=TEXNET_DATA,
     mag_thresh=3,
     box_size=20,
-    sar_fname="../S1A_20141215.geo.vrt",
+    sar_fname=None,
     decimals=1,  # How many lat/lon decimals should the directories have?
 ):
     """Create a DataFrame of the top weekly earthquakes, limited to the
@@ -112,17 +117,23 @@ def eq_dirname(df, decimals=1):
     return names
 
 
-def calculate_stack(vrt_group, outname="stackavg.tif"):
+def calculate_stack(vrt_group, outname="stackavg.tif", ref=(5, 5), overwrite=False):
     if len(vrt_group) < 2:
         # TODO: no name for empty... maybe pass dict {folder: [unws...]}
         print(f"{len(vrt_group)} igrams for {vrt_group}, skipping...")
         return None
-    avg_velo = stack_vrts(vrt_group)
     directory = os.path.dirname(vrt_group[0])
-
-    print(f"averaged {len(vrt_group)} done in {directory}...")
     if outname:
         out_filename = os.path.join(directory, outname)
+    if os.path.exists(out_filename) and not overwrite:
+        print(f"{out_filename} exists and {overwrite = }, loading...")
+        with rio.open(out_filename) as src:
+            return src.read(1)
+
+    avg_velo = stack_vrts(vrt_group, ref=ref)
+
+    print(f"averaged {len(vrt_group)} igrams in {directory}...")
+    if outname:
         print(f"Saving to {out_filename}")
         sario.save_image_like(avg_velo, out_filename, vrt_group[0], driver="GTiff")
     return avg_velo
@@ -161,9 +172,18 @@ def stack_vrts(
 
 # def run_jackknife(stack_igrams, igram_dir, bbox, outdir="jackknife", ext=".unw"):
 def calc_avg_geos(
-    event_date, igram_dir, geo_dir, bbox, outdir="average_geos", ext=".unw"
+    event_date,
+    igram_dir,
+    geo_dir,
+    bbox,
+    num_igrams=10,
+    outdir="average_geos",
+    ext=".unw",
+    overwrite=False,
 ):
-    stack_igrams, _ = select_subset_igrams(event_date, igram_dir, geo_dir)
+    stack_igrams, _ = select_subset_igrams(
+        event_date, igram_dir, geo_dir, num_igrams=num_igrams
+    )
     geo_date_list = utils.geolist_from_igrams(stack_igrams)
     fully_connected_igrams = utils.full_igram_list(geo_date_list)
     src_fullpaths = [
@@ -190,7 +210,7 @@ def calc_avg_geos(
     avg_imgs = []
     for (geo, fname_list) in geo_to_fname_dict.items():
         outname = f"avg_{geo.strftime('%Y%m%d')}.tif"
-        img = calculate_stack(fname_list, outname=outname)
+        img = calculate_stack(fname_list, outname=outname, overwrite=False)
         if img is not None:
             avg_imgs.append(img)
 
@@ -210,7 +230,7 @@ def find_geo_outliers(geo_date_list, avg_imgs, nsigma=3):
     img_vars = np.var(avg_imgs, axis=(1, 2))
     cutoff = np.median(img_vars) + nsigma * np.std(img_vars)
     outlier_idxs = img_vars > cutoff
-    return geo_date_list[outlier_idxs]
+    return np.array(geo_date_list)[outlier_idxs].tolist()
 
 
 def run_jackknife(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=".unw"):
@@ -232,7 +252,9 @@ def run_jackknife(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=
     return imgs
 
 
-def subset_all_folders(df, igram_dir, geo_dir, remove_outliers=True, **kwargs):
+def subset_all_folders(
+    df, igram_dir, geo_dir, num_igrams=10, remove_outliers=True, **kwargs
+):
     all_vrts = []
     print(df)
     for event_date, row in df.iterrows():
@@ -243,10 +265,16 @@ def subset_all_folders(df, igram_dir, geo_dir, remove_outliers=True, **kwargs):
             if remove_outliers:
                 print("Removing outlier SAR dates")
                 geo_date_list, avg_imgs = calc_avg_geos(
-                    event_date, igram_dir, geo_dir, bbox, outdir=current_dir
+                    event_date,
+                    igram_dir,
+                    geo_dir,
+                    bbox,
+                    num_igrams=num_igrams,
+                    outdir=current_dir,
+                    overwrite=False,
                 )
                 bad_dates = find_geo_outliers(geo_date_list, avg_imgs, nsigma=3)
-                print(f"Found {len(bad_dates)}: {bad_dates}")
+                print(f"Found {len(bad_dates)} bad SAR date: {bad_dates}")
             else:
                 bad_dates = []
 
@@ -255,6 +283,7 @@ def subset_all_folders(df, igram_dir, geo_dir, remove_outliers=True, **kwargs):
                 igram_dir,
                 geo_dir,
                 extra_geo_ignores=bad_dates,
+                num_igrams=num_igrams,
                 **kwargs,
             )
             vrts = subset_unws(src_fullpaths, current_dir, bbox, **kwargs)
@@ -282,7 +311,7 @@ def select_subset_igrams(
     geolist, intlist = sario.load_geolist_intlist(
         igram_dir, geo_dir=geo_dir, geolist_ignore_file=gi_file
     )
-    if extra_geo_ignores:
+    if extra_geo_ignores is not None:
         geolist = [g for g in geolist if g not in extra_geo_ignores]
         intlist = [
             pair for pair in intlist if all(g not in pair for g in extra_geo_ignores)
@@ -485,14 +514,28 @@ def get_cli_args():
         help="Magnitude of earthquakes to threshold (default=%(default)s)",
     )
     p.add_argument(
-        "--sar-fname",
-        help="SLC filename of TexNet earthquake data (default=%(default)s)",
-    )
-    p.add_argument(
         "--box-size",
         default=20,
         type=float,
         help="Size (in km) of box to subset around EQ hypocenter (default=%(default)s)",
+    )
+    p.add_argument(
+        "--num-igrams",
+        default=10,
+        type=int,
+        help="Desired number of independent igrams to include in stack (less used if not available, default=%(default)s)",
+    )
+    p.add_argument(
+        "--ref-row",
+        default=5,
+        type=int,
+        help="Row of reference point for stack calculation (default=%(default)s)",
+    )
+    p.add_argument(
+        "--ref-col",
+        default=5,
+        type=int,
+        help="Column of reference point for stack calculation (default=%(default)s)",
     )
     p.add_argument(
         "--eq-fname",
@@ -500,16 +543,24 @@ def get_cli_args():
         help="filename of TexNet earthquake data (default=%(default)s)",
     )
     p.add_argument(
-        "--ignore-geos",
-        action="store_true",
-        default=True,
-        help="Apply the geolist_ignore.txt file (default=%(default)s)",
+        "--no-outlier-removal",
+        action="store_false",
+        help="When set, skips using the average igram per date to remove noisy SAR dates (default=%(default)s)",
     )
     p.add_argument(
-        "--plot",
+        "--no-ignore-geos",
+        action="store_false",
+        help="Skip applying the geolist_ignore.txt file (default=%(default)s)",
+    )
+    p.add_argument(
+        "--no-plot",
+        action="store_false",
+        help="Skip plotting plots of results (default=%(default)s)",
+    )
+    p.add_argument(
+        "--verbose",
         action="store_true",
-        default=True,
-        help="Show plots of results (default=%(default)s)",
+        help="Print extra debug info (default=%(default)s)",
     )
     return p.parse_args()
 
@@ -521,11 +572,12 @@ if __name__ == "__main__":
         args.geo_dir,
         mag_thresh=args.mag_thresh,
         eq_fname=args.eq_fname,
-        sar_fname=args.sar_fname,
         box_size=args.box_size,
-        ignore_geos=args.ignore_geos,
-        num_igrams=10,
+        remove_outliers=args.no_outlier_removal,
+        ignore_geos=args.no_ignore_geos,
+        num_igrams=args.num_igrams,
+        ref=(args.ref_row, args.ref_col),
         igram_type="cross",
-        verbose=True,
-        plot_block=args.plot,
+        verbose=args.verbose,
+        plot_block=args.no_plot,
     )
