@@ -32,6 +32,7 @@ def run_vrt_subset(
     eq_fname=TEXNET_DATA,
     sar_fname="../S1A_20141215.geo.vrt",
     box_size=20,
+    remove_outliers=True,
     ignore_geos=True,
     num_igrams=10,
     igram_type="cross",
@@ -46,6 +47,7 @@ def run_vrt_subset(
         df,
         igram_dir,
         geo_dir,
+        remove_outliers=remove_outliers,
         ignore_geos=ignore_geos,
         num_igrams=num_igrams,
         igram_type=igram_type,
@@ -156,15 +158,14 @@ def stack_vrts(
 
 
 # TODO: merge this with "avg_igram" script
-def average_geo(vrts):
-    pass
-
 
 # def run_jackknife(stack_igrams, igram_dir, bbox, outdir="jackknife", ext=".unw"):
-def calc_avg_geos(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=".unw"):
+def calc_avg_geos(
+    event_date, igram_dir, geo_dir, bbox, outdir="average_geos", ext=".unw"
+):
     stack_igrams, _ = select_subset_igrams(event_date, igram_dir, geo_dir)
-    geos = utils.geolist_from_igrams(stack_igrams)
-    fully_connected_igrams = utils.full_igram_list(geos)
+    geo_date_list = utils.geolist_from_igrams(stack_igrams)
+    fully_connected_igrams = utils.full_igram_list(geo_date_list)
     src_fullpaths = [
         os.path.join(os.path.abspath(igram_dir), f)
         for f in sario.intlist_to_filenames(fully_connected_igrams, ext)
@@ -175,7 +176,8 @@ def calc_avg_geos(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=
     vrt_filenames = subset_unws(src_fullpaths, outdir, bbox, verbose=False)
 
     geo_to_igram_dict = {
-        geo: [pair for pair in fully_connected_igrams if geo in pair] for geo in geos
+        geo: [pair for pair in fully_connected_igrams if geo in pair]
+        for geo in geo_date_list
     }
     vrt_ext = ext + ".vrt"  # TODO: extract from vrt_filenames?
     geo_to_fname_dict = {
@@ -192,8 +194,23 @@ def calc_avg_geos(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=
         if img is not None:
             avg_imgs.append(img)
 
-    return geos, np.array(avg_imgs)
+    return geo_date_list, np.array(avg_imgs)
     # plt.figure(); plt.plot(geos,  np.var(avg_imgs, axis=(1,2)))
+
+
+def find_geo_outliers(geo_date_list, avg_imgs, nsigma=3):
+    """Using the average of interferograms per date, find especially noisy ones
+
+    Method: for N average SAR images...
+        1. find the overall variance of each image (N total numbers)
+        2. find the median of the N points
+        3. set a cutoff of `median + 3sigma`
+    Returns the dates from `geo_date_list` which are flagged to be outliers
+    """
+    img_vars = np.var(avg_imgs, axis=(1, 2))
+    cutoff = np.median(img_vars) + nsigma * np.std(img_vars)
+    outlier_idxs = img_vars > cutoff
+    return geo_date_list[outlier_idxs]
 
 
 def run_jackknife(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=".unw"):
@@ -215,18 +232,32 @@ def run_jackknife(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=
     return imgs
 
 
-def subset_all_folders(df, igram_dir, geo_dir, **kwargs):
+def subset_all_folders(df, igram_dir, geo_dir, remove_outliers=True, **kwargs):
     all_vrts = []
     print(df)
     for event_date, row in df.iterrows():
+        bbox = row.bbox.bounds
+        current_dir = row.dirname
         try:
+            # Get the list of very noisy days to skip:
+            if remove_outliers:
+                print("Removing outlier SAR dates")
+                geo_date_list, avg_imgs = calc_avg_geos(
+                    event_date, igram_dir, geo_dir, bbox, outdir=current_dir
+                )
+                bad_dates = find_geo_outliers(geo_date_list, avg_imgs, nsigma=3)
+                print(f"Found {len(bad_dates)}: {bad_dates}")
+            else:
+                bad_dates = []
+
             stack_igrams, src_fullpaths = select_subset_igrams(
                 event_date,
                 igram_dir,
                 geo_dir,
+                extra_geo_ignores=bad_dates,
                 **kwargs,
             )
-            vrts = subset_unws(src_fullpaths, row.dirname, row.bbox.bounds, **kwargs)
+            vrts = subset_unws(src_fullpaths, current_dir, bbox, **kwargs)
             all_vrts.append(vrts)
         except Exception as e:
             print(f"Failed on {event_date}: {e}")
