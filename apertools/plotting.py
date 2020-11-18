@@ -152,6 +152,7 @@ def view_stack(
     vmax=None,
     legend_loc="upper left",
     lat_lon=False,
+    rsc_data=None,
     line_plot_kwargs=None,
     timeline_callback=None,
 ):
@@ -190,7 +191,7 @@ def view_stack(
 
     if isinstance(display_img, int):
         img = stack[display_img, :, :]
-    # TODO: is this the best way to check if it's ndarray or Latlonimage?
+    # TODO: is this the best way to check if it's ndarray?
     elif hasattr(display_img, "__array_finalize__"):
         img = display_img
     else:
@@ -242,7 +243,7 @@ def view_stack(
             timeline_callback(timeline, row, col)
 
         if lat_lon:
-            lat, lon = img.rowcol_to_latlon(row, col)
+            lat, lon = latlon.rowcol_to_latlon(row, col, rsc_data)
             legend_entries.append("Lat {:.3f}, Lon {:.3f}".format(lat, lon))
         else:
             legend_entries.append("Row %s, Col %s" % (row, col))

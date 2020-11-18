@@ -52,7 +52,7 @@ def cli(ctx, verbose, path):
     show_default=True,
 )
 @click.option(
-    "--dset", default="stack/1", help="Dataset within hdf5 file", show_default=True
+    "--dset", default="stack", help="Dataset within hdf5 file", show_default=True
 )
 @click.option(
     "--cmap",
@@ -107,9 +107,9 @@ def view_stack(
     if rowcol:
         rsc_data = None
     else:
-        rsc_data = apertools.sario.load(join(context["path"], "dem.rsc"))
+        rsc_data = apertools.sario.load_dem_from_h5(filename)
 
-    deformation = apertools.latlon.LatlonImage(data=deformation, rsc_data=rsc_data)
+    # deformation = apertools.latlon.LatlonImage(data=deformation, rsc_data=rsc_data)
     deformation = deformation[:, row_start:row_end, col_start:col_end]
     img = np.mean(deformation[-3:], axis=0)
 
@@ -121,6 +121,7 @@ def view_stack(
         label=label,
         cmap=cmap,
         lat_lon=not rowcol,
+        rsc_data=rsc_data,
     )
 
 
@@ -809,3 +810,8 @@ def subset_vrt(filenames, bbox, out_dir):  # , start_date, end_date):
     for f in filenames:
         out_fname = os.path.join(out_dir, os.path.split(f)[1] + ".vrt")
         apertools.subset.copy_vrt(f, out_fname=out_fname, bbox=bbox, verbose=True)
+
+
+from apertools.netcdf import run_hdf5_to_netcdf
+
+cli.add_command(run_hdf5_to_netcdf)

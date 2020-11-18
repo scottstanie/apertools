@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 import netCDF4 as nc
 import rasterio as rio
+import click
 
 from apertools import latlon, sario
 from apertools.log import get_log, log_runtime
@@ -11,10 +12,12 @@ from apertools.log import get_log, log_runtime
 logger = get_log()
 
 
+# TODO: do i ever need to do a list? just make 2 files, right?
+@log_runtime
 def hdf5_to_netcdf(
     filename,
-    stack_dset_list=["stack"],
-    stack_dim_list=["idx"],
+    dset_name="stack",
+    stack_dim="idx",
     outname=None,
     bbox=None,
 ):
@@ -32,12 +35,12 @@ def hdf5_to_netcdf(
         # Get data and references from HDF% file
 
         # Just get one example for shape
-        if any(d not in hf for d in stack_dset_list):
+        if dset_name not in hf:
             raise ValueError(
-                f"Requested dsets: {stack_dset_list}. "
+                f"Requested dset: {dset_name}. "
                 f"Dset keys available in {filename}: {list(hf.keys())}"
             )
-        nstack, rows, cols = hf[stack_dset_list[0]].shape
+        nstack, rows, cols = hf[dset_name].shape
         lon_arr, lat_arr = latlon.get_latlon_arrs(h5_filename=filename, bbox=bbox)
 
         (row_top, row_bot), (col_left, col_right) = latlon.window_rowcol(
@@ -47,18 +50,14 @@ def hdf5_to_netcdf(
         lon_arr = lon_arr[col_left:col_right]
         rows, cols = len(lat_arr), len(lon_arr)
 
-        stack_arrs = []
-        for dset_name, stack_dim in zip(stack_dset_list, stack_dim_list):
-            nstack, _, _ = hf[dset_name].shape
-            if stack_dim == "date":
-                try:
-                    geolist = sario.load_geolist_from_h5(filename, dset=dset_name)
-                except KeyError:  # Give this one a shot too
-                    geolist = sario.load_geolist_from_h5(filename)
-                stack_dim_arr = to_datetimes(geolist)
-            else:
-                stack_dim_arr = np.arange(nstack)
-            stack_arrs.append(stack_dim_arr)
+        if stack_dim == "date":
+            try:
+                geolist = sario.load_geolist_from_h5(filename, dset=dset_name)
+            except KeyError:  # Give this one a shot too
+                geolist = sario.load_geolist_from_h5(filename)
+            stack_dim_arr = to_datetimes(geolist)
+        else:
+            stack_dim_arr = np.arange(nstack)
 
         # TODO: store the int dates as dims... somehow
 
@@ -74,58 +73,52 @@ def hdf5_to_netcdf(
             latitudes.units = "degrees north"
             longitudes.units = "degrees east"
 
-            for dset_name, stack_dim_name, stack_arr in zip(
-                stack_dset_list, stack_dim_list, stack_arrs
-            ):
-                dset = hf[dset_name]
-                nstack, _, _ = dset.shape
-                if stack_dim_name not in f.dimensions:
-                    f.createDimension(stack_dim_name, nstack)
-                if stack_dim_name not in f.variables:
-                    if stack_dim_name == "date":
-                        idxs = f.createVariable(
-                            stack_dim_name, "f4", (stack_dim_name,), zlib=True
-                        )
-                        idxs.units = f"days since {geolist[0]}"
-                    else:
-                        idxs = f.createVariable(stack_dim_name, "i4", (stack_dim_name,))
-
-                # Write data
-                latitudes[:] = lat_arr
-                longitudes[:] = lon_arr
-                if stack_dim_name == "date":
-                    d2n = nc.date2num(stack_arr, units=idxs.units)
-                    idxs[:] = d2n
+            dset = hf[dset_name]
+            nstack, _, _ = dset.shape
+            if stack_dim not in f.dimensions:
+                f.createDimension(stack_dim, nstack)
+            if stack_dim not in f.variables:
+                if stack_dim == "date":
+                    idxs = f.createVariable(stack_dim, "f4", (stack_dim,), zlib=True)
+                    idxs.units = f"days since {geolist[0]}"
                 else:
-                    idxs[:] = stack_arr
+                    idxs = f.createVariable(stack_dim, "i4", (stack_dim,))
 
-                # Finally, the actual stack
-                # stackvar = rootgrp.createVariable("stack/1", "f4", ("date", "lat", "lon"))
-                logger.info(f"Writing {dset_name} data")
-                if hf[dset_name].dtype == np.dtype("bool"):
-                    bool_type = "i1"
-                    # bool_type = f.createEnumType(
-                    #     np.uint8, "bool_t", {"FALSE": 0, "TRUE": 1}
-                    # )
-                    dt = bool_type
-                    fill_value = 0
-                else:
-                    dt = hf[dset_name].dtype
-                    fill_value = 0
+            # Write data
+            latitudes[:] = lat_arr
+            longitudes[:] = lon_arr
+            if stack_dim == "date":
+                d2n = nc.date2num(stack_dim_arr, units=idxs.units)
+                idxs[:] = d2n
+            else:
+                idxs[:] = stack_dim_arr
 
-                stackvar = f.createVariable(
-                    dset_name,
-                    dt,
-                    (stack_dim_name, "lat", "lon"),
-                    fill_value=fill_value,
-                    zlib=True,
-                )
-                d = dset[:, row_top:row_bot, col_left:col_right]
-                logger.info(f"d shape: {d.shape}")
-                stackvar[:] = d
+            # Finally, the actual stack
+            # stackvar = rootgrp.createVariable("stack/1", "f4", ("date", "lat", "lon"))
+            logger.info(f"Writing {dset_name} data")
+            if hf[dset_name].dtype == np.dtype("bool"):
+                bool_type = "i1"
+                # bool_type = f.createEnumType(
+                #     np.uint8, "bool_t", {"FALSE": 0, "TRUE": 1}
+                # )
+                dt = bool_type
+                fill_value = 0
+            else:
+                dt = hf[dset_name].dtype
+                fill_value = 0
+
+            stackvar = f.createVariable(
+                dset_name,
+                dt,
+                (stack_dim, "lat", "lon"),
+                fill_value=fill_value,
+                zlib=True,
+            )
+            d = dset[:, row_top:row_bot, col_left:col_right]
+            logger.info(f"d shape: {d.shape}")
+            stackvar[:] = d
 
 
-# TODO: put elsewhere
 def to_datetimes(date_list):
     return [datetime.datetime(*d.timetuple()[:6]) for d in date_list]
 
@@ -251,6 +244,7 @@ def create_empty_nc_stack(
         # stackvar[:] = d
 
 
+@log_runtime
 def create_nc_stack(
     outname,
     file_list,
@@ -348,3 +342,25 @@ def create_nc_stack(
         if cur_chunk_size > 0:
             # Write the final part of the buffer:
             stack_var[lastidx : lastidx + cur_chunk_size, :, :] = buf[:cur_chunk_size]
+
+
+# Create the command-line version
+@click.command("hdf5-to-netcdf")
+@click.argument("filename")
+@click.option("--outname", "-o", type=click.Path(dir_okay=False))
+@click.option(
+    "--stack-dset",
+    help="Name of 3d datasets in the .h5 file to convert",
+)
+@click.option(
+    "--stack-dset",
+    help="Name of 3rd dimension for stack. If 'data' passed, will try to load geolist",
+)
+@click.option(
+    "--bbox",
+    nargs=4,
+    type=float,
+    help="To only convert a subset, pass lat/lon bounds: left bot right top",
+)
+def run_hdf5_to_netcdf(filename, outname, stack_dset_list, stack_dim_list, bbox):
+    hdf5_to_netcdf(filename, [stack_dset], [stack_dim], outname, bbox)
