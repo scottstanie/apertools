@@ -6,12 +6,13 @@ import os
 import subprocess
 
 import numpy as np
+import matplotlib.pyplot as plt
 import shapely.geometry
 import rasterio as rio
 import pandas as pd
 import geopandas as gpd
 
-import coseismic_stack
+import apertools.coseismic_stack as coseismic_stack
 import apertools.sario as sario
 import apertools.latlon as latlon
 import apertools.utils as utils
@@ -44,7 +45,9 @@ def run_vrt_subset(
     if sar_fname is None:
         sar_fname = glob.glob(os.path.join(geo_dir, "*.geo.vrt"))[0]
         print(f"Using bbox area {sar_fname = } to bound search for EQs.")
-    df = setup_folders(eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh)
+    df = setup_folders(
+        eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh, box_size=box_size
+    )
     if len(df) < 1:
         return
     all_vrts = subset_all_folders(
@@ -69,10 +72,15 @@ def run_vrt_subset(
 
 def setup_folders(
     eq_fname=TEXNET_DATA,
+    geo_dir=None,
     sar_fname=None,
     mag_thresh=3,
     box_size=20,
 ):
+    if geo_dir is not None:
+        sar_fname = glob.glob(os.path.join(geo_dir, "*.geo.vrt"))[0]
+        print(f"Using bbox area {sar_fname = } to bound search for EQs.")
+
     df = load_eq_df(
         eq_fname=eq_fname, sar_fname=sar_fname, mag_thresh=mag_thresh, box_size=box_size
     )
@@ -125,10 +133,10 @@ def calculate_stack(vrt_group, outname="stackavg.tif", ref=(5, 5), overwrite=Fal
     directory = os.path.dirname(vrt_group[0])
     if outname:
         out_filename = os.path.join(directory, outname)
-    if os.path.exists(out_filename) and not overwrite:
-        print(f"{out_filename} exists and {overwrite = }, loading...")
-        with rio.open(out_filename) as src:
-            return src.read(1)
+        if os.path.exists(out_filename) and not overwrite:
+            print(f"{out_filename} exists and {overwrite = }, loading...")
+            with rio.open(out_filename) as src:
+                return src.read(1)
 
     avg_velo = stack_vrts(vrt_group, ref=ref)
 
@@ -170,7 +178,7 @@ def stack_vrts(
 
 # TODO: merge this with "avg_igram" script
 
-# def run_jackknife(stack_igrams, igram_dir, bbox, outdir="jackknife", ext=".unw"):
+
 def calc_avg_geos(
     event_date,
     igram_dir,
@@ -215,7 +223,6 @@ def calc_avg_geos(
             avg_imgs.append(img)
 
     return geo_date_list, np.array(avg_imgs)
-    # plt.figure(); plt.plot(geos,  np.var(avg_imgs, axis=(1,2)))
 
 
 def find_geo_outliers(geo_date_list, avg_imgs, nsigma=3):
@@ -233,23 +240,45 @@ def find_geo_outliers(geo_date_list, avg_imgs, nsigma=3):
     return np.array(geo_date_list)[outlier_idxs].tolist()
 
 
-def run_jackknife(event_date, igram_dir, geo_dir, bbox, outdir="jackknife", ext=".unw"):
+def run_jackknife(
+    event_date,
+    igram_dir,
+    geo_dir,
+    bbox,
+    outdir="jackknife",
+    ext=".unw",
+    extra_geo_ignores=[],
+    plot_std=True,
+):
     stack_igrams, _ = select_subset_igrams(event_date, igram_dir, geo_dir)
     geos = utils.geolist_from_igrams(stack_igrams)
     imgs = []
+    leave_out_dates = []
     for idx, g in enumerate(geos):
         stack_igrams, src_fullpaths = select_subset_igrams(
             event_date,
             igram_dir,
             geo_dir,
-            extra_geo_ignores=[g],
+            extra_geo_ignores=extra_geo_ignores + [g],
         )
         od = f"outdir{idx}"
         utils.mkdir_p(od)
         vrts = subset_unws(src_fullpaths, od, bbox, verbose=False)
         img = calculate_stack(vrts, outname=None)
         imgs.append(img)
-    return imgs
+        leave_out_dates.append(g)
+    if plot_std:
+        plot_std_img(imgs)
+    return imgs, leave_out_dates
+
+
+def plot_std_img(imgs):
+    fig, ax = plt.subplots()
+    std_img = np.std(np.array(imgs), axis=0)
+    axim = ax.imshow(std_img, cmap="Reds")
+    fig.colorbar(axim)
+    ax.set_title("Std. dev. of estimates from jackknife")
+    return fig, ax, std_img
 
 
 def subset_all_folders(
@@ -406,21 +435,55 @@ def get_top_mag_dates(df, n=None):
     )
 
 
-def plot_stacks(imgs, vrt_names, block=False):
-    import matplotlib.pyplot as plt
+def plot_stacks(imgs, vrt_names, block=False, show_colorbar=True, hide_axes=True):
 
     nimgs = len(imgs)
-    ntiles = int(np.ceil(np.sqrt(nimgs)))
-    fig, axes = plt.subplots(ntiles, ntiles, squeeze=False)
+    nrow, ncol = _plot_rows_cols(len(imgs))
+    fig, axes = plt.subplots(nrow, ncol, squeeze=False)
     for (name, ax, img) in zip(vrt_names, axes.ravel(), imgs):
         axim = ax.imshow(img, vmax=1, vmin=-1, cmap="seismic_wide_y")
         ax.set_title(name)
+        if hide_axes:
+            ax.set_axis_off()
 
-    fig.colorbar(axim, ax=axes.ravel()[nimgs - 1])
+    if show_colorbar:
+        fig.colorbar(axim, ax=axes.ravel()[nimgs - 1])
+
     plt.show(block=block)
 
 
-# ### Jackknife stuff... really need to merge and clean up with coseismic_stack.py
+def plot_avg(directory=None, prefix="avg_", band=1, cmap="seismic_wide_y"):
+    filenames = sorted(glob.glob(os.path.join(directory, f"{prefix}*")))
+    imgs = np.stack([sario.load(f, band=band) for f in filenames], axis=0)
+    vmax = np.max(np.abs(imgs))
+    vmin = -vmax
+
+    nrow, ncol = _plot_rows_cols(len(imgs))
+    fig, axes = plt.subplots(nrow, ncol)
+    for (img, ax, fname) in zip(imgs, axes.ravel(), filenames):
+        axim = ax.imshow(img, vmax=vmax, vmin=vmin, cmap=cmap)
+        ax.set_title(os.path.split(fname)[1])
+    fig.colorbar(axim, ax=ax)
+
+    geolist = sario.parse_geolist_strings([os.path.split(s)[1] for s in filenames])
+    plot_variances(geolist, imgs)
+    return fig, axes, imgs
+
+
+def plot_variances(geolist, imgs, title="Variance of SAR images"):
+    fig, ax = plt.subplots()
+    variances = np.var(imgs, axis=(1, 2))
+    ax.plot(geolist, variances, "-x")
+    ax.set_title(title)
+    ax.set_ylabel("Variance of image")
+    return fig, ax, variances
+
+
+def _plot_rows_cols(num_imgs):
+    nrow = int(np.floor(np.sqrt(num_imgs)))
+    ncol = int(np.ceil(num_imgs / nrow))
+    return nrow, ncol
+
 
 #####################
 
@@ -543,9 +606,18 @@ def get_cli_args():
         help="filename of TexNet earthquake data (default=%(default)s)",
     )
     p.add_argument(
+        "--igram-type",
+        default="cross",
+        choices=["cross", "pre", "post"],
+        help=(
+            "Type of igram selection for analyzing across, before, "
+            "or after event (default=%(default)s)"
+        ),
+    )
+    p.add_argument(
         "--no-outlier-removal",
         action="store_false",
-        help="When set, skips using the average igram per date to remove noisy SAR dates (default=%(default)s)",
+        help="When set, skips averaging igram per date to discard bad dates (default=%(default)s)",
     )
     p.add_argument(
         "--no-ignore-geos",
@@ -577,7 +649,7 @@ if __name__ == "__main__":
         ignore_geos=args.no_ignore_geos,
         num_igrams=args.num_igrams,
         ref=(args.ref_row, args.ref_col),
-        igram_type="cross",
+        igram_type=args.igram_type,
         verbose=args.verbose,
         plot_block=args.no_plot,
     )

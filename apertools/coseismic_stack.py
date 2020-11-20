@@ -10,14 +10,12 @@ MENTONE_EQ_DATE = date(2020, 3, 26)
 
 # TODO: Make a cli version...
 # TODO: make pre/post independent like cross
-# TODO: add variance checking for square to remove
-# TODO: add jackknife for std estimates
 # TODO: integrate with the other subset_top_eq
 
 
 def stack_igrams(
     event_date=MENTONE_EQ_DATE,
-    num_igrams=None,
+    num_igrams=10,
     use_cm=True,
     rate=False,
     outname=None,
@@ -84,12 +82,40 @@ def select_cross_event(geolist, intlist, event_date, num_igrams=None):
     return stack_igrams
 
 
-def select_pre_event(geolist, intlist, event_date, min_date=None):
+def select_pre_event(geolist, intlist, event_date, num_igrams=None, min_date=None):
+    insert_idx = np.searchsorted(geolist, event_date)
+    num_igrams = num_igrams or (insert_idx // 2)
+    num_geos = 2 * num_igrams
+
+    start_idx = np.clip(insert_idx - num_geos, 0, None)
+    end_idx = insert_idx
+    geo_subset = geolist[start_idx:end_idx]
+    # print(f"{start_idx = }, {insert_idx = }, {end_idx = }")
+    stack_igrams = list(zip(geo_subset[:num_igrams], geo_subset[num_igrams:]))
+    return stack_igrams
+
+
+def select_post_event(geolist, intlist, event_date, num_igrams=None, max_date=None):
+    insert_idx = np.searchsorted(geolist, event_date)
+    num_igrams = num_igrams or (len(geolist) - insert_idx) // 2
+    num_geos = 2 * num_igrams
+
+    start_idx = insert_idx
+    end_idx = np.clip(insert_idx + num_geos, None, len(geolist))
+    geo_subset = geolist[start_idx:end_idx]
+    # print(f"{start_idx = }, {insert_idx = }, {end_idx = }")
+    stack_igrams = list(zip(geo_subset[:num_igrams], geo_subset[num_igrams:]))
+    return stack_igrams
+
+
+def select_pre_event_redundant(
+    geolist, intlist, event_date, num_igrams=None, min_date=None
+):
     ifgs = [ifg for ifg in intlist if (ifg[0] < event_date and ifg[1] < event_date)]
     return _filter_min_max_date(ifgs, min_date, None)
 
 
-def select_post_event(geolist, intlist, event_date, max_date=None):
+def select_post_event_redundant(geolist, intlist, event_date, max_date=None):
     ifgs = [ifg for ifg in intlist if (ifg[0] > event_date and ifg[1] > event_date)]
     return _filter_min_max_date(ifgs, None, max_date)
 
