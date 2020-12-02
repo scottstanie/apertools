@@ -452,8 +452,16 @@ def plot_stacks(imgs, vrt_names, block=False, show_colorbar=True, hide_axes=True
     plt.show(block=block)
 
 
-def plot_avg(directory=None, prefix="avg_", band=1, cmap="seismic_wide_y"):
-    filenames = sorted(glob.glob(os.path.join(directory, f"{prefix}*")))
+def plot_avg(
+    directory=None,
+    prefix="avg_",
+    band=1,
+    cmap="seismic_wide_y",
+    hide_axes=True,
+    num_igrams=-1,
+):
+    filenames = sorted(glob.glob(os.path.join(directory, f"{prefix}*")))[:num_igrams]
+    print(f"Found {len(filenames)} average images in {directory}")
     imgs = np.stack([sario.load(f, band=band) for f in filenames], axis=0)
     vmax = np.max(np.abs(imgs))
     vmin = -vmax
@@ -462,8 +470,13 @@ def plot_avg(directory=None, prefix="avg_", band=1, cmap="seismic_wide_y"):
     fig, axes = plt.subplots(nrow, ncol)
     for (img, ax, fname) in zip(imgs, axes.ravel(), filenames):
         axim = ax.imshow(img, vmax=vmax, vmin=vmin, cmap=cmap)
-        ax.set_title(os.path.split(fname)[1])
+        title = os.path.split(fname)[1]
+        title = os.path.splitext(title)[0].replace(prefix, "")
+        ax.set_title(title)
+        if hide_axes:
+            ax.set_axis_off()
     fig.colorbar(axim, ax=ax)
+    plt.tight_layout()
 
     geolist = sario.parse_geolist_strings([os.path.split(s)[1] for s in filenames])
     plot_variances(geolist, imgs)
