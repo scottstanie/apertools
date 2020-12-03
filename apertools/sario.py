@@ -810,7 +810,9 @@ def load_intlist_from_h5(h5file, dset=None, parse=True):
 
 
 def parse_geolist_strings(geolist_str):
-    return [_parse(g) for g in geolist_str]
+    # The re.search will find YYYYMMDD anywhere in string
+    matches = [re.search(r"\d{4}\d{2}\d{2}", f) for f in geolist_str]
+    return [_parse(m.group()) for m in matches]
 
 
 def parse_intlist_strings(date_pairs, ext=".int"):
