@@ -245,7 +245,7 @@ def _clean_gps_df(df, start_date=None, end_date=None):
 
 
 def stations_within_image(
-    image_ll=None, filename=None, mask_invalid=True, gps_filename=None
+    filename=None, mask_invalid=True, gps_filename=None, bad_vals=[0], band=1
 ):
     """Given an image, find gps stations contained in area
 
@@ -253,7 +253,6 @@ def stations_within_image(
     by image_ll), or have the file in same directory as `filename`
 
     Args:
-        image_ll (LatlonImage): LatlonImage of area with data
         filename (str): filename to load into a LatlonImage
         mask_invalid (bool): Default true. if true, don't return stations
             where the image value is NaN or exactly 0
@@ -261,23 +260,37 @@ def stations_within_image(
     Returns:
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
     """
-    if image_ll is None:
-        image_ll = apertools.latlon.LatlonImage(filename=filename)
+    import rasterio as rio
+    from shapely import geometry
+
+    # with rio.open(filename) as ds:
+    ds = rio.open(filename)
+    image_bbox = geometry.box(*ds.bounds)
+    image = ds.read(band)
+    # if image_ll is None:
+    # image_ll = apertools.latlon.LatlonImage(filename=filename)
 
     df = read_station_llas(filename=gps_filename)
     station_lon_lat_arr = df[["lon", "lat"]].values
-    contains_bools = image_ll.contains(station_lon_lat_arr)
-    candidates = df[contains_bools][["name", "lon", "lat"]].values
+    # contains_bools = image_ll.contains(station_lon_lat_arr)
+    contains_bools = np.array(
+        [image_bbox.contains(geometry.Point(p)) for p in station_lon_lat_arr]
+    )
+    candidates = df.loc[contains_bools, ["name", "lon", "lat"]].values
     good_stations = []
     if mask_invalid:
         for name, lon, lat in candidates:
-            val = image_ll[..., lat, lon]
-            if np.isnan(val):  # or val == 0: TODO: with window 1 reference, it's 0
+            # val = image[..., lat, lon]
+            row, col = ds.index(lon, lat)
+            val = image[..., row, col]
+            # TODO: with window 1 reference, it's 0
+            if np.isnan(val) or any(val == v for v in bad_vals):
                 continue
             else:
                 good_stations.append([name, lon, lat])
     else:
         good_stations = candidates
+    ds.close()
     return good_stations
 
 
