@@ -1,17 +1,22 @@
 from __future__ import division, print_function
-import copy
-from collections import Iterable
 from numpy import sin, cos, sqrt, arctan2, radians
 from xml.etree import ElementTree
 import os
 import numpy as np
+
+# TODO: lots of stuff here can be done with pyproj.Geod
+# https://pyproj4.github.io/pyproj/stable/api/geod.html
+from pyproj import Geod
+
 import apertools.sario
 import apertools.utils
 from apertools.log import get_log
 
+wgs84 = Geod(ellps="WGS84")
+
 logger = get_log()
 
-
+# TODO: get rid of references to this
 def load_deformation_img(
     igram_path=".",
     n=1,
@@ -95,39 +100,39 @@ def latlon_to_rowcol(lat, lon, rsc_data):
     return int(round(row)), int(round(col))
 
 
-def latlon_to_dist(lat_lon_start, lat_lon_end, R=6378):
-    """Find the distance between two lat/lon points on Earth
+def latlon_to_dist(lat_lon_start, lat_lon_end):
+    """Find the distance between two lat/lon points on Earth [in meters]
 
-    Uses the haversine formula: https://en.wikipedia.org/wiki/Haversine_formula
-    so it does not account for the ellopsoidal Earth shape. Will be with about
-    0.5-1% of the correct value.
-
-    Notes: lats and lons are in degrees, and the values used for R Earth
-    (6373 km) are optimized for locations around 39 degrees from the equator
-
-    Reference: https://andrew.hedges.name/experiments/haversine/
+    lats and lons are in degrees, WGS84 ellipsoid is used
+    wrapper around pyproj.Geod for older compatibility
 
     Args:
         lat_lon_start (tuple[int, int]): (lat, lon) in degrees of start
         lat_lon_end (tuple[int, int]): (lat, lon) in degrees of end
-        R (float): Radius of earth
 
     Returns:
-        float: distance between two points in km
+        float: distance between two points in meters
 
     Examples:
-        >>> round(latlon_to_dist((38.8, -77.0), (38.9, -77.1)), 1)
+        >>> round(latlon_to_dist((38.8, -77.0), (38.9, -77.1)))
         14.1
     """
     lat1, lon1 = lat_lon_start
     lat2, lon2 = lat_lon_end
-    dlat = radians(lat2 - lat1)
-    dlon = radians(lon2 - lon1)
-    lat1 = radians(lat1)
-    lat2 = radians(lat2)
-    a = (sin(dlat / 2) ** 2) + (cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2)
-    c = 2 * arctan2(sqrt(a), sqrt(1 - a))
-    return R * c
+    print(lat_lon_start, lat_lon_end)
+    print((lon1, lon2), (lat1, lat2))
+    return wgs84.line_length((lon1, lon2), (lat1, lat2))
+
+
+def pixel_spacing(y_step=None, x_step=None, y_first=None, x_first=None, **kwargs):
+    """Return the (x_spacing, y_spacing) pixel spacing in meters, given degrees"""
+    start_latlon = (y_first, x_first)
+    end_x = (y_first, x_first + x_step)
+    x_spacing = latlon_to_dist(start_latlon, end_x)
+
+    end_y = (y_first + y_step, x_first)
+    y_spacing = latlon_to_dist(start_latlon, end_y)
+    return x_spacing, y_spacing
 
 
 def km_to_deg(km, R=6378):
@@ -182,7 +187,7 @@ def grid(
     file_length=None,
     sparse=False,
     fname=None,
-    **kwargs
+    **kwargs,
 ):
     """Takes sizes and spacing info, creates a grid of values
 
@@ -315,7 +320,7 @@ def grid_extent(
     x_first=None,
     file_length=None,
     width=None,
-    **kwargs
+    **kwargs,
 ):
     """Takes sizes and spacing from .rsc info, finds boundaries
 
