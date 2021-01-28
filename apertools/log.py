@@ -19,6 +19,7 @@ Usage:
 """
 import logging
 import time
+from functools import wraps
 
 try:
     from colorlog import ColoredFormatter
@@ -113,6 +114,7 @@ def log_runtime(f):
 
     """
 
+    @wraps
     def wrapper(*args, **kwargs):
         t1 = time.time()
 
