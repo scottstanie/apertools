@@ -874,7 +874,10 @@ def find_geos(directory=".", ext=".geo", parse=True, filename=None):
     if not geolist:
         return []
         # raise ValueError("No .geo files found in %s" % directory)
+    return parse_geolist(geolist, ext=ext)
 
+
+def parse_geolist(geolist, ext=".geo"):
     pat = r"\w*S1[AB]_(?P<date>\d{8})" + ext
     if re.match(pat, geolist[0]):  # S1A_YYYYmmdd.geo
         # Note: will match even if file is S1A_YYYYmmdd.geo.vrt
@@ -948,25 +951,28 @@ def save_geolist_to_h5(
     out_file=None,
     dset_name=None,
     geo_date_list=None,
+    igram_ext=".int",
     overwrite=False,
 ):
+    if geo_date_list is None:
+        geo_date_list, _ = load_geolist_intlist(igram_path, igram_ext=igram_ext)
+
     if dset_name is not None:
         if not check_dset(out_file, dset_name, overwrite, attr_name=GEOLIST_DSET):
-            return
+            return geo_date_list
     else:
         if not check_dset(out_file, GEOLIST_DSET, overwrite):
-            return
+            return geo_date_list
 
-    if geo_date_list is None:
-        geo_date_list, _ = load_geolist_intlist(igram_path, parse=True)
-
+    geo_str_list = geolist_to_str(geo_date_list)
     with h5py.File(out_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
         # f[GEOLIST_DSET] = json.dumps(geolist_to_str(geo_date_list))
         if dset_name is not None:
-            f[dset_name].attrs[GEOLIST_DSET] = geolist_to_str(geo_date_list)
+            f[dset_name].attrs[GEOLIST_DSET] = geo_str_list
         else:
-            f[GEOLIST_DSET] = geolist_to_str(geo_date_list)
+            f[GEOLIST_DSET] = geo_str_list
+    return geo_date_list
 
 
 def save_intlist_to_h5(
@@ -974,24 +980,32 @@ def save_intlist_to_h5(
     dset_name=None,
     out_file=None,
     overwrite=False,
+    igram_ext=".int",
     int_date_list=None,
 ):
-    if not check_dset(out_file, INTLIST_DSET, overwrite):
-        return
-
     if int_date_list is None:
-        _, int_date_list = load_geolist_intlist(igram_path)
+        _, int_date_list = load_geolist_intlist(igram_path, igram_ext=igram_ext)
 
+    if not check_dset(out_file, INTLIST_DSET, overwrite):
+        return int_date_list
+
+    igram_str_list = intlist_to_str(int_date_list)
     logger.info("Saving igram dates to %s / %s" % (out_file, INTLIST_DSET))
     with h5py.File(out_file, "a") as f:
         if dset_name is not None:
-            f[dset_name].attrs[INTLIST_DSET] = intlist_to_str(int_date_list)
+            f[dset_name].attrs[INTLIST_DSET] = igram_str_list
         else:
-            f[INTLIST_DSET] = intlist_to_str(int_date_list)
+            f[INTLIST_DSET] = igram_str_list
+    return int_date_list
 
 
 def geolist_to_str(geo_date_list):
     return np.array([d.strftime(DATE_FMT) for d in geo_date_list]).astype("S")
+
+
+# def geolist_to_filenames(geo_date_list, ext=".geo"):
+#     """Convert SAR date list to list of filename strings"""
+#     return ["{}{ext}".format(a.strftime(DATE_FMT), ext=ext) for a in geo_date_list]
 
 
 def intlist_to_str(int_date_list):
@@ -1009,12 +1023,14 @@ def intlist_to_filenames(int_date_list, ext=".int"):
     ]
 
 
-def load_geolist_intlist(igram_dir, geo_dir=None, geolist_ignore_file=None, parse=True):
+def load_geolist_intlist(
+    igram_dir, geo_dir=None, geolist_ignore_file=None, igram_ext=".int", parse=True
+):
     """Load the geo_date_list and int_date_list from a igram_dir with igrams
 
     if geo_dir is None, assumes that the .geo files are one diretory up from the igrams
     """
-    int_date_list = find_igrams(igram_dir, parse=parse)
+    int_date_list = find_igrams(directory=igram_dir, parse=parse, ext=igram_ext)
     if geo_dir is None:
         geo_dir = apertools.utils.get_parent_dir(igram_dir)
     geo_date_list = find_geos(directory=geo_dir, parse=parse)

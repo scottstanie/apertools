@@ -28,20 +28,36 @@ def copy_vrt(in_fname, out_fname=None, bbox=None, verbose=True):
 
 
 def read_subset(bbox, in_fname, driver=None, bands=None):
-    # This is a bug right now due to rasterio rounding
+    # This has a bug right now due to rasterio rounding
     # https://github.com/mapbox/rasterio/issues/2004
     # bbox: left, bot, right, top
     with rio.open(in_fname, driver=driver) as src:
-        w = src.window(*bbox)
+        w = src.window(*bbox) if bbox else None
         # TODO: do i want to make this 2d if one band requested?
         return src.read(bands, window=w)
 
 
 def copy_subset(
-    bbox, in_fname, out_fname, driver=None, bands=None, nodata=0, verbose=True
+    in_fname,
+    out_fname,
+    bbox=None,
+    bounding_file=None,
+    driver=None,
+    bands=None,
+    nodata=0,
+    verbose=True,
 ):
+    """Copy a box from `in_fname` to `out_fname`
+
+    Can with specify (left, bot, right, top) with `bbox`, or use the bounds
+    of an existing other file in `bounding_file`
+    """
+    if bbox is None:
+        if bounding_file is not None:
+            bbox = get_bounds(bounding_file)
     if verbose:
         logger.info(f"Subsetting {bbox} from {in_fname} to {out_fname}")
+
     img = read_subset(bbox, in_fname, driver)
     crs = get_crs(in_fname, driver=driver)
     transform = get_transform(in_fname, driver=driver, bbox=bbox)
@@ -104,6 +120,12 @@ def get_transform(in_fname, driver=None, bbox=None):
     with rio.open(in_fname, driver=driver) as src:
         transform = src.window_transform(src.window(*bbox)) if bbox else src.transform
         return transform
+
+
+def get_bounds(fname):
+    """Find the (left, bot, right, top) bounds 1 file `fname`"""
+    with rio.open(fname) as src:
+        return src.bounds
 
 
 def get_intersect_transform(fname1, fname2):

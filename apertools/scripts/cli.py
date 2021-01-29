@@ -753,9 +753,9 @@ def subset(bbox, out_dir, in_dir, start_date, end_date):
 
     # dems:
     apertools.subset.copy_subset(
-        bbox,
         join(in_dir, "elevation.dem"),
         join(out_dir, "elevation.dem"),
+        bbox=bbox,
         driver="ROI_PAC",
     )
     # Fortran cant read anything but 15-space .rsc file :|
