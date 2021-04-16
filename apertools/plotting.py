@@ -46,9 +46,10 @@ def create_mph_image(ifg, expval=0.3, max_pct=99.95, scalemag=True):
     if scalemag:
         mag = scale_mag(ifg, expval=expval, max_pct=max_pct)
         mag_scaling = (mag / np.max(mag))[:, :, np.newaxis]  # Match rgb shape
-
     else:
+        # Otherwise, just the phase Image
         mag_scaling = 1
+
     img = Image.fromarray((mag_scaling * rgb).astype("uint8"))
     return img
 
