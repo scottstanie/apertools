@@ -119,8 +119,6 @@ def latlon_to_dist(lat_lon_start, lat_lon_end):
     """
     lat1, lon1 = lat_lon_start
     lat2, lon2 = lat_lon_end
-    print(lat_lon_start, lat_lon_end)
-    print((lon1, lon2), (lat1, lat2))
     return wgs84.line_length((lon1, lon2), (lat1, lat2))
 
 

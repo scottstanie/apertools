@@ -132,6 +132,9 @@ def scale_dset(filename, dset, scale):
 
 
 def geolist_from_igrams(igram_list):
+    """Takes a list of [(reference, secondary),...] igram date pairs
+    and returns the list of unique dates of SAR images used to form them
+    """
     return sorted(list(set(itertools.chain(*igram_list))))
 
 

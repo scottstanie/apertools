@@ -523,7 +523,7 @@ def load_stacked_img(
     dtype=FLOAT_32_LE,
     **kwargs,
 ):
-    """Helper function to load .unw and .cor files
+    """Helper function to load .unw and .cor files from snaphu output
 
     Format is two stacked matrices:
         [[first], [second]] where the first "cols" number of floats

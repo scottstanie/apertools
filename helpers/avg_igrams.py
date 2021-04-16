@@ -59,7 +59,6 @@ def create_averages(
     # gdal_translate -outsize 2% 2% S1B_20190325.geo.vrt looked_S1B_20190325.geo.tif
     ifg_date_list = sario.find_igrams(directory=search_path, ext=ext)
     unw_file_list = sario.find_igrams(directory=search_path, ext=ext, parse=False)
-    # unw_file_list = [f.replace(".int", ".unwflat") for f in sario.find_igrams(".", parse=False)]
 
     geo_date_list = sorted(set(itertools.chain.from_iterable(ifg_date_list)))
     geo_date_list, ifg_date_list = sario.ignore_geo_dates(

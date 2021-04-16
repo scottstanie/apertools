@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from apertools.log import get_log
 from apertools import utils, latlon
-from .colors import make_shifted_cmap
+from .colors import make_shifted_cmap, create_dismph_colors
 
 try:
     basestring = str
@@ -15,6 +15,38 @@ except NameError:
     pass
 
 logger = get_log()
+
+
+def scale_mag(img, expval=0.3, max_pct=99.95):
+    """Scale the magnitude of complex radar iamge for better display"""
+    out = np.abs(img) ** expval
+    max_val = np.percentile(out, max_pct)
+    return np.clip(out, None, max_val)
+
+
+def phase_to_2pi(img):
+    """Convert [-pi, pi] phase to [0, 2pi] by adding 2pi to negative vals"""
+    phase = np.angle(img) if np.iscomplexobj(img) else img
+    assert np.min(phase) >= -3.142 and np.max(phase) <= 3.142
+    return np.where(phase > 0, phase, phase + 2 * np.pi)
+
+
+def create_mph_image(ifg, expval=0.3, max_pct=99.95):
+    """Convert an ifg array into a PIL.Image with same colors as `dismph`"""
+    from PIL import Image
+
+    phase = phase_to_2pi(ifg)
+    # Convert the phase values from [0, 2pi] to [0, 359] lookup values
+    phase_idxs = (phase / 2 / np.pi * 360 - 0.5).astype(int)
+    red, green, blue = create_dismph_colors()
+    # Create [m, n, 3] array by looking up each phase color
+    rgb = np.stack((red[phase_idxs], green[phase_idxs], blue[phase_idxs]), axis=-1)
+
+    # Now darken RGB values according to image magnitude
+    mag = scale_mag(ifg, expval=expval, max_pct=max_pct)
+    mag_scaling = mag / np.max(mag)
+    img = Image.fromarray((mag_scaling[:, :, np.newaxis] * rgb).astype("uint8"))
+    return img
 
 
 def get_fig_ax(fig, ax):
@@ -431,7 +463,9 @@ def plot_img_diff(
         axim = axes[ii].imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
     fig.colorbar(axim, ax=axes[-2])
     # Now different image at end
-    axim = axes[-1].imshow(arrays[0] - arrays[1], cmap=cmap, vmax=vdiff, vmin=-vdiff)
+    diff_arr = arrays[0] - arrays[1]
+    vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=twoway)
+    axim = axes[-1].imshow(diff_arr, cmap=cmap, vmax=vmin, vmin=vmax)
     axes[-1].set_title("left - middle")
     fig.colorbar(axim, ax=axes[-1])
     # [f.close() for f in files]
@@ -480,3 +514,61 @@ def cmap_to_dict(cmap_name, vmin=None, vmax=None):
     color_tuple_dict = {idx: cmap(norm(v), bytes=True) for idx, v in enumerate(vals)}
     # {1: (219, 237, 200, 255),... }
     return color_tuple_dict
+
+
+def map_background(
+    bbox,
+    pad_pct=0.3,
+    zoom_level=9,
+    fig=None,
+    cmap="gray",
+    coastlines=False,
+):
+    """Plot the raster `img` on top of background tiles
+    Inputs:
+        img (ndarray): raster iamge
+        bbox (tuple[float]): (left, bottom, right, top)
+        fig (matplotlib.figure): optional, existing figure to use
+    """
+    import cartopy.crs as ccrs
+    from cartopy.io import img_tiles
+
+    # tiler = img_tiles.Stamen("terrain-background")
+    # tiler = img_tiles.GoogleTiles(style="satellite")
+    mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
+    tiler = img_tiles.MapboxTiles(mykey, "satellite")
+    crs = tiler.crs
+
+    if fig is None:
+        fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, projection=crs)
+
+    # matplotlib wants extent different than gdal/rasterio convention
+    left, bot, right, top = bbox
+    if pad_pct:
+        padx = pad_pct * (right - left) / 2
+        pady = pad_pct * (top - bot) / 2
+        ax.set_extent(
+            [left - padx, right + padx, bot - pady, top + pady],
+            crs=ccrs.PlateCarree(),
+        )
+
+    ax.add_image(tiler, zoom_level)
+
+    if coastlines:
+        ax.coastlines("10m")
+    return fig, ax
+
+
+def map_img(img, bbox, ax=None, crs=None, cmap="gray"):
+    import cartopy.crs as ccrs
+
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1, projection=crs)
+    if crs is None:
+        crs = ccrs.PlateCarree()
+
+    left, bot, right, top = bbox
+    extent = [left, right, bot, top]
+    ax.imshow(img, transform=crs, extent=extent, origin="upper", cmap=cmap)

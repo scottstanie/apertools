@@ -316,3 +316,24 @@ def cmap_to_qgis(cmap_rgba_arr):
 #     </colorramp>
 #   </colorramps>
 # </qgis_style>
+
+
+def create_dismph_colors():
+    red, green, blue = [], [], []
+    for i in range(120):
+        red.append(i * 2.13 * 155.0 / 255.0 + 100)
+        green.append((119.0 - i) * 2.13 * 155.0 / 255.0 + 100.0)
+        blue.append(255)
+    for i in range(120):
+        red.append(255)
+        green.append(i * 2.13 * 155.0 / 255.0 + 100.0)
+        blue.append((119 - i) * 2.13 * 155.0 / 255.0 + 100.0)
+    for i in range(120):
+        red.append(i * 2.13 * 155.0 / 255.0 + 100.0)
+        green.append(255)
+        blue.append((119 - i) * 2.13 * 155.0 / 255.0 + 100.0)
+    return np.vstack((red, green, blue))
+    # cdict = {"red": red, "green": green, "blue": blue}
+    # return cdict
+    # newcmap = LinearSegmentedColormap("shiftedcmap", cdict, N=len(red))
+    # return newcmap

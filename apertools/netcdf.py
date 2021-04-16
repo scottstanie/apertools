@@ -158,10 +158,6 @@ def create_empty_nc_stack(
 
     # Get data and references from HDF% file
 
-    lat_arr = lat_arr[row_top:row_bot]
-    lon_arr = lon_arr[col_left:col_right]
-    rows, cols = len(lat_arr), len(lon_arr)
-
     # TODO: unlimited....
     # TODO: store filename metadata?
     if stack_dim_name == "date":
