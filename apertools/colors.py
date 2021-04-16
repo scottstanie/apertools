@@ -248,13 +248,6 @@ def create_dismph_colors():
         blue.append(i * 2.13 * 155.0 / 255.0 + 100.0)
     return np.vstack((red, green, blue))
 
-    # TODO: figure out what is needed to make the dismph work for normal matplotlib colormaps
-    # create a dict that matplotlib can read
-    # cdict = {"red": red, "green": green, "blue": blue}
-    # return cdict
-    # newcmap = LinearSegmentedColormap("shiftedcmap", cdict, N=len(red))
-    # return newcmap
-
 
 DISMPH = LinearSegmentedColormap.from_list("dismph", create_dismph_colors().T / 256)
 plt.register_cmap(cmap=DISMPH)
