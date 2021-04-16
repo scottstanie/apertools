@@ -6,7 +6,7 @@ from numpy import sin, cos
 import h5py
 
 # from scipy import interpolate
-from . import subset
+from apertools import subset
 from apertools.log import get_log
 
 logger = get_log()
@@ -42,8 +42,8 @@ def find_enu_coeffs(lon, lat, los_map_file=None, verbose=False):
 
 
 def solve_east_up(
-    asc_enu_stack_fname,
-    desc_enu_stack_fname,
+    asc_enu_fname,
+    desc_enu_fname,
     asc_img_fname,
     desc_img_fname,
     asc_band=1,
@@ -54,7 +54,7 @@ def solve_east_up(
 ):
 
     asc_enu_stack, desc_enu_stack = subset.read_intersections(
-        asc_enu_stack_fname, desc_enu_stack_fname
+        asc_enu_fname, desc_enu_fname
     )
     asc_img, desc_img = subset.read_intersections(
         asc_img_fname, desc_img_fname, asc_band, desc_band
@@ -94,15 +94,6 @@ def solve_east_up(
         )
 
     return east, up
-
-
-def save_east_up_mat(east_up_fname):
-    import rasterio as rio
-
-    with rio.open(east_up_fname) as src:
-        east = src.read(1)
-        up = src.read(2)
-        lons, lats = latlon.grid(fname="east_up_202006.tif", sparse=True)
 
 
 def read_los_map_file(los_map_file):

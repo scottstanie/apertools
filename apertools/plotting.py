@@ -441,33 +441,39 @@ def plot_img_diff(
     dset="velos/1",
     fnames=[],
     vm=20,
-    vdiff=4,
     vmax=None,
     vmin=None,
     twoway=True,
+    titles=[],
+    show_diff=True,
+    vdiff=4,
     cmap="seismic_wide_y",
     show=True,
     **kwargs,
 ):
-    """Compare two images and their difference"""
+    """Plot two images for comparison, (and their difference if `show_diff`)"""
     if arrays is None:
         from apertools import sario
 
         arrays = [sario.load(f, dset=dset, **kwargs) for f in fnames]
 
     n = len(arrays)
+    ncols = n + 1 if show_diff else n
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
-    print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(1, n + 1, sharex=True, sharey=True)
+    # print(f"{vmin} {vmax}")
+    fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True)
     for ii in range(n):
         axim = axes[ii].imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
-    fig.colorbar(axim, ax=axes[-2])
-    # Now different image at end
-    diff_arr = arrays[0] - arrays[1]
-    vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=twoway)
-    axim = axes[-1].imshow(diff_arr, cmap=cmap, vmax=vmin, vmin=vmax)
-    axes[-1].set_title("left - middle")
-    fig.colorbar(axim, ax=axes[-1])
+        if titles:
+            axes[ii].set_title(titles[ii])
+    fig.colorbar(axim, ax=axes[n - 1])
+    if show_diff:
+        # Now different image at end
+        diff_arr = arrays[0] - arrays[1]
+        vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=twoway)
+        axim = axes[-1].imshow(diff_arr, cmap=cmap, vmax=vmin, vmin=vmax)
+        axes[-1].set_title("left - middle")
+        fig.colorbar(axim, ax=axes[-1])
     # [f.close() for f in files]
     if show:
         plt.show(block=False)
