@@ -31,7 +31,7 @@ def phase_to_2pi(img):
     return np.where(phase > 0, phase, phase + 2 * np.pi)
 
 
-def create_mph_image(ifg, expval=0.3, max_pct=99.95):
+def create_mph_image(ifg, expval=0.3, max_pct=99.95, scalemag=True):
     """Convert an ifg array into a PIL.Image with same colors as `dismph`"""
     from PIL import Image
 
@@ -43,10 +43,23 @@ def create_mph_image(ifg, expval=0.3, max_pct=99.95):
     rgb = np.stack((red[phase_idxs], green[phase_idxs], blue[phase_idxs]), axis=-1)
 
     # Now darken RGB values according to image magnitude
-    mag = scale_mag(ifg, expval=expval, max_pct=max_pct)
-    mag_scaling = mag / np.max(mag)
-    img = Image.fromarray((mag_scaling[:, :, np.newaxis] * rgb).astype("uint8"))
+    if scalemag:
+        mag = scale_mag(ifg, expval=expval, max_pct=max_pct)
+        mag_scaling = (mag / np.max(mag))[:, :, np.newaxis]  # Match rgb shape
+
+    else:
+        mag_scaling = 1
+    img = Image.fromarray((mag_scaling * rgb).astype("uint8"))
     return img
+
+
+def plot_ifg(ifg, ax=None, cmap="dismph"):
+    if ax is None:
+        fig, ax = plt.subplots()
+    phase = phase_to_2pi(ifg)
+    # Note: other interpolations (besides nearest/None) make dismph colorscheme look weird
+    ax.imshow(phase, cmap="dismph", interpolation="nearest")
+    return ax
 
 
 def get_fig_ax(fig, ax):

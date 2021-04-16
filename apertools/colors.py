@@ -4,90 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def make_dismph_colormap():
-    """Make a custom colormap like the one used in dismph.
-
-    The list was created from dismphN.mat in geodmod which is a 64 segmented colormap
-    using the following:
-      from scipy.io import loadmat
-      cmap = loadmat('dismphN.mat',struct_as_record=True)['dismphN']
-      from matplotlib.colors import rgb2hex
-      list=[]
-      for i in cmap: list.append(rgb2hex(i))
-
-    Source: https://imaging.unavco.org/data/geoslc/geoslc2intf.py
-    """
-    colors = [
-        "#f579cd",
-        "#f67fc6",
-        "#f686bf",
-        "#f68cb9",
-        "#f692b3",
-        "#f698ad",
-        "#f69ea7",
-        "#f6a5a1",
-        "#f6ab9a",
-        "#f6b194",
-        "#f6b78e",
-        "#f6bd88",
-        "#f6c482",
-        "#f6ca7b",
-        "#f6d075",
-        "#f6d66f",
-        "#f6dc69",
-        "#f6e363",
-        "#efe765",
-        "#e5eb6b",
-        "#dbf071",
-        "#d0f477",
-        "#c8f67d",
-        "#c2f684",
-        "#bbf68a",
-        "#b5f690",
-        "#aff696",
-        "#a9f69c",
-        "#a3f6a3",
-        "#9cf6a9",
-        "#96f6af",
-        "#90f6b5",
-        "#8af6bb",
-        "#84f6c2",
-        "#7df6c8",
-        "#77f6ce",
-        "#71f6d4",
-        "#6bf6da",
-        "#65f6e0",
-        "#5ef6e7",
-        "#58f0ed",
-        "#52e8f3",
-        "#4cdbf9",
-        "#7bccf6",
-        "#82c4f6",
-        "#88bdf6",
-        "#8eb7f6",
-        "#94b1f6",
-        "#9aabf6",
-        "#a1a5f6",
-        "#a79ef6",
-        "#ad98f6",
-        "#b392f6",
-        "#b98cf6",
-        "#bf86f6",
-        "#c67ff6",
-        "#cc79f6",
-        "#d273f6",
-        "#d86df6",
-        "#de67f6",
-        "#e561f6",
-        "#e967ec",
-        "#ed6de2",
-        "#f173d7",
-    ]
-    dismphCM = LinearSegmentedColormap.from_list("dismph", colors)
-    dismphCM.set_bad("w", 0.0)
-    return dismphCM
-
-
 def discrete_seismic_colors(n=5):
     """From http://colorbrewer2.org/#type=diverging&scheme=RdBu&n=7"""
     if n == 5:
@@ -181,8 +97,6 @@ SEISMIC_WIDE_Y = LinearSegmentedColormap.from_list(
 )
 plt.register_cmap("seismic_wide_y", SEISMIC_WIDE_Y)
 
-DISMPH = make_dismph_colormap()
-plt.register_cmap(cmap=DISMPH)
 DISCRETE_SEISMIC5 = LinearSegmentedColormap.from_list(
     "discrete_seismic5", discrete_seismic_colors(5), N=5
 )
@@ -329,11 +243,31 @@ def create_dismph_colors():
         green.append(i * 2.13 * 155.0 / 255.0 + 100.0)
         blue.append((119 - i) * 2.13 * 155.0 / 255.0 + 100.0)
     for i in range(120):
-        red.append(i * 2.13 * 155.0 / 255.0 + 100.0)
+        red.append((119 - i) * 2.13 * 155.0 / 255.0 + 100.0)
         green.append(255)
-        blue.append((119 - i) * 2.13 * 155.0 / 255.0 + 100.0)
+        blue.append(i * 2.13 * 155.0 / 255.0 + 100.0)
     return np.vstack((red, green, blue))
+
+    # TODO: figure out what is needed to make the dismph work for normal matplotlib colormaps
+    # create a dict that matplotlib can read
     # cdict = {"red": red, "green": green, "blue": blue}
     # return cdict
     # newcmap = LinearSegmentedColormap("shiftedcmap", cdict, N=len(red))
     # return newcmap
+
+
+DISMPH = LinearSegmentedColormap.from_list("dismph", create_dismph_colors().T / 256)
+plt.register_cmap(cmap=DISMPH)
+
+
+def test_rgbmat(plot=True):
+    """Create a square showing the dismph color gradient"""
+    rgbmat = create_dismph_colors()
+    N = rgbmat.shape[1]
+    gradient = np.ones((1, N)) * (np.ones(N).reshape((N, 1)) / N)
+    square_grad = gradient[:, :, np.newaxis] * (rgbmat.T)[:, np.newaxis, :]
+    if plot:
+        plt.figure()
+        plt.imshow(square_grad)
+        plt.colorbar()
+    return square_grad
