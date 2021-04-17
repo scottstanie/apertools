@@ -130,28 +130,23 @@ def view_stack(
 @click.argument("filename")
 @click.option("--downsample", default=1, help="Amount to downsample image")
 @click.option("--cmap", default="dismph", help="Colormap for image display.")
+@click.option("--band", default=1, show_default=True, help="Band to load (for GDAL)")
 @click.option("--title", help="Title for image plot")
 @click.option(
     "--colorbar/--no-colorbar", default=True, help="Display colorbar on figure"
 )
-def plot(filename, downsample, cmap, title, colorbar):
+def plot(filename, downsample, band, cmap, title, colorbar):
     """Quick plot of a single InSAR file.
 
     filename: Name of InSAR file to plot (possible extensions: .int, .cor, .unw, .geo,...)"
 
     Can downsample for easier viewing.
-    Requires a .dem.rsc file to also be in same directory
-
-    If not using the current directory, use the --path option:
-
-        aper --path /path/to/igrams <filename>
-
     """
     # from .plot_insar import plot_image
     import matplotlib.pyplot as plt
     from apertools.plotting import plot_ifg
 
-    img = apertools.sario.load(filename, downsample=downsample)
+    img = apertools.sario.load(filename, downsample=downsample, band=band)
     plot_ifg(img, title=title, colorbar=colorbar)
     plt.show(block=True)
 
