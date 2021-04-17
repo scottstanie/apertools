@@ -132,14 +132,9 @@ def view_stack(
 @click.option("--cmap", default="dismph", help="Colormap for image display.")
 @click.option("--title", help="Title for image plot")
 @click.option(
-    "--alpha",
-    default=0.6,
-    help="Transparency for background magnitude (if plotting insar)",
-)
-@click.option(
     "--colorbar/--no-colorbar", default=True, help="Display colorbar on figure"
 )
-def plot(filename, downsample, cmap, title, alpha, colorbar):
+def plot(filename, downsample, cmap, title, colorbar):
     """Quick plot of a single InSAR file.
 
     filename: Name of InSAR file to plot (possible extensions: .int, .cor, .unw, .geo,...)"
@@ -152,10 +147,13 @@ def plot(filename, downsample, cmap, title, alpha, colorbar):
         aper --path /path/to/igrams <filename>
 
     """
-    from .plot_insar import plot_image
+    # from .plot_insar import plot_image
+    import matplotlib.pyplot as plt
+    from apertools.plotting import plot_ifg
 
     img = apertools.sario.load(filename, downsample=downsample)
-    plot_image(img, title=title, colorbar=colorbar, alpha=alpha)
+    plot_ifg(img, title=title, colorbar=colorbar)
+    plt.show(block=True)
 
 
 # COMMAND: kml

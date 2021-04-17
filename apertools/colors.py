@@ -232,7 +232,7 @@ def cmap_to_qgis(cmap_rgba_arr):
 # </qgis_style>
 
 
-def create_dismph_colors():
+def make_dismph_colors():
     red, green, blue = [], [], []
     for i in range(120):
         red.append(i * 2.13 * 155.0 / 255.0 + 100)
@@ -249,13 +249,13 @@ def create_dismph_colors():
     return np.vstack((red, green, blue))
 
 
-DISMPH = LinearSegmentedColormap.from_list("dismph", create_dismph_colors().T / 256)
+DISMPH = LinearSegmentedColormap.from_list("dismph", make_dismph_colors().T / 256)
 plt.register_cmap(cmap=DISMPH)
 
 
 def test_rgbmat(plot=True):
-    """Create a square showing the dismph color gradient"""
-    rgbmat = create_dismph_colors()
+    """make a square showing the dismph color gradient"""
+    rgbmat = make_dismph_colors()
     N = rgbmat.shape[1]
     gradient = np.ones((1, N)) * (np.ones(N).reshape((N, 1)) / N)
     square_grad = gradient[:, :, np.newaxis] * (rgbmat.T)[:, np.newaxis, :]

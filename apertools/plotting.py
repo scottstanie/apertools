@@ -2,12 +2,12 @@
 """
 from __future__ import division, print_function
 import numpy as np
-import matplotlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from apertools.log import get_log
 from apertools import utils, latlon
-from .colors import make_shifted_cmap, create_dismph_colors
+from .colors import make_shifted_cmap, make_dismph_colors
 
 try:
     basestring = str
@@ -31,15 +31,15 @@ def phase_to_2pi(img):
     return np.where(phase > 0, phase, phase + 2 * np.pi)
 
 
-def create_mph_image(ifg, expval=0.3, max_pct=99.95, scalemag=True):
+def make_mph_image(ifg, expval=0.3, max_pct=99.95, scalemag=True):
     """Convert an ifg array into a PIL.Image with same colors as `dismph`"""
     from PIL import Image
 
     phase = phase_to_2pi(ifg)
     # Convert the phase values from [0, 2pi] to [0, 359] lookup values
     phase_idxs = (phase / 2 / np.pi * 360 - 0.5).astype(int)
-    red, green, blue = create_dismph_colors()
-    # Create [m, n, 3] array by looking up each phase color
+    red, green, blue = make_dismph_colors()
+    # make [m, n, 3] array by looking up each phase color
     rgb = np.stack((red[phase_idxs], green[phase_idxs], blue[phase_idxs]), axis=-1)
 
     # Now darken RGB values according to image magnitude
@@ -54,12 +54,46 @@ def create_mph_image(ifg, expval=0.3, max_pct=99.95, scalemag=True):
     return img
 
 
-def plot_ifg(ifg, ax=None, cmap="dismph"):
-    if ax is None:
-        fig, ax = plt.subplots()
+def plot_ifg(
+    ifg,
+    phase_cmap="dismph",
+    mag_cmap="gray",
+    title="",
+    expval=0.3,
+    max_pct=99.95,
+    subplot_layout=None,
+    **kwargs,
+):
+    if subplot_layout is None:
+        # Decide to layout in rows or cols
+        subplot_layout = (1, 3) if ifg.shape[0] > ifg.shape[1] else (3, 1)
+    figsize = (4 * subplot_layout[1], 4 * subplot_layout[0])
+
+    print(f"{kwargs = }")
+    print(figsize)
+    fig, axes = plt.subplots(*subplot_layout, sharex=True, sharey=True, figsize=figsize)
+
+    # mag = scale_mag(ifg)
+    mag = np.abs(ifg)
+    ax = axes[0]
+    # Note: this PowerNorm does the same thing as my "scale_mag", but lets you see the actual values
+    norm = mpl.colors.PowerNorm(gamma=expval, vmax=np.percentile(mag, 99.5))
+    axim = ax.imshow(mag, norm=norm, cmap=mag_cmap)
+    fig.colorbar(axim, ax=ax, extend="max")
+
     phase = phase_to_2pi(ifg)
+    ax = axes[1]
     # Note: other interpolations (besides nearest/None) make dismph colorscheme look weird
-    ax.imshow(phase, cmap="dismph", interpolation="nearest")
+    axim = ax.imshow(phase, cmap=phase_cmap, interpolation="nearest")
+    fig.colorbar(axim, ax=ax)
+
+    ax = axes[2]
+    dismph_img = make_mph_image(ifg)
+    axim = ax.imshow(dismph_img)
+
+    if title:
+        axes.set_title(title)
+    fig.tight_layout()
     return ax
 
 
@@ -271,7 +305,7 @@ def view_stack(
         # Check if the toolbar has zoom or pan active
         # https://stackoverflow.com/a/20712813
         # MPL version 3.3: https://stackoverflow.com/a/63447351
-        if matplotlib.__version__ >= "3.3":
+        if mpl.__version__ >= "3.3":
             state = timefig.canvas.manager.toolbar.mode
             if state != "":  # Zoom/other tool is active
                 return
@@ -526,10 +560,10 @@ def cmap_to_dict(cmap_name, vmin=None, vmax=None):
     # syd = {r: tuple(256*np.array(sy(r))) for r in range(256) }
     # cmy(.4, bytes=True)
     # (219, 237, 200, 255)
-    cmap = matplotlib.cm.get_cmap(cmap_name)
+    cmap = mpl.cm.get_cmap(cmap_name)
     if vmin is None or vmax is None:
         vmin, vmax = 0, 1
-    norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
     vals = np.linspace(vmin, vmax, cmap.N)
     color_tuple_dict = {idx: cmap(norm(v), bytes=True) for idx, v in enumerate(vals)}
     # {1: (219, 237, 200, 255),... }
