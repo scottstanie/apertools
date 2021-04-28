@@ -15,6 +15,10 @@ import re
 import os
 import difflib  # For station name misspelling checks
 import datetime
+from datetime import date
+from itertools import repeat
+from functools import lru_cache
+
 import requests
 import h5py
 import numpy as np
@@ -23,10 +27,6 @@ import matplotlib.cm
 import matplotlib.dates as mdates
 
 # from scipy.ndimage.filters import uniform_filter1d
-try:
-    from functools import lru_cache
-except ImportError:
-    from backports.functools_lru_cache import lru_cache
 try:
     import pandas as pd
 except ImportError:
@@ -70,6 +70,72 @@ def _get_gps_dir():
 
 
 GPS_DIR = _get_gps_dir()
+
+
+def plot_gps_los(
+    name,
+    insar_mm_list=[],
+    labels=None,
+    insar_colors=None,
+    ref="TXKM",
+    start_date=date(2014, 11, 1),
+    end_date=date(2019, 2, 1),
+    days_smooth=0,
+    ylim=(-3, 3),
+    yticks=[-2, 0, 2],
+    title="",
+    bigfont=False,
+    offset=True,
+    lw=5,
+    rasterized=True,
+    gps_color="#86b251",
+    ms=7,
+    los_map_file="los_map.h5",
+):
+    if labels is None:
+        labels = repeat(None, len(insar_mm_list))
+    if insar_colors is None:
+        insar_colors = repeat(None, len(insar_mm_list))
+
+    fig, ax = plt.subplots()
+    dts, los = load_gps_los_data(
+        los_map_file=los_map_file,
+        station_name=name,
+        days_smooth=days_smooth,
+        reference_station=ref,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    day_nums = (dts - dts.iloc[0]).dt.days
+    # day_nums = _get_day_nums(dts)
+
+    if bigfont:
+        plt.rcParams["font.size"] = 20
+        plt.rcParams["font.weight"] = "bold"
+
+    ax.plot(
+        dts,
+        los,
+        ".",
+        color=gps_color,
+        markersize=ms,
+        label="GPS",
+        rasterized=rasterized,
+    )
+
+    for (label, insar_mm, c) in zip(labels, insar_mm_list, insar_colors):
+        insar_cm_day = insar_mm / 365 / 10
+        full_defo = insar_cm_day * (dts.iloc[-1] - dts.iloc[0]).value
+        bias = -full_defo / 2 if offset else 0
+        ax.plot(dts, bias + day_nums * insar_cm_day, "-", c=c, lw=lw, label=label)
+
+    ax.grid(which="major", alpha=0.5)
+    ax.set_xticks(pd.date_range(dts[0], end=dts.iloc[-1], freq="365D"))
+    ax.set_yticks(yticks)
+    ax.set_ylabel("[cm]")
+
+    ax.set_ylim(ylim)
+    return fig, ax
 
 
 def plot_insar_vs_gps(

@@ -981,22 +981,22 @@ def save_intlist_to_h5(
     out_file=None,
     overwrite=False,
     igram_ext=".int",
-    int_date_list=None,
+    ifg_date_list=None,
 ):
-    if int_date_list is None:
-        _, int_date_list = load_geolist_intlist(igram_path, igram_ext=igram_ext)
+    if ifg_date_list is None:
+        _, ifg_date_list = load_geolist_intlist(igram_path, igram_ext=igram_ext)
 
     if not check_dset(out_file, INTLIST_DSET, overwrite):
-        return int_date_list
+        return ifg_date_list
 
-    igram_str_list = intlist_to_str(int_date_list)
+    igram_str_list = intlist_to_str(ifg_date_list)
     logger.info("Saving igram dates to %s / %s" % (out_file, INTLIST_DSET))
     with h5py.File(out_file, "a") as f:
         if dset_name is not None:
             f[dset_name].attrs[INTLIST_DSET] = igram_str_list
         else:
             f[INTLIST_DSET] = igram_str_list
-    return int_date_list
+    return ifg_date_list
 
 
 def geolist_to_str(geo_date_list):
@@ -1008,43 +1008,65 @@ def geolist_to_str(geo_date_list):
 #     return ["{}{ext}".format(a.strftime(DATE_FMT), ext=ext) for a in geo_date_list]
 
 
-def intlist_to_str(int_date_list):
+def intlist_to_str(ifg_date_list):
     """Date pairs to Nx2 numpy array or strings"""
     return np.array(
-        [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in int_date_list]
+        [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in ifg_date_list]
     ).astype("S")
 
 
-def intlist_to_filenames(int_date_list, ext=".int"):
+def intlist_to_filenames(ifg_date_list, ext=".int"):
     """Convert date pairs to list of string filenames"""
     return [
         "{}_{}{ext}".format(a.strftime(DATE_FMT), b.strftime(DATE_FMT), ext=ext)
-        for a, b in int_date_list
+        for a, b in ifg_date_list
     ]
 
 
 def load_geolist_intlist(
-    igram_dir, geo_dir=None, geolist_ignore_file=None, igram_ext=".int", parse=True
+    igram_dir=None,
+    geo_dir=None,
+    h5file=None,
+    geolist_ignore_file=None,
+    igram_ext=".int",
+    parse=True,
+    min_date=None,
+    max_date=None,
+    max_temporal_baseline=None,
 ):
-    """Load the geo_date_list and int_date_list from a igram_dir with igrams
+    """Load the geo_date_list and ifg_date_list from a igram_dir with igrams
 
     if geo_dir is None, assumes that the .geo files are one diretory up from the igrams
     """
-    int_date_list = find_igrams(directory=igram_dir, parse=parse, ext=igram_ext)
-    if geo_dir is None:
-        geo_dir = apertools.utils.get_parent_dir(igram_dir)
-    geo_date_list = find_geos(directory=geo_dir, parse=parse)
+    if h5file is not None:
+        ifg_date_list = load_intlist_from_h5(h5file, parse=parse)
+        geo_date_list = load_geolist_from_h5(h5file, parse=parse)
+    elif igram_dir is not None:
+        ifg_date_list = find_igrams(directory=igram_dir, parse=parse, ext=igram_ext)
+        if geo_dir is None:
+            geo_dir = apertools.utils.get_parent_dir(igram_dir)
+        geo_date_list = find_geos(directory=geo_dir, parse=parse)
 
     if geolist_ignore_file is not None:
-        ignore_filepath = os.path.join(igram_dir, geolist_ignore_file)
-        geo_date_list, int_date_list = ignore_geo_dates(
-            geo_date_list, int_date_list, ignore_file=ignore_filepath, parse=parse
+        ignore_filepath = os.path.join(igram_dir or ".", geolist_ignore_file)
+        geo_date_list, ifg_date_list = ignore_geo_dates(
+            geo_date_list, ifg_date_list, ignore_file=ignore_filepath, parse=parse
         )
-    return geo_date_list, int_date_list
+    # ifg_date_list = apertools.utils.filter_min_max_date(
+    #     ifg_date_list, min_date, max_date
+    # )
+
+    # if max_temporal_baseline is not None:
+    #     ifg_date_list = [
+    #         ifg
+    #         for ifg in ifg_date_list
+    #         if abs((ifg[1] - ifg[0]).days) > max_temporal_baseline
+    #     ]
+    return geo_date_list, ifg_date_list
 
 
 def ignore_geo_dates(
-    geo_date_list, int_date_list, ignore_file="geolist_ignore.txt", parse=True
+    geo_date_list, ifg_date_list, ignore_file="geolist_ignore.txt", parse=True
 ):
     """Read extra file to ignore certain dates of interferograms"""
     ignore_geos = set(find_geos(filename=ignore_file, parse=parse))
@@ -1052,8 +1074,11 @@ def ignore_geo_dates(
     logger.info(sorted(ignore_geos))
     valid_geos = [g for g in geo_date_list if g not in ignore_geos]
     valid_igrams = [
-        i for i in int_date_list if i[0] not in ignore_geos and i[1] not in ignore_geos
+        i for i in ifg_date_list if i[0] not in ignore_geos and i[1] not in ignore_geos
     ]
+    logger.info(
+        f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in {ignore_file}"
+    )
     return valid_geos, valid_igrams
 
 
@@ -1135,15 +1160,15 @@ def load_single_mask(
     int_date_string=None,
     date_pair=None,
     mask_filename=MASK_FILENAME,
-    int_date_list=None,
+    ifg_date_list=None,
 ):
     """Load one mask from the `mask_filename`
 
     Can either pass a tuple of Datetimes in date_pair, or a string like
     `20170101_20170104.int` or `20170101_20170303` to int_date_string
     """
-    if int_date_list is None:
-        int_date_list = load_intlist_from_h5(mask_filename)
+    if ifg_date_list is None:
+        ifg_date_list = load_intlist_from_h5(mask_filename)
 
     if int_date_string is not None:
         # If the pass string with ., only take first part
@@ -1151,7 +1176,7 @@ def load_single_mask(
         date_pair = parse_intlist_strings([date_str_pair])[0]
 
     with h5py.File(mask_filename, "r") as f:
-        idx = int_date_list.index(date_pair)
+        idx = ifg_date_list.index(date_pair)
         dset = f[IGRAM_MASK_DSET]
         with dset.astype(bool):
             return dset[idx]

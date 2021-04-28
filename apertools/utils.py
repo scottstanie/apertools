@@ -519,6 +519,24 @@ def get_parent_dir(filepath):
         return os.path.dirname(os.path.split(os.path.abspath(filepath))[0])
 
 
+def filter_min_max_date(ifg_list, min_date=None, max_date=None):
+    """Filters from an iterable of (date1, date1) ifg pairs by min/max date"""
+    if min_date:
+        ll = len(ifg_list)
+        ifg_list = [
+            ifg for ifg in ifg_list if (ifg[0] > min_date and ifg[1] > min_date)
+        ]
+        ll = len(ifg_list)
+        logger.info(f"Ignoring {ll - len(ifg_list)} igrams before {min_date}")
+    if max_date:
+        ll = len(ifg_list)
+        ifg_list = [
+            ifg for ifg in ifg_list if (ifg[0] < max_date and ifg[1] < max_date)
+        ]
+        logger.info(f"Ignoring {ll - len(ifg_list)} igrams after {max_date}")
+    return ifg_list
+
+
 def get_cache_dir(force_posix=False, app_name="apertools"):
     """Returns the config folder for the application.  The default behavior
     is to return whatever is most appropriate for the operating system.

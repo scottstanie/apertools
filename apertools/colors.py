@@ -4,6 +4,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+MATLAB_COLORS = [
+    [0, 0.4470, 0.7410, 1],
+    [0.8500, 0.3250, 0.0980, 1],
+    [0.9290, 0.6940, 0.1250, 1],
+    [0.4940, 0.1840, 0.5560, 1],
+    [0.4660, 0.6740, 0.1880, 1],
+    [0.3010, 0.7450, 0.9330, 1],
+    [0.6350, 0.0780, 0.1840, 1],
+]
+
+
 def discrete_seismic_colors(n=5):
     """From http://colorbrewer2.org/#type=diverging&scheme=RdBu&n=7"""
     if n == 5:

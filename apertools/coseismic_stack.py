@@ -2,6 +2,7 @@
 from datetime import date
 import numpy as np
 import apertools.sario as sario
+import apertools.utils as utils
 import apertools.subset as subset
 from insar.prepare import remove_ramp
 from insar.timeseries import PHASE_TO_CM
@@ -112,20 +113,12 @@ def select_pre_event_redundant(
     geolist, intlist, event_date, num_igrams=None, min_date=None
 ):
     ifgs = [ifg for ifg in intlist if (ifg[0] < event_date and ifg[1] < event_date)]
-    return _filter_min_max_date(ifgs, min_date, None)
+    return utils.filter_min_max_date(ifgs, min_date, None)
 
 
 def select_post_event_redundant(geolist, intlist, event_date, max_date=None):
     ifgs = [ifg for ifg in intlist if (ifg[0] > event_date and ifg[1] > event_date)]
-    return _filter_min_max_date(ifgs, None, max_date)
-
-
-def _filter_min_max_date(ifgs, min_date, max_date):
-    if min_date:
-        ifgs = [ifg for ifg in ifgs if (ifg[0] > min_date and ifg[1] > min_date)]
-    if max_date:
-        ifgs = [ifg for ifg in ifgs if (ifg[0] < max_date and ifg[1] < max_date)]
-    return ifgs
+    return utils.filter_min_max_date(ifgs, None, max_date)
 
 
 def create_stack(
