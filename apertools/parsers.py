@@ -29,7 +29,7 @@ class Base(object):
             filename (str): name of SAR/InSAR product
             verbose (bool): print extra logging into about file loading
         """
-        self.filename = filename
+        self.filename = str(filename)  # convert to string in case using pathlib
         self.full_parse()  # Run a parse to check validity of filename
         self.verbose = verbose
 
@@ -127,7 +127,7 @@ class Sentinel(Base):
     def __init__(self, filename, **kwargs):
         super(Sentinel, self).__init__(filename, **kwargs)
         # The name of the unzipped .SAFE directory (with .zip stripped)
-        self._safe_dir = self._form_safe_dir(filename)
+        self._safe_dir = self._form_safe_dir(str(filename))
         self._preview_folder = os.path.join(self._safe_dir, "preview")
         self.map_overlay_kml = os.path.join(self._preview_folder, "map-overlay.kml")
         self._lon_lat_overlay_coords = apertools.latlon.map_overlay_coords(
