@@ -83,6 +83,7 @@ def plot_gps_los(
     days_smooth=0,
     ylim=(-3, 3),
     yticks=[-2, 0, 2],
+    ylabel="[cm]",
     title="",
     bigfont=False,
     offset=True,
@@ -125,14 +126,16 @@ def plot_gps_los(
 
     for (label, insar_mm, c) in zip(labels, insar_mm_list, insar_colors):
         insar_cm_day = insar_mm / 365 / 10
-        full_defo = insar_cm_day * (dts.iloc[-1] - dts.iloc[0]).value
+        full_defo = insar_cm_day * (dts.iloc[-1] - dts.iloc[0]).days
         bias = -full_defo / 2 if offset else 0
+
+        # ipdb.set_trace()
         ax.plot(dts, bias + day_nums * insar_cm_day, "-", c=c, lw=lw, label=label)
 
     ax.grid(which="major", alpha=0.5)
     ax.set_xticks(pd.date_range(dts[0], end=dts.iloc[-1], freq="365D"))
     ax.set_yticks(yticks)
-    ax.set_ylabel("[cm]")
+    ax.set_ylabel(ylabel)
 
     ax.set_ylim(ylim)
     return fig, ax
