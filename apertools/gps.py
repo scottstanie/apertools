@@ -55,9 +55,17 @@ GPS_FILE = GPS_BASE_URL.split("/")[-1].replace(".{plate}", "")
 GPS_STATION_URL = "http://geodesy.unr.edu/NGLStationPages/stations/{station}.sta"
 
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
+
+STATION_LLH_URL = "http://geodesy.unr.edu/NGLStationPages/llh.out"
 STATION_LLH_FILE = os.environ.get(
-    "STATION_LIST",
+    "STATION_LIST_LLH",
     os.path.join(DIRNAME, "data/station_llh_all.csv"),
+)
+
+STATION_XYZ_URL = "http://geodesy.unr.edu/NGLStationPages/DataHoldings.txt"
+STATION_XYZ_FILE = os.environ.get(
+    "STATION_LIST_XYZ",
+    os.path.join(DIRNAME, "data/station_xyz_all.csv"),
 )
 START_DATE = datetime.date(2014, 11, 1)  # Start of InSAR data I care about
 
@@ -290,7 +298,7 @@ def load_station_data(
                 "{gps_data_file} does not exist, download_if_missing = False"
             )
 
-    df = pd.read_csv(gps_data_file, header=0, sep=r"\s+")
+    df = pd.read_csv(gps_data_file, header=0, sep=r"\s+", engine="python")
     clean_df = _clean_gps_df(df, start_date, end_date)
     if to_cm:
         # logger.info("Converting %s GPS to cm" % station_name)
@@ -427,21 +435,66 @@ def save_station_points_kml(station_iter):
 
 
 @lru_cache()
-def read_station_llas(header=None, filename=None):
+def read_station_llas(filename=None):
     """Read in the name, lat, lon, alt list of gps stations
 
-    Assumes file is a csv with "name,lat,lon,alt" as columns
-    Must give "header" argument if there is a header
+    Assumes file is a space-separated with "name,lat,lon,alt" as columns
     """
     filename = filename or STATION_LLH_FILE
     logger.debug("Searching %s for gps data" % filename)
-    df = pd.read_csv(filename, header=header)
+    try:
+        df = pd.read_csv(filename, sep=r"\s+", engine="python", header=None)
+    except FileNotFoundError:
+        logger.warning("%s not found; downloading from %s", filename, STATION_LLH_URL)
+        download_station_locations(filename, STATION_LLH_URL)
+        df = pd.read_csv(filename, sep=r"\s+", engine="python", header=None)
+
     df.columns = ["name", "lat", "lon", "alt"]
     return df
 
 
+@lru_cache()
+def read_station_xyzs(filename=None):
+    """Read in the name, X, Y, Z position of gps stations"""
+    filename = filename or STATION_XYZ_FILE
+    logger.debug("Searching %s for gps data" % filename)
+    try:
+        df = pd.read_csv(
+            filename,
+            sep=r"\s+",
+            engine="python",
+            warn_bad_lines=True,
+            error_bad_lines=False,
+        )
+    except FileNotFoundError:
+        logger.warning("%s not found; downloading from %s", filename, STATION_XYZ_URL)
+        download_station_locations(filename, STATION_XYZ_URL)
+        df = pd.read_csv(
+            filename,
+            sep=r"\s+",
+            engine="python",
+            warn_bad_lines=True,
+            error_bad_lines=False,
+        )
+    orig_cols = "Sta Lat(deg) Long(deg) Hgt(m) X(m) Y(m) Z(m) Dtbeg Dtend Dtmod NumSol StaOrigName"
+    new_cols = "name lat lon alt X Y Z dtbeg dtend dtmod numsol origname"
+    mapping = dict(zip(orig_cols.split(), new_cols.split()))
+    return df.rename(columns=mapping)
+
+
+def download_station_locations(filename, url):
+    """Download either station LLH file or XYZ file from Nevada website
+    url = [STATION_XYZ_URL or STATION_LLH_URL]
+    """
+    resp = requests.get(url)
+    resp.raise_for_status()
+
+    with open(filename, "w") as f:
+        f.write(resp.text)
+
+
 def station_lonlat(station_name):
-    """Return the (lon, lat) of a `station_name`"""
+    """Return the (lon, lat) in degrees of `station_name`"""
     df = read_station_llas()
     station_name = station_name.upper()
     if station_name not in df["name"].values:
@@ -451,6 +504,19 @@ def station_lonlat(station_name):
         )
     name, lat, lon, alt = df[df["name"] == station_name].iloc[0]
     return lon, lat
+
+
+def station_xyz(station_name):
+    """Return the (X, Y, Z) in meters of `station_name`"""
+    df = read_station_xyzs()
+    station_name = station_name.upper()
+    if station_name not in df["name"].values:
+        closest_names = difflib.get_close_matches(station_name, df["name"], n=5)
+        raise ValueError(
+            "No station named %s found. Closest: %s" % (station_name, closest_names)
+        )
+    X, Y, Z = df.loc[df["name"] == station_name, ["X", "Y", "Z"]].iloc[0]
+    return X, Y, Z
 
 
 def station_rowcol(station_name=None, rsc_data=None):
@@ -483,6 +549,7 @@ def download_station_data(station_name):
     plate = get_station_plate(station_name)
     url = GPS_BASE_URL.format(station=station_name, plate=plate)
     response = requests.get(url)
+    response.raise_for_status()
 
     filename = "{}/{}".format(
         GPS_DIR, GPS_FILE.format(station=station_name, plate=plate)
@@ -496,6 +563,8 @@ def download_station_data(station_name):
 def get_station_plate(station_name):
     url = GPS_STATION_URL.format(station=station_name)
     response = requests.get(url)
+    response.raise_for_status()
+
     match = re.search(r"(?P<plate>[A-Z]{2}) Plate Fixed", response.text)
     if not match:
         raise ValueError("Could not find plate name on %s" % url)
