@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 import apertools.sario as sario
-from insar.prepare import remove_ramp
-from insar.timeseries import PHASE_TO_CM
+from apertools.deramp import remove_ramp
+from apertools.constants import PHASE_TO_CM
 
 
 def select_nearby_igrams(

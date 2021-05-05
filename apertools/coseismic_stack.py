@@ -4,8 +4,8 @@ import numpy as np
 import apertools.sario as sario
 import apertools.utils as utils
 import apertools.subset as subset
-from insar.prepare import remove_ramp
-from insar.timeseries import PHASE_TO_CM
+from apertools.constants import PHASE_TO_CM
+from apertools.deramp import remove_ramp
 
 MENTONE_EQ_DATE = date(2020, 3, 26)
 

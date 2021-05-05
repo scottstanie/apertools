@@ -14,7 +14,7 @@ import argparse
 import rasterio as rio
 
 from apertools import sario
-from insar.prepare import remove_ramp
+from apertools.prepare import remove_ramp
 
 
 def get_cli_args():

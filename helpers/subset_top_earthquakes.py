@@ -18,8 +18,8 @@ import apertools.latlon as latlon
 import apertools.utils as utils
 import apertools.subset as subset
 
-from insar.prepare import remove_ramp
-from insar.timeseries import PHASE_TO_CM
+from apertools.deramp import remove_ramp
+from apertools.constants import PHASE_TO_CM
 
 # TODO: merge overlapping date/areas... aftershocks means 3/26,27,29 all there
 
