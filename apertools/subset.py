@@ -3,18 +3,21 @@ import shapely.geometry
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
 from apertools.log import get_log
 from apertools.latlon import km_to_deg
+from apertools.deramp import remove_ramp
 
 logger = get_log()
 
+# TODO: this is basically the same as copy_subset... def merge these
 
-def copy_vrt(in_fname, out_fname=None, bbox=None, verbose=True):
+
+def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True):
     """Create a VRT for (a subset of) a gdal-readable file
 
     bbox format: (left, bottom, right, top)"""
-    from gdal import Translate
+    import gdal
 
-    if out_fname is None:
-        out_fname = in_fname + ".vrt"
+    # if not out_fname:
+    # out_fname = in_fname + ".vrt"
 
     # Using Translate... but would use Warp if every reprojecting
     if bbox:
@@ -22,9 +25,21 @@ def copy_vrt(in_fname, out_fname=None, bbox=None, verbose=True):
         projwin = (left, top, right, bottom)  # unclear why Translate does UL LR
     else:
         projwin = None
+
     if verbose:
-        logger.info(f"Creating {out_fname}, subset bbox: {bbox}")
-    Translate(out_fname, in_fname, projWin=projwin)
+        msg = ""
+        if bbox:
+            msg += f"Subsetting bbox: {bbox} "
+        if out_fname:
+            msg += f"writing to {out_fname}"
+        logger.info(msg)
+
+    # out_ds = gdal.Translate(out_fname, in_fname, projWin=projwin)
+    ds_in = gdal.Open(in_fname)
+    out_ds = gdal.Warp(out_fname, in_fname, outputBounds=bbox, format="VRT")
+    out_arr = out_ds.ReadAsArray()
+    # ds_in, out_ds = None, None
+    return out_arr
 
 
 def read_subset(bbox, in_fname, driver=None, bands=None):
@@ -32,9 +47,9 @@ def read_subset(bbox, in_fname, driver=None, bands=None):
     # https://github.com/mapbox/rasterio/issues/2004
     # bbox: left, bot, right, top
     with rio.open(in_fname, driver=driver) as src:
-        w = src.window(*bbox) if bbox else None
+        win = src.window(*bbox) if bbox else None
         # TODO: do i want to make this 2d if one band requested?
-        return src.read(bands, window=w)
+        return src.read(bands, window=win)
 
 
 def copy_subset(
@@ -104,8 +119,8 @@ def write_outfile(
             dst.write(layer, band)
 
 
-def get_intersection_bounds(fname1, fname2):
-    """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2"""
+def _get_img_bounds(fname1, fname2):
+    """Read 2 arrays and make sure they are on the same projection"""
     with rio.open(fname1) as src1, rio.open(fname2) as src2:
         if src1.crs != src2.crs:
             raise ValueError(
@@ -113,7 +128,19 @@ def get_intersection_bounds(fname1, fname2):
             )
         b1 = shapely.geometry.box(*src1.bounds)
         b2 = shapely.geometry.box(*src2.bounds)
-        return b1.intersection(b2).bounds
+        return b1, b2
+
+
+def get_intersection_bounds(fname1, fname2):
+    """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2"""
+    b1, b2 = _get_img_bounds(fname1, fname2)
+    return b1.intersection(b2).bounds
+
+
+def get_union_bounds(fname1, fname2):
+    """Find the (left, bot, right, top) bounds of union of fname1 and fname2"""
+    b1, b2 = _get_img_bounds(fname1, fname2)
+    return b1.union(b2).bounds
 
 
 def get_transform(in_fname, driver=None, bbox=None):
@@ -149,41 +176,21 @@ def get_nodata(fname):
 
 
 def read_intersections(fname1, fname2, band1=None, band2=None):
-    from gdal import Translate, Open, Unlink
-
+    """Read in the intersection of 2 files as an array"""
     bounds = get_intersection_bounds(fname1, fname2)
     print(f"bounds: {bounds}")
-    left, bottom, right, top = bounds
-    projwin = (left, top, right, bottom)  # Translate does UL LR
-
-    ds1 = Open(fname1)
-    ds2 = Open(fname2)
-    outname1 = "/vsimem/overlap1.vrt"
-    outname2 = "/vsimem/overlap2.vrt"
-
-    ds_overlap1 = Translate(outname1, ds1, format="VRT", projWin=projwin)
-    ds_overlap2 = Translate(outname2, ds2, format="VRT", projWin=projwin)
-    r1 = ds_overlap1.ReadAsArray()
-    r2 = ds_overlap2.ReadAsArray()
-
-    Unlink(outname1)
-    Unlink(outname2)
-    ds1 = ds2 = None
-    ds1 = ds2 = None
-
-    return r1, r2
+    im1 = copy_vrt(fname1, out_fname="", bbox=bounds)
+    im2 = copy_vrt(fname2, out_fname="", bbox=bounds)
+    return im1, im2
 
 
-# NOTE: appears broken from bad rounding of rasterio
-def read_intersections_rio(fname1, fname2, band1=None, band2=None):
-    bounds = get_intersection_bounds(fname1, fname2)
+def read_unions(fname1, fname2, band1=None, band2=None):
+    """Read in the union of 2 files as an array"""
+    bounds = get_union_bounds(fname1, fname2)
     print(f"bounds: {bounds}")
-    with rio.open(fname1) as src1, rio.open(fname2) as src2:
-        w1 = src1.window(*bounds)
-        w2 = src2.window(*bounds)
-        r1 = src1.read(window=w1) if band1 is None else src1.read(band1, window=w1)
-        r2 = src2.read(window=w2) if band2 is None else src2.read(band2, window=w2)
-        return r1, r2
+    im1 = copy_vrt(fname1, out_fname="", bbox=bounds)
+    im2 = copy_vrt(fname2, out_fname="", bbox=bounds)
+    return im1, im2
 
 
 def bbox_around_point(lons, lats, side_km=25):
@@ -191,7 +198,26 @@ def bbox_around_point(lons, lats, side_km=25):
 
     Returns (N, 4) array, where N = len(lons)"""
     side_deg = km_to_deg(side_km)
-    r = side_deg / 2
+    buff = side_deg / 2
     return np.array(
-        [(lon - r, lat - r, lon + r, lat + r) for (lon, lat) in zip(lons, lats)]
+        [
+            (lon - buff, lat - buff, lon + buff, lat + buff)
+            for (lon, lat) in zip(lons, lats)
+        ]
     )
+
+
+def merge_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
+    """Create a merged version of two files, bounded by their union bounds"""
+
+    img1, img2 = read_unions(file1, file2)
+    if deramp1:
+        mask1 = img1 == 0
+        img1 = np.nan_to_num(remove_ramp(img1, deramp_order=deramp_order, mask=mask1))
+    if deramp2:
+        mask2 = img2 == 0
+        img2 = np.nan_to_num(remove_ramp(img2, deramp_order=deramp_order, mask=mask2))
+    valid1 = (img1 != 0).astype(int)
+    valid2 = (img2 != 0).astype(int)
+    valid_count = valid1 + valid2
+    return (img1 + img2) / valid_count
