@@ -97,10 +97,10 @@ def plot_ifg(
     return ax
 
 
-def get_fig_ax(fig, ax):
+def get_fig_ax(fig, ax, **figkwargs):
     """Handle passing None to either fig or ax by creating new, returns both"""
     if not fig and not ax:
-        fig = plt.figure()
+        fig = plt.figure(**figkwargs)
         ax = fig.gca()
     elif ax and not fig:
         fig = ax.figure
@@ -128,6 +128,7 @@ def plot_image(
     aspect="auto",
     perform_shift=False,
     colorbar=True,
+    **figkwargs,
 ):
     """Plot an image with a zero-shifted colorbar
 
@@ -146,8 +147,9 @@ def plot_image(
             see https://matplotlib.org/api/_as_gen/matplotlib.pyplot.imshow.html
         perform_shift (bool): default True. If false, skip cmap shifting step
         colorbar (bool): display colorbar in figure
+        figkwargs: pass through to plt.figure() (e.g. figsize, sharex,...)
     Returns:
-        fig, axes_image
+        fig, ax, axes_image
     """
     if filename and dset:
         from apertools import sario
@@ -163,14 +165,7 @@ def plot_image(
     else:
         extent = (0, ncols, nrows, 0)
 
-    fig, ax = get_fig_ax(fig, ax)
-    if not fig and not ax:
-        fig = plt.figure()
-        ax = fig.gca()
-    elif ax and not fig:
-        fig = ax.figure
-    elif fig and not ax:
-        ax = fig.gca()
+    fig, ax = get_fig_ax(fig, ax, **figkwargs)
 
     if perform_shift:
         shifted_cmap = make_shifted_cmap(img, cmap_name=cmap, vmin=vmin, vmax=vmax)
@@ -199,8 +194,8 @@ def plot_image(
     if colorbar:
         cbar = fig.colorbar(axes_image, ax=ax)
         cbar.set_label(label)
-    plt.show(block=False)
-    return fig, axes_image
+    # plt.show(block=False)
+    return fig, ax, axes_image
 
 
 def _abs_max(img):
