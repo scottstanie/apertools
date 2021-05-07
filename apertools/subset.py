@@ -3,6 +3,7 @@ import shapely.geometry
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
 from apertools.log import get_log
 from apertools.latlon import km_to_deg
+from apertools.deramp import remove_ramp
 
 logger = get_log()
 
@@ -175,6 +176,7 @@ def get_nodata(fname):
 
 
 def read_intersections(fname1, fname2, band1=None, band2=None):
+    """Read in the intersection of 2 files as an array"""
     bounds = get_intersection_bounds(fname1, fname2)
     print(f"bounds: {bounds}")
     im1 = copy_vrt(fname1, out_fname="", bbox=bounds)
@@ -183,6 +185,7 @@ def read_intersections(fname1, fname2, band1=None, band2=None):
 
 
 def read_unions(fname1, fname2, band1=None, band2=None):
+    """Read in the union of 2 files as an array"""
     bounds = get_union_bounds(fname1, fname2)
     print(f"bounds: {bounds}")
     im1 = copy_vrt(fname1, out_fname="", bbox=bounds)
@@ -195,7 +198,26 @@ def bbox_around_point(lons, lats, side_km=25):
 
     Returns (N, 4) array, where N = len(lons)"""
     side_deg = km_to_deg(side_km)
-    r = side_deg / 2
+    buff = side_deg / 2
     return np.array(
-        [(lon - r, lat - r, lon + r, lat + r) for (lon, lat) in zip(lons, lats)]
+        [
+            (lon - buff, lat - buff, lon + buff, lat + buff)
+            for (lon, lat) in zip(lons, lats)
+        ]
     )
+
+
+def merge_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
+    """Create a merged version of two files, bounded by their union bounds"""
+
+    img1, img2 = read_unions(file1, file2)
+    if deramp1:
+        mask1 = img1 == 0
+        img1 = np.nan_to_num(remove_ramp(img1, deramp_order=deramp_order, mask=mask1))
+    if deramp2:
+        mask2 = img2 == 0
+        img2 = np.nan_to_num(remove_ramp(img2, deramp_order=deramp_order, mask=mask2))
+    valid1 = (img1 != 0).astype(int)
+    valid2 = (img2 != 0).astype(int)
+    valid_count = valid1 + valid2
+    return (img1 + img2) / valid_count
