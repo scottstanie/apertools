@@ -114,7 +114,7 @@ def log_runtime(f):
 
     """
 
-    @wraps
+    @wraps(f)
     def wrapper(*args, **kwargs):
         t1 = time.time()
 
