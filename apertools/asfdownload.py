@@ -55,6 +55,7 @@ def form_url(
     end=None,
     processingLevel="RAW",
     relativeOrbit=None,
+    absoluteOrbit=None,
     maxResults=2000,
     query_filetype="geojson",
     platform="S1",
@@ -74,7 +75,7 @@ def form_url(
     if dem is not None:
         bbox = get_dem_bbox(dem)
 
-    if bbox is None:
+    if bbox is None and absoluteOrbit is None:
         raise ValueError("Need bbox (or dem) to constrain query area.")
 
     # TODO: geojson to WKT for intersection
@@ -84,6 +85,7 @@ def form_url(
         end=end,
         processingLevel=processingLevel,
         relativeOrbit=relativeOrbit,
+        absoluteOrbit=absoluteOrbit,
         maxResults=maxResults,
         output=query_filetype.upper(),
         platform=platform,
@@ -199,6 +201,11 @@ def cli():
         "--relativeOrbit",
         type=int,
         help="Limit to one path / relativeOrbit",
+    )
+    p.add_argument(
+        "--absoluteOrbit",
+        type=int,
+        help="Either orbit cycle count, or (for UAVSAR) the flightLine",
     )
     p.add_argument(
         "--maxResults",
