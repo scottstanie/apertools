@@ -492,6 +492,7 @@ def plot_img_diff(
     vdiff=4,
     cmap="seismic_wide_y",
     show=True,
+    figsize=None,
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
@@ -504,7 +505,7 @@ def plot_img_diff(
     ncols = n + 1 if show_diff else n
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True)
+    fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True, figsize=figsize)
     for ii in range(n):
         axim = axes[ii].imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
         if titles:

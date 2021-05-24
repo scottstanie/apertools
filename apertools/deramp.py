@@ -1,34 +1,6 @@
 import numpy as np
 
 
-def matrix_indices(shape, flatten=True):
-    """Returns a pair of vectors for all indices of a 2D array
-
-    Convenience function to help remembed mgrid syntax
-
-    Example:
-        >>> a = np.arange(12).reshape((4, 3))
-        >>> print(a)
-        [[ 0  1  2]
-         [ 3  4  5]
-         [ 6  7  8]
-         [ 9 10 11]]
-        >>> rs, cs = matrix_indices(a.shape)
-        >>> rs
-        array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
-        >>> cs
-        array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
-        >>> print(a[rs[1], cs[1]] == a[0, 1])
-        True
-    """
-    nrows, ncols = shape
-    row_block, col_block = np.mgrid[0:nrows, 0:ncols]
-    if flatten:
-        return row_block.flatten(), col_block.flatten()
-    else:
-        return row_block, col_block
-
-
 def remove_ramp(z, deramp_order=1, mask=np.ma.nomask, copy=False):
     """Estimates a linear plane through data and subtracts to flatten
 
@@ -60,7 +32,6 @@ def estimate_ramp(z, deramp_order):
         z (ndarray): 2D array, interpreted as heights
         deramp_order (int): degree of surface estimation
             deramp_order = 1 removes linear ramp, deramp_order = 2 fits quadratic surface
-        deramp_order (int)
 
     Returns:
         ndarray: the estimated coefficients of the surface
@@ -96,3 +67,31 @@ def estimate_ramp(z, deramp_order):
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
 
     return z_fit
+
+
+def matrix_indices(shape, flatten=True):
+    """Returns a pair of vectors for all indices of a 2D array
+
+    Convenience function to help remembed mgrid syntax
+
+    Example:
+        >>> a = np.arange(12).reshape((4, 3))
+        >>> print(a)
+        [[ 0  1  2]
+         [ 3  4  5]
+         [ 6  7  8]
+         [ 9 10 11]]
+        >>> rs, cs = matrix_indices(a.shape)
+        >>> rs
+        array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3])
+        >>> cs
+        array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
+        >>> print(a[rs[1], cs[1]] == a[0, 1])
+        True
+    """
+    nrows, ncols = shape
+    row_block, col_block = np.mgrid[0:nrows, 0:ncols]
+    if flatten:
+        return row_block.flatten(), col_block.flatten()
+    else:
+        return row_block, col_block

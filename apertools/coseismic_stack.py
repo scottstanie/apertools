@@ -67,7 +67,7 @@ def stack_igrams(
     return cur_phase_sum, cc_stack
 
 
-def select_cross_event(geolist, intlist, event_date, num_igrams=None):
+def select_cross_event(geolist, event_date, num_igrams=None):
     """Choose a list of independent igrams spanning `event_date`"""
 
     insert_idx = np.searchsorted(geolist, event_date)
@@ -83,7 +83,7 @@ def select_cross_event(geolist, intlist, event_date, num_igrams=None):
     return stack_igrams
 
 
-def select_pre_event(geolist, intlist, event_date, num_igrams=None, min_date=None):
+def select_pre_event(geolist, event_date, num_igrams=None, min_date=None):
     insert_idx = np.searchsorted(geolist, event_date)
     num_igrams = num_igrams or (insert_idx // 2)
     num_geos = 2 * num_igrams
@@ -96,7 +96,7 @@ def select_pre_event(geolist, intlist, event_date, num_igrams=None, min_date=Non
     return stack_igrams
 
 
-def select_post_event(geolist, intlist, event_date, num_igrams=None, max_date=None):
+def select_post_event(geolist, event_date, num_igrams=None, max_date=None):
     insert_idx = np.searchsorted(geolist, event_date)
     num_igrams = num_igrams or (len(geolist) - insert_idx) // 2
     num_geos = 2 * num_igrams
@@ -197,10 +197,10 @@ def subset_stack(
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
 
-    stack_igrams = select_cross_event(geolist, intlist, event_date, nigrams)
-    # stack_igrams = select_pre_event(geolist, intlist, event_date, min_date=date(2019, 7, 1))
+    stack_igrams = select_cross_event(geolist, event_date, nigrams)
+    # stack_igrams = select_pre_event(geolist, event_date, min_date=date(2019, 7, 1))
     # stack_igrams = select_post_event(
-    #     geolist, intlist, event_date, max_date=date(2020, 5, 1)
+    #     geolist, event_date, max_date=date(2020, 5, 1)
     # )
 
     stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
