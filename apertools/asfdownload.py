@@ -46,6 +46,8 @@ from urllib.parse import urlencode
 #
 # Note: quote_via=urllib.parse.quote for quote spaces with percent
 
+DIRNAME = os.path.dirname(os.path.abspath(__file__))
+
 
 def form_url(
     bbox=None,
@@ -56,6 +58,7 @@ def form_url(
     processingLevel="RAW",
     relativeOrbit=None,
     absoluteOrbit=None,
+    flightLine=None,
     maxResults=2000,
     query_filetype="geojson",
     platform="S1",
@@ -75,17 +78,18 @@ def form_url(
     if dem is not None:
         bbox = get_dem_bbox(dem)
 
-    if bbox is None and absoluteOrbit is None:
-        raise ValueError("Need bbox (or dem) to constrain query area.")
+    # if bbox is None and absoluteOrbit is None:
+        # raise ValueError("Need either bbox or dem options without absoluteOrbit")
 
     # TODO: geojson to WKT for intersection
     params = dict(
-        bbox=",".join(map(str, bbox)),
+        bbox=",".join(map(str, bbox)) if bbox else None,
         start=start,
         end=end,
         processingLevel=processingLevel,
         relativeOrbit=relativeOrbit,
         absoluteOrbit=absoluteOrbit,
+        flightLine=flightLine,
         maxResults=maxResults,
         output=query_filetype.upper(),
         platform=platform,
@@ -161,10 +165,42 @@ def parse_query_results(fname="asfquery.geojson"):
     return path_nums, starts
 
 
+def _platform_choices():
+    import pandas as pd
+
+    fname = os.path.join(DIRNAME, "data/asfquery_platforms.csv")
+    return pd.read_csv(fname)
+
+
+def _platform_beammodes():
+    import pandas as pd
+
+    fname = os.path.join(DIRNAME, "data/asfquery_platform_beammodes.csv")
+    df = pd.read_csv(fname)
+    df["values"] = df["values"].str.split(", ")
+    return df
+
+
+def _check_platform(args):
+    choices = _platform_choices()
+    if not (args.platform in choices["name"].values or args.platform is None):
+        raise ValueError(f"Invalid platform: {args.platform}")
+
+
+def _check_beammode(args):
+    platdf = _platform_choices()
+    canonical_name = platdf[platdf["name"].str.lower() == args.platform.lower()]
+
+    beamdf = _platform_beammodes()
+    choices = beamdf[beamdf["platform"] == canonical_name]["values"]
+    if not (args.beamMode in choices or args.beamMode is None):
+        raise ValueError(
+            f"Invalid beamMode {args.beamMode} for platform {args.platform}"
+        )
+
+
 def cli():
     p = argparse.ArgumentParser()
-    # Only care for now about platform="S1",
-    # Only care for now about beamMode="IW",
     p.add_argument(
         "--out-dir",
         "-o",
@@ -192,10 +228,19 @@ def cli():
         help="Ending date for query (recommended: YYYY-MM-DD)",
     )
     p.add_argument(
+        "--platform",
+        help="Remote sensing platform (default=%(default)s)",
+        default="S1",
+    )
+    p.add_argument(
         "--processingLevel",
-        choices=["RAW", "SLC"],
-        default="RAW",
+        # default="RAW",
         help="Level or product to download (default=%(default)s)",
+    )
+    p.add_argument(
+        "--beamMode",
+        help="Type of acquisition mode for data (default=%(default)s)",
+        # default="IW",
     )
     p.add_argument(
         "--relativeOrbit",
@@ -203,9 +248,14 @@ def cli():
         help="Limit to one path / relativeOrbit",
     )
     p.add_argument(
+        "--flightLine",
+        type=int,
+        help="UAVSAR flight line",
+    )
+    p.add_argument(
         "--absoluteOrbit",
         type=int,
-        help="Either orbit cycle count, or (for UAVSAR) the flightLine",
+        help="Either orbit cycle count, or (for UAVSAR) the flightId",
     )
     p.add_argument(
         "--maxResults",
@@ -225,8 +275,13 @@ def cli():
         help="Type of output file to save query to (default=%(default)s)",
     )
     args = p.parse_args()
-    if args.bbox is None and args.dem is None:
-        raise ValueError("Need either --bbox or --dem options")
+    if all(vars(args)[item] for item in ("bbox", "dem", "absoluteOrbit", "flightLine")):
+        raise ValueError(
+            "Need either --bbox or --dem options without flightLine/absoluteOrbit"
+        )
+
+    _check_platform(args)
+    _check_beammode(args)
 
     if args.query_only:
         query_only(**vars(args))
