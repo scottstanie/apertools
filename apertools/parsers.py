@@ -2,15 +2,13 @@
 Utilities for parsing file names of SAR products for relevant info.
 
 """
-from __future__ import division, print_function
-import os
+
 import re
-import pprint
 from datetime import datetime
+import os
+import pprint
 
-import apertools.latlon
 from apertools.log import get_log
-
 logger = get_log()
 
 __all__ = ["Sentinel", "Uavsar", "SentinelOrbit"]
@@ -21,7 +19,6 @@ class Base(object):
 
     FILE_REGEX = None
     TIME_FMT = None
-    _FIELD_MEANINGS = None
 
     def __init__(self, filename, verbose=False):
         """
@@ -29,7 +26,7 @@ class Base(object):
             filename (str): name of SAR/InSAR product
             verbose (bool): print extra logging into about file loading
         """
-        self.filename = str(filename)  # convert to string in case using pathlib
+        self.filename = filename
         self.full_parse()  # Run a parse to check validity of filename
         self.verbose = verbose
 
@@ -46,7 +43,7 @@ class Base(object):
         """Returns all parts of the data contained in filename
 
         Returns:
-            tuple: parsed file data. Entry order will match `field_meanings`
+            tuple: parsed file data. Entry order will match reged named fields
 
         Raises:
             ValueError: if filename string is invalid
@@ -60,17 +57,16 @@ class Base(object):
                 "Invalid {} filename: {}".format(self.__class__.__name__, self.filename)
             )
         else:
-            return match.groups()
+            return match.groupdict()
 
     @property
     def field_meanings(self):
         """List the fields returned by full_parse()"""
-        return self._FIELD_MEANINGS
+        return self.full_parse().keys()
 
     def _get_field(self, fieldname):
         """Pick a specific field based on its name"""
-        idx = self.field_meanings.index(fieldname)
-        return self.full_parse()[idx]
+        return self.full_parse()[fieldname]
 
 
 class Sentinel(Base):
@@ -108,38 +104,23 @@ class Sentinel(Base):
         filename (str) name of the sentinel data product
     """
 
-    FILE_REGEX = r"(S1A|S1B)_([\w\d]{2})_([\w_]{3})([FHM_])_([012])S([SDHV]{2})_([T\d]{15})_([T\d]{15})_(\d{6})_([\d\w]{6})_([\d\w]{4})"
-    TIME_FMT = "%Y%m%dT%H%M%S"
-    _FIELD_MEANINGS = (
-        "mission",
-        "beam",
-        "product type",
-        "resolution class",
-        "product level",
-        "polarization",
-        "start datetime",
-        "stop datetime",
-        "orbit number",
-        "data-take identified",
-        "product unique id",
+    FILE_REGEX = re.compile(
+        r"(?P<mission>S1A|S1B)_"
+        r"(?P<beam>[\w\d]{2})_"
+        r"(?P<product_type>[\w_]{3})"
+        r"(?P<resolution_class>[FHM_])_"
+        r"(?P<product_level>[012])S"
+        r"(?P<polarization>[SDHV]{2})_"
+        r"(?P<start_datetime>[T\d]{15})_"
+        r"(?P<stop_datetime>[T\d]{15})_"
+        r"(?P<orbit_number>\d{6})_"
+        r"(?P<datetake_identifier>[\d\w]{6})_"
+        r"(?P<unique_id>[\d\w]{4})"
     )
+    TIME_FMT = "%Y%m%dT%H%M%S"
 
     def __init__(self, filename, **kwargs):
         super(Sentinel, self).__init__(filename, **kwargs)
-        # The name of the unzipped .SAFE directory (with .zip stripped)
-        self._safe_dir = self._form_safe_dir(str(filename))
-        self._preview_folder = os.path.join(self._safe_dir, "preview")
-        self.map_overlay_kml = os.path.join(self._preview_folder, "map-overlay.kml")
-        self._lon_lat_overlay_coords = apertools.latlon.map_overlay_coords(
-            self.map_overlay_kml
-        )
-
-    def _form_safe_dir(self, filename):
-        """Get just the Sentinel product name without extensions, then add .SAFE"""
-        # Strip '/' from end to start in case they pass "blahblah.SAFE/", or splitext[1] is ''
-        fname = filename.rstrip("/").replace(".zip", "").replace(".geo", "")
-        root, ext = os.path.splitext(fname)
-        return root + ".SAFE"
 
     def __str__(self):
         return "{} {}, path {} from {}".format(
@@ -150,8 +131,8 @@ class Sentinel(Base):
         return (self.start_time, self.filename) < (other.start_time, other.filename)
 
     def __eq__(self, other):
-        # TODO: Do we just want to compare product_uids?? or filenames?
         return self.product_uid == other.product_uid
+        # TODO: Is there ever a need to compare filenames? or just product_uids?
         # return self.filename == other.filename
 
     def __hash__(self):
@@ -161,37 +142,24 @@ class Sentinel(Base):
     def start_time(self):
         """Returns start datetime from a sentinel file name
 
-        Args:
-            filename (str): filename of a sentinel 1 product
-
-        Returns:
-            datetime: start datetime of mission
-
-
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
             >>> print(s.start_time)
             2018-04-08 04:30:25
         """
-        start_time_str = self._get_field("start datetime")
+        start_time_str = self._get_field("start_datetime")
         return datetime.strptime(start_time_str, self.TIME_FMT)
 
     @property
     def stop_time(self):
         """Returns stop datetime from a sentinel file name
 
-        Args:
-            filename (str): filename of a sentinel 1 product
-
-        Returns:
-            datetime: stop datetime
-
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
             >>> print(s.stop_time)
             2018-04-08 04:30:53
         """
-        stop_time_str = self._get_field("stop datetime")
+        stop_time_str = self._get_field("stop_datetime")
         return datetime.strptime(stop_time_str, self.TIME_FMT)
 
     @property
@@ -214,7 +182,7 @@ class Sentinel(Base):
             >>> print(s.product_type)
             SLC
         """
-        return self._get_field("product type")
+        return self._get_field("product_type")
 
     @property
     def level(self):
@@ -241,7 +209,7 @@ class Sentinel(Base):
             >>> print(s.absolute_orbit)
             21371
         """
-        return int(self._get_field("orbit number"))
+        return int(self._get_field("orbit_number"))
 
     @property
     def relative_orbit(self):
@@ -271,62 +239,12 @@ class Sentinel(Base):
     @property
     def product_uid(self):
         """Unique identifier of product (last 4 of filename)"""
-        return self._get_field("product unique id")
+        return self._get_field("unique_id")
 
     @property
     def date(self):
         """Date of acquisition: shortcut for start_time.date()"""
         return self.start_time.date()
-
-    @property
-    def swath_extent(self):
-        """Give the lon and lat boundaries for the swath
-
-        Matches latlon.grid_extent(**dem_rsc_data)
-        (lon_left,lon_right,lat_bottom,lat_top)
-        """
-        if not os.path.exists(self.map_overlay_kml):
-            raise ValueError(
-                "No map-overlay.kml file found in %s" % self._preview_folder
-            )
-        lons, lats = list(zip(*self._lon_lat_overlay_coords))
-        return min(lons), max(lons), min(lats), max(lats)
-
-    @property
-    def extent(self):
-        """alias for swath_extent"""
-        return self.swath_extent
-
-    @property
-    def swath_width_height(self):
-        """Width and height of the swath area in degrees"""
-        left, right, bot, top = self.swath_extent
-        return right - left, top - bot
-
-    def overlaps_dem(self, dem_rsc_data):
-        """Swath is contained in DEM from rsc data"""
-        dem_extent = apertools.latlon.grid_extent(**dem_rsc_data)
-        return apertools.latlon.intersects(self.swath_extent, dem_extent)
-
-    def overlaps_geojson(self, geojson):
-        """Swath is contained in bounding box for geojson"""
-        if isinstance(geojson, str):
-            geojson = apertools.sario.load(geojson)
-
-        geojson_extent = apertools.geojson.extent(geojson)
-        return apertools.latlon.intersects(self.swath_extent, geojson_extent)
-
-    def overlaps(self, geojson_or_rsc):
-        """Swath is contained in DEM or geojson (parsed to figure out which is passed)"""
-        if "x_first" in [k.lower() for k in geojson_or_rsc.keys()]:
-            return self.overlaps_dem(geojson_or_rsc)
-
-        # Test for geojson by extracting the coords
-        try:
-            apertools.geojson.coords(geojson_or_rsc)
-        except ValueError:
-            raise ValueError("Need either valid geojson or dem_rsc_data")
-        return self.overlaps_geojson(geojson_or_rsc)
 
 
 class SentinelOrbit(Base):
@@ -365,16 +283,13 @@ class SentinelOrbit(Base):
         filename (str) name of the sentinel data product
     """
 
-    FILE_REGEX = (
-        r"(S1A|S1B)_OPER_AUX_([\w_]{6})_OPOD_([T\d]{15})_V([T\d]{15})_([T\d]{15}).EOF"
-    )
     TIME_FMT = "%Y%m%dT%H%M%S"
-    _FIELD_MEANINGS = (
-        "mission",
-        "orbit type",
-        "created datetime",
-        "start datetime",
-        "stop datetime",
+    FILE_REGEX = (
+        r"(?P<mission>S1A|S1B)_OPER_AUX_"
+        r"(?P<orbit_type>[\w_]{6})_OPOD_"
+        r"(?P<created_datetime>[T\d]{15})_"
+        r"V(?P<start_datetime>[T\d]{15})_"
+        r"(?P<stop_datetime>[T\d]{15})"
     )
 
     def __init__(self, filename, **kwargs):
@@ -415,54 +330,36 @@ class SentinelOrbit(Base):
     def start_time(self):
         """Returns start datetime of an orbit
 
-        Args:
-            filename (str): filename of a sentinel 1 EOF file
-
-        Returns:
-            datetime: start datetime of mission
-
         Example:
             >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
             >>> print(s.start_time)
             2019-12-31 22:59:42
         """
-        start_time_str = self._get_field("start datetime")
+        start_time_str = self._get_field("start_datetime")
         return datetime.strptime(start_time_str, self.TIME_FMT)
 
     @property
     def stop_time(self):
         """Returns stop datetime from a sentinel file name
 
-        Args:
-            filename (str): filename of a sentinel 1 product
-
-        Returns:
-            datetime: stop datetime
-
         Example:
             >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
             >>> print(s.stop_time)
             2020-01-02 00:59:42
         """
-        stop_time_str = self._get_field("stop datetime")
+        stop_time_str = self._get_field("stop_datetime")
         return datetime.strptime(stop_time_str, self.TIME_FMT)
 
     @property
     def created_time(self):
         """Returns created datetime from a orbit file name
 
-        Args:
-            filename (str): filename of a sentinel 1 product
-
-        Returns:
-            datetime: created datetime
-
         Example:
             >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
             >>> print(s.created_time)
             2020-01-21 12:06:54
         """
-        stop_time_str = self._get_field("created datetime")
+        stop_time_str = self._get_field("created_datetime")
         return datetime.strptime(stop_time_str, self.TIME_FMT)
 
     @property
@@ -477,7 +374,7 @@ class SentinelOrbit(Base):
         >>> print(s.orbit_type)
         restituted
         """
-        o = self._get_field("orbit type")
+        o = self._get_field("orbit_type")
         if o == "POEORB":
             return "precise"
         elif o == "RESORB":
