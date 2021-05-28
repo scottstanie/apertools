@@ -203,22 +203,24 @@ def create_geotiff(
         lon_lat (tuple[float]): if shape == 'point', the lon and lat of the point
     """
 
-    gdal_translate_box = "gdal_translate -of GTiff -a_nodata 0 -a_srs EPSG:4326 -a_ullr {ullr} {input} {out}"
-    gdal_translate_quad = "gdal_translate -of GTiff -a_nodata 0 -a_srs EPSG:4326 -gcp 1 1 {ul} -gcp 1 {nrows} {ll} -gcp {ncols} 1 {ur} {input} {out}"
     # gdalwarp -s_srs EPSG:4326 -t_srs EPSG:3857 out1.tif out2.tif
+    # Base of the gral_translate command
+    translate_cmd = "gdal_translate -of GTiff -a_nodata 0 -a_srs EPSG:4326 "
     if shape == "box":
         # ullr means upper left, lower right (lon, lat) points
         north, south, east, west = rsc_nsew(rsc_data)
         ullr_string = "%f %f %f %f" % (west, north, east, south)
-        cmd = gdal_translate_box.format(
-            ullr=ullr_string, input=img_filename, out=outfile
-        )
+        translate_cmd += " -a_ullr {ullr} {input} {out}"
+        cmd = translate_cmd.format(ullr=ullr_string, input=img_filename, out=outfile)
     elif shape == "quad":
         # coords:
         # [(-105.191055, 31.886913),
         #  (-104.869621, 33.508629),
         #  (-102.552689, 31.481976),
         #  (-102.181068, 33.105865)]
+        translate_cmd += (
+            " -gcp 1 1 {ul} -gcp 1 {nrows} {ll} -gcp {ncols} 1 {ur} {input} {out}"
+        )
 
         with rio.open(img_filename) as ds:
             ncols, nrows = ds.width, ds.height
@@ -230,7 +232,7 @@ def create_geotiff(
         ul = "%s %s" % ul
         ll = "%s %s" % ll
         ur = "%s %s" % ur
-        cmd = gdal_translate_quad.format(
+        cmd = translate_cmd.format(
             ul=ul,
             ll=ll,
             ur=ur,

@@ -9,6 +9,7 @@ import os
 import pprint
 
 from apertools.log import get_log
+
 logger = get_log()
 
 __all__ = ["Sentinel", "Uavsar", "SentinelOrbit"]
@@ -67,6 +68,10 @@ class Base(object):
     def _get_field(self, fieldname):
         """Pick a specific field based on its name"""
         return self.full_parse()[fieldname]
+        
+    def __getitem__(self, item):
+        """Access properties with uavsar[item] syntax"""
+        return self._get_field(item)
 
 
 class Sentinel(Base):
@@ -417,7 +422,19 @@ class Uavsar(Base):
 
     """
 
-    FILE_REGEX = r"([\w\d]{6})_(\d{3})(\w+)_(\d{2})(\d{3})_(\d{3})_(\d{6})_(\w)(\d{3})(\w{0,4})_(XX|CX)_(\w{2})(_ML\dX\d)?"
+    FILE_REGEX = (
+        r"(?P<target_site>[\w\d]{6})_"
+        # r"(?P<heading>\d{3})(?P<counter>\w+)_" # this is lineID
+        r"(?P<line_id>\d{5})_"
+        # r"(?P<year>\d{2})(?P<flight_number>\d{3})_" # this is FlightID
+        r"(?P<flight_id>\d{5})_"
+        r"(?P<data_take>\d{3})_"
+        r"(?P<date>\d{6})_"
+        r"(?P<band_squint_pol>\w{0,8})_"
+        r"(?P<xtalk>X|C)(?P<dither>[XGD])_"
+        r"(?P<nmode>\w{3,4})?_?"
+        r"(?P<version>\d{2})\.?(?P<ext>\w{2,5})?"
+    )
     TIME_FMT = "%y%m%d"
     _FIELD_MEANINGS = (
         "target site",
@@ -440,9 +457,8 @@ class Uavsar(Base):
     POLARIZATIONS = REAL_POLS + COMPLEX_POLS
 
     def __str__(self):
-        return "{} {} from {}".format(
-            self.__class__.__name__, self.polarization, self.date
-        )
+        return self.filename
+        return "{} from {}".format(self.__class__.__name__, self.date)
 
     @property
     def date(self):
