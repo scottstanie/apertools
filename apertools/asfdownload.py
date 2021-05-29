@@ -79,7 +79,7 @@ def form_url(
         bbox = get_dem_bbox(dem)
 
     # if bbox is None and absoluteOrbit is None:
-        # raise ValueError("Need either bbox or dem options without absoluteOrbit")
+    # raise ValueError("Need either bbox or dem options without absoluteOrbit")
 
     # TODO: geojson to WKT for intersection
     params = dict(
@@ -184,18 +184,20 @@ def _platform_beammodes():
 def _check_platform(args):
     choices = _platform_choices()
     if not (args.platform in choices["name"].values or args.platform is None):
-        raise ValueError(f"Invalid platform: {args.platform}")
+        raise ValueError(f"Invalid platform: {args.platform}. Choices: {choices}")
 
 
 def _check_beammode(args):
     platdf = _platform_choices()
-    canonical_name = platdf[platdf["name"].str.lower() == args.platform.lower()]
+    canonical_name_df = platdf[platdf["name"].str.lower() == args.platform.lower()]
+    canonical_name = canonical_name_df.iloc[0]["canonical"]
 
     beamdf = _platform_beammodes()
-    choices = beamdf[beamdf["platform"] == canonical_name]["values"]
+    choices = beamdf[beamdf["platform"] == canonical_name]["values"].iloc[0]
     if not (args.beamMode in choices or args.beamMode is None):
         raise ValueError(
-            f"Invalid beamMode {args.beamMode} for platform {args.platform}"
+            f"Invalid beamMode {args.beamMode} for platform {args.platform}. "
+            f"Choices: {choices}"
         )
 
 
