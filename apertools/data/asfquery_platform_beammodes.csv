@@ -1,4 +1,5 @@
-﻿AIRSAR,"3FP, ATI, XTI"
+﻿platform,values
+AIRSAR,"3FP, ATI, XTI"
 ALOS,"FBD, FBS, PLR, WB1, WB2, DSN"
 ERS-1,"Standard, STD"
 ERS-2,"Standard, STD"
