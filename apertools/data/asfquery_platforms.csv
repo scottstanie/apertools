@@ -13,13 +13,13 @@ J1, JERS-1
 RADARSAT-1, RADARSAT-1
 R1, RADARSAT-1
 SEASAT, SEASAT
-SS,SEASAT 
-S1,Sentinel 
-Sentinel,Sentinel 
+SS,SEASAT
+S1,Sentinel
+Sentinel,Sentinel
 Sentinel-1,Sentinel
-Sentinel-1A,Sentinel-1A 
-SA,Sentinel-1A 
-Sentinel-1B,Sentinel-1B 
+Sentinel-1A,Sentinel-1A
+SA,Sentinel-1A
+Sentinel-1B,Sentinel-1B
 SB,Sentinel-1B
 SMAP,SMAP
 SP,SMAP
