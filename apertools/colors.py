@@ -85,28 +85,37 @@ SEISMIC_WIDE2 = LinearSegmentedColormap.from_list(
     N=250,
 )
 plt.register_cmap("seismic_wider", SEISMIC_WIDE2)
+
+seismic_widy_y_list = [
+    (0, 0, 0.7, 1),
+    (0, 0, 1, 1),
+    (0.1, 0.3, 1, 1),
+    (0.2, 0.6, 0.95, 1),
+    (0.5, 0.8, 0.85, 1),
+    (0.8, 0.95, 0.80, 1),
+    (0.9, 0.92, 0.78, 1),
+    (0.95, 0.95, 0.75, 1),
+    (0.95, 0.92, 0.70, 1),
+    (0.95, 0.85, 0.65, 1),
+    (0.97, 0.65, 0.3, 1),
+    (1, 0.3, 0.2, 1),
+    (1, 0.1, 0.05, 1),
+    (1, 0, 0, 1),
+    (0.7, 0, 0, 1),
+]
 SEISMIC_WIDE_Y = LinearSegmentedColormap.from_list(
     "seismic_wide_y",
-    [
-        (0, 0, 0.7, 1),
-        (0, 0, 1, 1),
-        (0.1, 0.3, 1, 1),
-        (0.2, 0.6, 0.95, 1),
-        (0.5, 0.8, 0.85, 1),
-        (0.8, 0.95, 0.80, 1),
-        (0.9, 0.92, 0.78, 1),
-        (0.95, 0.95, 0.75, 1),
-        (0.95, 0.92, 0.70, 1),
-        (0.95, 0.85, 0.65, 1),
-        (0.97, 0.65, 0.3, 1),
-        (1, 0.3, 0.2, 1),
-        (1, 0.1, 0.05, 1),
-        (1, 0, 0, 1),
-        (0.7, 0, 0, 1),
-    ],
+    seismic_widy_y_list,
     N=256,
 )
 plt.register_cmap("seismic_wide_y", SEISMIC_WIDE_Y)
+# Also add the reverse colormap with _r in name
+SEISMIC_WIDE_Y_R = LinearSegmentedColormap.from_list(
+    "seismic_wide_y_r",
+    seismic_widy_y_list[::-1],
+    N=256,
+)
+plt.register_cmap("seismic_wide_y_r", SEISMIC_WIDE_Y_R)
 
 DISCRETE_SEISMIC5 = LinearSegmentedColormap.from_list(
     "discrete_seismic5", discrete_seismic_colors(5), N=5
