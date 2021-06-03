@@ -534,7 +534,7 @@ def rescale_and_color(in_name, outname, vmin=None, vmax=None, cmap=None):
     out_dt = "uint8"
     meta["dtype"] = out_dt
 
-    if vmax is None:
+    if vmax is None or vmin is None:
         arr_valid = arr[~mask]
         vmin, vmax = np.min(arr_valid), np.max(arr_valid)
 

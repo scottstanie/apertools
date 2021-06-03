@@ -1,3 +1,6 @@
+"""Module for exploting the full coherence/correlation matrix per pixel
+"""
+import itertools
 import numpy as np
 import xarray as xr
 import apertools.sario as sario
@@ -79,3 +82,8 @@ def plot_corr_matrix(corrmatrix, geolist, vmax=None, vmin=0):
     fig.autofmt_xdate()
     # fig.autofmt_ydate() # No y equivalent :(
     return fig, ax
+
+def plot_bandwidth(ifg_dates):
+    all_sar_dates = list(sorted(set(itertools.chain.from_iterable(ifg_dates))))
+    all_ifg_list = utils.full_igram_list(all_sar_dates)
+    return all_ifg_list

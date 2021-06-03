@@ -4,6 +4,7 @@ utils.py: Miscellaneous helper functions
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division, print_function
+import copy
 import errno
 import sys
 import os
@@ -145,6 +146,81 @@ def full_igram_list(geolist):
         for (idx, early) in enumerate(geolist[:-1])
         for late in geolist[idx + 1 :]
     ]
+
+
+def filter_min_max_date(ifg_list, min_date=None, max_date=None, verbose=False):
+    """Filters from an iterable of (date1, date1) ifg pairs by min/max date"""
+    if min_date:
+        ll = len(ifg_list)
+        ifg_list = [
+            ifg for ifg in ifg_list if (ifg[0] > min_date and ifg[1] > min_date)
+        ]
+        ll = len(ifg_list)
+        if verbose:
+            logger.info(f"Ignoring {ll - len(ifg_list)} igrams before {min_date}")
+    if max_date:
+        ll = len(ifg_list)
+        ifg_list = [
+            ifg for ifg in ifg_list if (ifg[0] < max_date and ifg[1] < max_date)
+        ]
+        if verbose:
+            logger.info(f"Ignoring {ll - len(ifg_list)} igrams after {max_date}")
+    return ifg_list
+
+
+def filter_geolist_intlist(
+    ifg_date_list,
+    min_date=None,
+    max_date=None,
+    max_temporal_baseline=None,
+    max_bandwidth=None,
+    verbose=False,
+):
+    valid_ifg_dates = copy.copy(ifg_date_list)
+
+    valid_ifg_dates = filter_min_max_date(
+        valid_ifg_dates, min_date, max_date, verbose=verbose
+    )
+    if max_temporal_baseline is not None:
+        ll = len(valid_ifg_dates)
+        valid_ifg_dates = [
+            ifg
+            for ifg in valid_ifg_dates
+            if abs((ifg[1] - ifg[0]).days) <= max_temporal_baseline
+        ]
+        if verbose:
+            logger.info(
+                f"Ignoring {ll - len(valid_ifg_dates)} longer than {max_temporal_baseline}"
+            )
+    elif max_bandwidth is not None:
+        valid_ifg_dates = limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth)
+
+    if verbose:
+        logger.info(f"Ignoring {len(ifg_date_list) - len(valid_ifg_dates)} igrams total")
+
+    # Now just use the ones remaining to reform the unique SAR dates
+    valid_sar_date = list(sorted(set(itertools.chain.from_iterable(valid_ifg_dates))))
+    # Does the same as np.searchsorted, but works on a list[tuple]
+    valid_ifg_idxs = [ifg_date_list.index(tup) for tup in valid_ifg_dates]
+    return valid_sar_date, valid_ifg_dates, valid_ifg_idxs
+
+
+def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth):
+    """Limit the total interferograms to just nearest `max_bandwidth` connections
+    Alternative to a temportal baseline.
+    """
+    cur_early = None
+    cur_bw = 1
+    ifg_used = []
+    for early, late in valid_ifg_dates:
+        if early != cur_early:
+            cur_bw = 1
+            cur_early = early
+        else:
+            cur_bw += 1
+        if cur_bw <= max_bandwidth:
+            ifg_used.append((early, late))
+    return ifg_used
 
 
 def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC"):
@@ -517,24 +593,6 @@ def get_parent_dir(filepath):
         return os.path.dirname(os.path.abspath(os.path.normpath(filepath)))
     else:
         return os.path.dirname(os.path.split(os.path.abspath(filepath))[0])
-
-
-def filter_min_max_date(ifg_list, min_date=None, max_date=None):
-    """Filters from an iterable of (date1, date1) ifg pairs by min/max date"""
-    if min_date:
-        ll = len(ifg_list)
-        ifg_list = [
-            ifg for ifg in ifg_list if (ifg[0] > min_date and ifg[1] > min_date)
-        ]
-        ll = len(ifg_list)
-        logger.info(f"Ignoring {ll - len(ifg_list)} igrams before {min_date}")
-    if max_date:
-        ll = len(ifg_list)
-        ifg_list = [
-            ifg for ifg in ifg_list if (ifg[0] < max_date and ifg[1] < max_date)
-        ]
-        logger.info(f"Ignoring {ll - len(ifg_list)} igrams after {max_date}")
-    return ifg_list
 
 
 def get_cache_dir(force_posix=False, app_name="apertools"):

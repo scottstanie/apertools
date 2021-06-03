@@ -6,11 +6,12 @@ Email: scott.stanie@utexas.edu
 
 from __future__ import division, print_function
 from collections.abc import Iterable
+import copy
 import datetime
 import fileinput
 import glob
 import math
-import time
+import itertools
 import json
 import os
 import re
@@ -1030,9 +1031,6 @@ def load_geolist_intlist(
     geolist_ignore_file=None,
     igram_ext=".int",
     parse=True,
-    min_date=None,
-    max_date=None,
-    max_temporal_baseline=None,
 ):
     """Load the geo_date_list and ifg_date_list from a igram_dir with igrams
 
@@ -1052,17 +1050,8 @@ def load_geolist_intlist(
         geo_date_list, ifg_date_list = ignore_geo_dates(
             geo_date_list, ifg_date_list, ignore_file=ignore_filepath, parse=parse
         )
-    # ifg_date_list = apertools.utils.filter_min_max_date(
-    #     ifg_date_list, min_date, max_date
-    # )
-
-    # if max_temporal_baseline is not None:
-    #     ifg_date_list = [
-    #         ifg
-    #         for ifg in ifg_date_list
-    #         if abs((ifg[1] - ifg[0]).days) > max_temporal_baseline
-    #     ]
     return geo_date_list, ifg_date_list
+
 
 
 def ignore_geo_dates(
