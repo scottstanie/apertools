@@ -84,6 +84,7 @@ def plot_corr_matrix(corrmatrix, geolist, vmax=None, vmin=0):
     return fig, ax
 
 
+# In [93]: out = apertools.correlation.plot_bandwidth(utils.filter_geolist_intlist(ifglist_full, max_temporal_baseline=300)[1])
 def plot_bandwidth(ifg_dates):
     all_sar_dates = list(sorted(set(itertools.chain.from_iterable(ifg_dates))))
     nsar = len(all_sar_dates)
