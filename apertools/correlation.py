@@ -83,7 +83,17 @@ def plot_corr_matrix(corrmatrix, geolist, vmax=None, vmin=0):
     # fig.autofmt_ydate() # No y equivalent :(
     return fig, ax
 
+
 def plot_bandwidth(ifg_dates):
     all_sar_dates = list(sorted(set(itertools.chain.from_iterable(ifg_dates))))
-    all_ifg_list = utils.full_igram_list(all_sar_dates)
-    return all_ifg_list
+    nsar = len(all_sar_dates)
+    # all_ifg_list = utils.full_igram_list(all_sar_dates)
+    out = np.full((nsar, nsar), fill_value=True, dtype=bool)
+    for idx in range(nsar):
+        d1 = all_sar_dates[idx]
+        for jdx in range(idx + 1, nsar):
+            d2 = all_sar_dates[jdx]
+            if (d1, d2) not in ifg_dates:
+                out[idx, jdx] = out[jdx, idx] = False
+
+    return out
