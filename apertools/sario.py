@@ -1053,7 +1053,6 @@ def load_geolist_intlist(
     return geo_date_list, ifg_date_list
 
 
-
 def ignore_geo_dates(
     geo_date_list, ifg_date_list, ignore_file="geolist_ignore.txt", parse=True
 ):

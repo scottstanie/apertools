@@ -174,13 +174,21 @@ def filter_geolist_intlist(
     max_date=None,
     max_temporal_baseline=None,
     max_bandwidth=None,
+    ignore_file=None,
     verbose=False,
 ):
     valid_ifg_dates = copy.copy(ifg_date_list)
+    if ignore_file is not None:
+        from . import sario
 
+        _, valid_ifg_dates = sario.ignore_geo_dates(
+            [], valid_ifg_dates, ignore_file=ignore_file, parse=True
+        )
     valid_ifg_dates = filter_min_max_date(
         valid_ifg_dates, min_date, max_date, verbose=verbose
     )
+    if max_temporal_baseline is not None and max_bandwidth is not None:
+        raise ValueError("Only can filter by one of bandwith or temp. baseline")
     if max_temporal_baseline is not None:
         ll = len(valid_ifg_dates)
         valid_ifg_dates = [
@@ -196,7 +204,9 @@ def filter_geolist_intlist(
         valid_ifg_dates = limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth)
 
     if verbose:
-        logger.info(f"Ignoring {len(ifg_date_list) - len(valid_ifg_dates)} igrams total")
+        logger.info(
+            f"Ignoring {len(ifg_date_list) - len(valid_ifg_dates)} igrams total"
+        )
 
     # Now just use the ones remaining to reform the unique SAR dates
     valid_sar_date = list(sorted(set(itertools.chain.from_iterable(valid_ifg_dates))))
