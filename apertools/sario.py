@@ -1280,6 +1280,8 @@ def save_as_vrt(
 
     Ref: https://gdal.org/drivers/raster/vrt.html#vrt-descriptions-for-raw-files
     """
+    # TODO: need to shift half pixel from RSC file to use GDAL conventions of 
+    # top left edge
     import gdal
 
     outfile = outfile or (filename + ".vrt")
@@ -1291,7 +1293,6 @@ def save_as_vrt(
     # Get geotransform and project based on rsc data, or existing GDAL info
     if rsc_data is None:
         if rsc_file is None:
-            # rsc_file = rsc_file if rsc_file else find_rsc_file(filename)
             try:
                 ds = gdal.Open(filename)
                 geotrans = ds.GetGeoTransform()

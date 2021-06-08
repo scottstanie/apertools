@@ -465,12 +465,6 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     help="Location of output file",
     show_default=True,
 )
-@click.option(
-    "--relative/--no-relative",
-    default=False,
-    help="Use relative paths for VRT source filename",
-    show_default=True,
-)
 def save_vrt(
     filenames,
     rsc_file,
@@ -481,20 +475,15 @@ def save_vrt(
     interleave,
     num_bands,
     out_dir,
-    relative,
 ):
-    """Save GDAL .vrt file binary raster loading
+    """Save GDAL .vrt file for easier binary raster loading
 
     List as many filenames with the same rsc as necessary
     """
     import apertools.sario
 
     for f in filenames:
-        if out_dir and out_dir != ".":
-            outfile = os.path.join(out_dir, os.path.split(f)[1]) + ".vrt"
-            relative = False
-        else:
-            outfile = None
+        outfile = os.path.join(out_dir, os.path.split(f)[1]) + ".vrt"
         apertools.sario.save_as_vrt(
             filename=f,
             rows=rows,
@@ -505,7 +494,7 @@ def save_vrt(
             interleave=interleave,
             num_bands=num_bands,
             outfile=outfile,
-            relative=relative,
+            relative=False,
         )
 
 
@@ -775,13 +764,13 @@ def subset(bbox, out_dir, in_dir, start_date, end_date):
         click.echo(f"Subsetting {in_fname} to {out_fname}")
         apertools.sario.save(out_fname, img)
 
-        s, d = (
+        src, dest = (
             in_fname.replace(".geo.vrt", ".orbtiming"),
             out_fname.replace(".geo", ".orbtiming"),
         )
 
-        click.echo(f"symlinking {s} to {d}")
-        force_symlink(s, d)
+        click.echo(f"symlinking {src} to {dest}")
+        force_symlink(src, dest)
         # copyfile(s, d)
 
 
