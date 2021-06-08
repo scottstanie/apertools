@@ -812,8 +812,17 @@ def load_intlist_from_h5(h5file, dset=None, parse=True):
 
 def parse_geolist_strings(geolist_str):
     # The re.search will find YYYYMMDD anywhere in string
-    matches = [re.search(r"\d{4}\d{2}\d{2}", f) for f in geolist_str]
-    return [_parse(m.group()) for m in matches]
+    if isinstance(geolist_str, str):
+        match = re.search(r"\d{4}\d{2}\d{2}", geolist_str)
+        if not match:
+            raise ValueError(f"{geolist_str} does not contain date as YYYYMMDD")
+        return _parse(match.group())
+    else:
+        matches = [re.search(r"\d{4}\d{2}\d{2}", f) for f in geolist_str]
+        try:
+            return [_parse(m.group()) for m in matches]
+        except AttributeError:
+            raise ValueError(f"{geolist_str} does not contain dates as YYYYMMDD")
 
 
 def parse_intlist_strings(date_pairs, ext=".int"):
@@ -890,16 +899,6 @@ def parse_geolist(geolist, ext=".geo"):
         return sorted(
             [apertools.parsers.Sentinel(geo).start_time.date() for geo in geolist]
         )
-
-
-def _strip_geoname(name):
-    """Leaves just date from format S1A_YYYYmmdd.geo"""
-    return (
-        name.replace("S1A_", "")
-        .replace("S1B_", "")
-        .replace(".geo", "")
-        .replace(".vrt", "")
-    )
 
 
 def find_igrams(directory=".", ext=".int", parse=True, filename=None):

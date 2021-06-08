@@ -2,7 +2,7 @@
 Main command line entry point to manage all other sub commands
 """
 import os
-from os.path import abspath, join, split
+from os.path import abspath, join
 import glob
 import json
 import click
@@ -761,16 +761,14 @@ def subset(bbox, out_dir, in_dir, start_date, end_date):
 
     # geos and .orbtimings
     for in_fname in glob.glob(join(in_dir, "*.geo.vrt")):
-        cur_date = apertools.sario._parse(
-            apertools.sario._strip_geoname(split(in_fname)[1])
-        )
+        cur_date = apertools.sario.parse_geolist_strings(os.path.split(in_fname)[1])
         if (end_date is not None and cur_date > end_date.date()) or (
             start_date is not None and cur_date < start_date.date()
         ):
             continue
         img = apertools.subset.read_subset(bbox, in_fname, driver="VRT")
 
-        _, nameonly = split(in_fname)
+        _, nameonly = os.path.split(in_fname)
         out_fname = join(out_dir, nameonly).replace(".vrt", "")
         # Can't write vrt?
         # copy_subset(bbox, in_fname, out_fname, driver="VRT")
