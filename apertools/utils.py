@@ -254,7 +254,7 @@ def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC
         ndarray, size = ceil(rows / row_looks, cols / col_looks)
         values at each pixel are averaged from input array
     """
-    import gdal
+    from osgeo import gdal
     from osgeo import gdalconst
 
     if row_looks == 1 and col_looks == 1:
@@ -288,7 +288,7 @@ def take_looks_gdal2(
     xlooks - Number of looks in x/range direction
     ylooks - Number of looks in y/azimuth direction
     """
-    import gdal
+    from osgeo import gdal
 
     ds = gdal.Open(infile, gdal.GA_ReadOnly)
 

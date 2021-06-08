@@ -1177,7 +1177,7 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
 
     Ref: https://gdal.org/tutorials/raster_api_tut.html#using-create
     """
-    import gdal
+    from osgeo import gdal
 
     rows, cols = array.shape
     if rsc_data is not None and (
@@ -1282,7 +1282,7 @@ def save_as_vrt(
     """
     # TODO: need to shift half pixel from RSC file to use GDAL conventions of 
     # top left edge
-    import gdal
+    from osgeo import gdal
 
     outfile = outfile or (filename + ".vrt")
     if outfile is None:
@@ -1386,7 +1386,7 @@ def save_as_vrt(
 def create_derived_band(
     src_filename, outfile=None, src_dtype="CFloat32", desc=None, func="log10"
 ):
-    import gdal
+    from osgeo import gdal
 
     # For new outfile, only have one .vrt extension
     if outfile is None:
@@ -1512,7 +1512,7 @@ def rsc_to_geotransform(rsc_data):
 
 def set_unit(filename, unit="cm"):
     from osgeo import gdalconst
-    import gdal
+    from osgeo import gdal
 
     go = gdal.Open(filename, gdalconst.GA_Update)
     b1 = go.GetRasterBand(1)
@@ -1551,7 +1551,7 @@ def cmy_colors():
 
 
 def make_cmy_colortable():
-    import gdal
+    from osgeo import gdal
 
     # create color table
     colors = gdal.ColorTable()
@@ -1687,7 +1687,7 @@ def save_east_up_mat(east_up_fname, outname=None, units="cm"):
 
 
 def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=".unw"):
-    import gdal
+    from osgeo import gdal
 
     if unw_filelist is None:
         unw_filelist = glob.glob(os.path.join(directory, "*" + ext))

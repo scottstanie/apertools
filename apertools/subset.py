@@ -14,7 +14,7 @@ def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True):
     """Create a VRT for (a subset of) a gdal-readable file
 
     bbox format: (left, bottom, right, top)"""
-    import gdal
+    from osgeo import gdal
 
     # if not out_fname:
     # out_fname = in_fname + ".vrt"

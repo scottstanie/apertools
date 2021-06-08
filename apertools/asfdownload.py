@@ -36,7 +36,7 @@ import subprocess
 from collections import Counter
 
 # import apertools.geojson
-# import gdal
+# from osgeo import gdal
 
 # python 2: urllib.urlencode
 from urllib.parse import urlencode

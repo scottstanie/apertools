@@ -20,7 +20,7 @@ $ ls 20180205_20180217*
 20180205_20180217.amp     20180205_20180217.amp.rsc  ...
 
 $ python
->>> import gdal
+>>> from osgeo import gdal
 >>> f1 = gdal.Open("20180205_20180217.amp")
 
 >>> f1.GetDriver().LongName

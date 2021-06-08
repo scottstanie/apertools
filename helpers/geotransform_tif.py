@@ -1,4 +1,4 @@
-import gdal
+from osgeo import gdal
 
 
 def georeference_image(filename, rsc_filename="dem.rsc"):
