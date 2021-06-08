@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
+#!/usr/bin/env python
 import re
 import argparse
 import os
@@ -31,7 +29,7 @@ def get_cli_args():
     parser.add_argument(
         "--out-vrt-name",
         type=str,
-        default="slc_base.vrt",
+        default="slcs_base.vrt",
         help="Name of output SLC containing all images (defaul = %(default)s)",
     )
     args = parser.parse_args()
@@ -81,7 +79,8 @@ def create_vrt_stack(file_list, outfile="slcs_base.vrt"):
             "Wavelength": str(SENTINEL_WAVELENGTH),
         }
         band = out_raster.GetRasterBand(band_num)
-        band.SetMetadata(metadata)
+        metadata_domain = "slc"
+        band.SetMetadata(metadata, metadata_domain)
 
     out_raster = None  # Force write
 
@@ -113,4 +112,3 @@ if __name__ == "__main__":
     utils.mkdir_p(args.out_dir)
     outfile = os.path.join(args.out_dir, args.out_vrt_name)
     create_vrt_stack(file_list, outfile=outfile)
-
