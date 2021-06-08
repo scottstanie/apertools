@@ -2,7 +2,7 @@
 import re
 import argparse
 import os
-import gdal
+from osgeo import gdal
 import apertools.utils as utils
 
 SENTINEL_WAVELENGTH = 0.05546576
