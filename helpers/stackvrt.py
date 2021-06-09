@@ -85,6 +85,37 @@ def create_vrt_stack(file_list, outfile="slcs_base.vrt"):
     out_raster = None  # Force write
 
 
+def create_vrt_stack_manual(file_list, outfile="slcs_base.vrt"):
+    # Use the first file in the stack to get size, transform info
+    ds = gdal.Open(file_list[0])
+    xsize = ds.RasterXSize
+    ysize = ds.RasterYSize
+    ds = None
+    print("write vrt file for stack directory")
+    with open(outfile, "w") as fid:
+        fid.write(f'<VRTDataset rasterXSize="{xsize}" rasterYSize="{ysize}">\n')
+
+        for idx, filename in enumerate(file_list, start=1):
+            date = _get_date(filename)
+            outstr = f"""    <VRTRasterBand dataType="CFloat32" band="{idx}">
+        <SimpleSource>
+            <SourceFilename>{filename}</SourceFilename>
+            <SourceBand>1</SourceBand>
+            <SourceProperties RasterXSize="{xsize}" RasterYSize="{ysize}" DataType="CFloat32"/>
+            <SrcRect xOff="0" yOff="0" xSize="{xsize}" ySize="{ysize}"/>
+            <DstRect xOff="0" yOff="0" xSize="{xsize}" ySize="{ysize}"/>
+        </SimpleSource>
+        <Metadata domain="slc">
+            <MDI key="Date">{date}</MDI>
+            <MDI key="Wavelength">{SENTINEL_WAVELENGTH}</MDI>
+            <MDI key="AcquisitionTime">{date}</MDI>
+        </Metadata>
+    </VRTRasterBand>\n"""
+            fid.write(outstr)
+
+        fid.write("</VRTDataset>")
+
+
 def _get_date(filename):
     match = re.search(r"\d{4}\d{2}\d{2}", filename)
     if not match:
@@ -111,4 +142,5 @@ if __name__ == "__main__":
     # Set up single stack file
     utils.mkdir_p(args.out_dir)
     outfile = os.path.join(args.out_dir, args.out_vrt_name)
-    create_vrt_stack(file_list, outfile=outfile)
+    # create_vrt_stack(file_list, outfile=outfile)
+    create_vrt_stack_manual(file_list, outfile=outfile)
