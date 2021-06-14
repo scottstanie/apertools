@@ -98,3 +98,55 @@ def plot_bandwidth(ifg_dates):
                 out[idx, jdx] = out[jdx, idx] = False
 
     return out
+
+
+def cov_matrix_tropo(ifg_date_list, sar_date_variances):
+    """Create a covariance matrix for tropospheric noise for 1 pixel
+
+    Args:
+        ifg_date_list (Iterable[Tuple]): list of (early, late) dates for ifgs
+        sar_date_variances (Iterable[Tuple]): list of variances per SAR date
+            if a scalar is given, will use the same variance for all dates
+    
+    Returns: sigma, the (M, M) covariance matrix, where M is the # of SAR dates
+        (unique dates in `ifg_date_list`)
+    """
+    M = len(ifg_date_list)
+    sar_date_list = list(sorted(set(itertools.chain.from_iterable(ifg_date_list))))
+    N = len(sar_date_list)
+
+    if np.isscalar(sar_date_variances):
+        sar_date_variances = sar_date_variances * np.ones(N)
+    else:
+        assert len(sar_date_list) == len(sar_date_variances)
+
+    sigma = np.zeros((M, M))
+    for (jdx, ig2) in enumerate(ifg_date_list):
+        for (idx, ig1) in enumerate(ifg_date_list):
+            if jdx > idx:
+                sigma[idx, jdx] = sigma[jdx, idx]
+                continue  # symmetric, so just copy over
+
+            d11, d12 = ig1
+            d21, d22 = ig2
+            if idx == jdx:
+                assert ig1 == ig2
+                sigma1 = sar_date_variances[sar_date_list.index(d11)]
+                sigma2 = sar_date_variances[sar_date_list.index(d12)]
+                sigma[idx, jdx] = sigma1 + sigma2
+                continue
+
+            # If there's a matching date with same sign -> positive variance
+            if d11 == d21:
+                sigma1 = sar_date_variances[sar_date_list.index(d11)]
+                sigma[idx, jdx] = sigma1
+            elif d12 == d22:
+                sigma2 = sar_date_variances[sar_date_list.index(d12)]
+                sigma[idx, jdx] = sigma2
+            # reverse the sign case
+            elif d12 == d21 or d11 == d22:
+                sigma2 = sar_date_variances[sar_date_list.index(d12)]
+                sigma[idx, jdx] = -sigma2
+            # otherwise there's no match, leave as 0
+
+    return sigma
