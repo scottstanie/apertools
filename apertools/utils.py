@@ -770,6 +770,11 @@ def block_iterator(arr_shape, window_shape, overlaps=(0, 0), start_offsets=(0, 0
     row_overlap, col_overlap = overlaps
     height, width = window_shape
 
+    if height is None:
+        height = rows
+    if width is None:
+        width = cols
+
     # Check we're not moving backwards with the overlap:
     if row_overlap >= height:
         raise ValueError(f"{row_overlap = } must be less than {height = }")
@@ -782,32 +787,28 @@ def block_iterator(arr_shape, window_shape, overlaps=(0, 0), start_offsets=(0, 0
             yield ((row_off, row_end), (col_off, col_end))
 
             col_off += width
-            col_off -= col_overlap
+            if col_off < cols: # dont bring back if already at edge
+                col_off -= col_overlap
 
         row_off += height
-        row_off -= row_overlap
+        if row_off < rows:
+            row_off -= row_overlap
         col_off = 0
 
 
-def read_blocks(filename, band=1, window_shape=(None, None), start_offsets=(0, 0)):
+def read_blocks(
+    filename, band=1, window_shape=(None, None), overlaps=(0, 0), start_offsets=(0, 0)
+):
     from rasterio.windows import Window
     import rasterio as rio
-
-    win_rows, win_cols = window_shape
-    with rio.open(filename) as src:
-        rows, cols = src.shape
-        if win_rows is None:
-            win_rows = rows
-        if win_cols is None:
-            win_cols = cols
-        window_shape = (win_rows, win_cols)
 
     with rio.open(filename) as src:
         block_iter = block_iterator(
             src.shape,
             window_shape,
+            overlaps=overlaps,
             start_offsets=start_offsets,
         )
-        for ((row_start, row_stop), (col_start, col_stop)) in block_iter:
-            window = Window.from_slices((row_start, row_stop), (col_start, col_stop))
+        for win_slice in block_iter:
+            window = Window.from_slices(*win_slice)
             yield src.read(band, window=window)
