@@ -746,77 +746,55 @@ def pprint_lon_lat(lon, lat, decimals=0):
     return f"{lat_str}{lon_str}"
 
 
-# Note
-# https://github.com/h5py/h5py/blob/0076bc4880bfa8b311338b21ddcd0e28cb27c443/h5py/_hl/dataset.py#L264
-# take from latest h5py, which is not released yet, but looks great
-class ChunkIterator(object):
+def block_iterator(arr_shape, window_shape, start_offsets=(0, 0)):
+    """Iterator to get indexes for accessing chunks of a raster
+
+    Args:
+        arr_shape = (num_rows, num_cols)
+        window_shape = (height, width)
+        start_offset = (row_offset, col_offset)
+    Yields:
+        iterator: ((row_start, row_end), (col_start, col_end))
+
+    Examples:
+    >>> list(block_iterator((180, 250), (100, 100)))
+    [((0, 100), (0, 100)), ((0, 100), (100, 200)), ((0, 100), (200, 250)), \
+((100, 180), (0, 100)), ((100, 180), (100, 200)), ((100, 180), (200, 250))]
     """
-    Class to iterate through list of chunks of a given dataset
+    rows, cols = arr_shape
+    row_off, col_off = start_offsets
+    height, width = window_shape
+    while row_off < rows:
+        while col_off < cols:
+            row_end = min(row_off + height, rows)
+            col_end = min(col_off + width, cols)
+            yield ((row_off, row_end), (col_off, col_end))
 
-    Note: will only give tuples for iterating over the rows/cols,
-    not the bands (the depth/time dimension)
+            col_off += width
 
-    For each chunk within the given region, iterator yields tuple of slices
+        row_off += height
+        col_off = 0
 
-    A TypeError will be raised if the dataset is not chunked.
 
-    A ValueError will be raised if the selection region is invalid.
+def read_blocks(filename, band=1, window_shape=(None, None), start_offsets=(0, 0)):
+    from rasterio.windows import Window
+    import rasterio as rio
 
-    Source:
-    https://github.com/h5py/h5py/blob/0076bc4880bfa8b311338b21ddcd0e28cb27c443/h5py/_hl/dataset.py
-    """
+    win_rows, win_cols = window_shape
+    with rio.open(filename) as src:
+        rows, cols = src.shape
+        if win_rows is None:
+            win_rows = rows
+        if win_cols is None:
+            win_cols = cols
+        window_shape = (win_rows, win_cols)
 
-    def __init__(self, dset):
-        self._shape = dset.shape
-        # rank = len(dset.shape)
-
-        if not dset.chunks:
-            # can only use with chunked datasets
-            raise TypeError("Chunked dataset required")
-
-        # Only get last 2, the row/col chunk sizes
-        self._layout = dset.chunks[-2:]
-
-        self._sel = tuple([slice(0, dset.shape[-2]), slice(0, dset.shape[1])])
-
-        self._chunk_index = [0, 0]
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        rank = len(self._sel)
-        slices = []
-        if self._chunk_index[0] * self._layout[0] >= self._sel[0].stop:
-            # ran past the last chunk, end iteration
-            raise StopIteration()
-
-        for dim in range(len(self._sel)):
-            s = self._sel[dim]
-            start = self._chunk_index[dim] * self._layout[dim]
-            stop = (self._chunk_index[dim] + 1) * self._layout[dim]
-            # adjust the start if this is an edge chunk
-            if start < s.start:
-                start = s.start
-            if stop > s.stop:
-                stop = s.stop  # trim to end of the selection
-            s = slice(start, stop, 1)
-            slices.append(s)
-
-        # bump up the last index and carry forward if we run outside the selection
-        dim = rank - 1
-        while dim >= 0:
-            s = self._sel[dim]
-            self._chunk_index[dim] += 1
-
-            chunk_end = self._chunk_index[dim] * self._layout[dim]
-            if chunk_end < s.stop:
-                # we still have room to extend along this dimensions
-                return tuple(slices)
-
-            if dim > 0:
-                # reset to the start and continue iterating with higher dimension
-                self._chunk_index[dim] = 0
-            dim -= 1
-
-        return tuple(slices)
+    with rio.open(filename) as src:
+        block_iter = block_iterator(
+            src.shape,
+            window_shape,
+            start_offsets=start_offsets,
+        )
+        for ((row_start, row_stop), (col_start, col_stop)) in block_iter:
+            window = Window.from_slices((row_start, row_stop), (col_start, col_stop))
+            yield src.read(band, window=window)
