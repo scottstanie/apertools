@@ -746,12 +746,13 @@ def pprint_lon_lat(lon, lat, decimals=0):
     return f"{lat_str}{lon_str}"
 
 
-def block_iterator(arr_shape, window_shape, start_offsets=(0, 0)):
+def block_iterator(arr_shape, window_shape, overlaps=(0, 0), start_offsets=(0, 0)):
     """Iterator to get indexes for accessing chunks of a raster
 
     Args:
         arr_shape = (num_rows, num_cols)
         window_shape = (height, width)
+        overlaps = (row_overlap, col_overlap)
         start_offset = (row_offset, col_offset)
     Yields:
         iterator: ((row_start, row_end), (col_start, col_end))
@@ -760,10 +761,20 @@ def block_iterator(arr_shape, window_shape, start_offsets=(0, 0)):
     >>> list(block_iterator((180, 250), (100, 100)))
     [((0, 100), (0, 100)), ((0, 100), (100, 200)), ((0, 100), (200, 250)), \
 ((100, 180), (0, 100)), ((100, 180), (100, 200)), ((100, 180), (200, 250))]
+    >>> list(block_iterator((180, 250), (100, 100), overlaps=(10, 10)))
+    [((0, 100), (0, 100)), ((0, 100), (90, 190)), ((0, 100), (180, 250)), \
+((90, 180), (0, 100)), ((90, 180), (90, 190)), ((90, 180), (180, 250))]
     """
     rows, cols = arr_shape
     row_off, col_off = start_offsets
+    row_overlap, col_overlap = overlaps
     height, width = window_shape
+
+    # Check we're not moving backwards with the overlap:
+    if row_overlap >= height:
+        raise ValueError(f"{row_overlap = } must be less than {height = }")
+    if col_overlap >= width:
+        raise ValueError(f"{col_overlap = } must be less than {width = }")
     while row_off < rows:
         while col_off < cols:
             row_end = min(row_off + height, rows)
@@ -771,8 +782,10 @@ def block_iterator(arr_shape, window_shape, start_offsets=(0, 0)):
             yield ((row_off, row_end), (col_off, col_end))
 
             col_off += width
+            col_off -= col_overlap
 
         row_off += height
+        row_off -= row_overlap
         col_off = 0
 
 
