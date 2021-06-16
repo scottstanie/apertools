@@ -415,7 +415,7 @@ def window_rowcol(lon_arr, lat_arr, bbox=None):
     Returns:
         (row_top, row_bot), (col_left, col_right)
     """
-    if bbox is None:
+    if bbox is None or len(bbox) == 0:
         return (0, len(lat_arr)), (0, len(lon_arr))
 
     # TODO: this should def be in latlon
