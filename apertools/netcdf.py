@@ -359,4 +359,4 @@ def create_nc_stack(
     help="To only convert a subset, pass lat/lon bounds: left bot right top",
 )
 def run_hdf5_to_netcdf(filename, outname, stack_dset, stack_dim, bbox):
-    hdf5_to_netcdf(filename, [stack_dset], [stack_dim], outname, bbox)
+    hdf5_to_netcdf(filename, stack_dset, stack_dim, outname, bbox)
