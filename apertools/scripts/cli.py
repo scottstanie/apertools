@@ -44,13 +44,7 @@ def cli(ctx, verbose, path):
 
 # COMMAND: view-stack
 @cli.command("view-stack")
-@click.option(
-    "--filename",
-    "-f",
-    default="deformation.h5",
-    help="Name of saved file containing deformation stack",
-    show_default=True,
-)
+@click.option("filename", help="Name of saved file containing deformation stack")
 @click.option(
     "--dset", default="stack", help="Dataset within hdf5 file", show_default=True
 )
@@ -78,6 +72,8 @@ def cli(ctx, verbose, path):
     default=False,
     show_default=True,
 )
+@click.option("--vmax", type=int)
+@click.option("--vmin", type=int)
 @click.pass_obj
 def view_stack(
     context,
@@ -91,6 +87,8 @@ def view_stack(
     col_start,
     col_end,
     rowcol,
+    vmax,
+    vmin,
 ):
     """Explore timeseries on stack of deformation images."""
     import apertools.sario, apertools.latlon, apertools.plotting
@@ -145,6 +143,8 @@ def view_stack(
         cmap=cmap,
         lat_lon=not rowcol,
         rsc_data=rsc_data,
+        vmax=vmax,
+        vmin=vmin,
     )
 
 

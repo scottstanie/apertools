@@ -274,7 +274,6 @@ def view_stack(
     if geolist is None:
         geolist = np.arange(stack.shape[0])
     geolist = np.array(geolist)
-    geolist_str = geolist_to_str(geolist)
 
     imagefig = plt.figure()
 
@@ -305,9 +304,6 @@ def view_stack(
     date_slider = DateSlider(
         ax=axdate,
         label="Date",
-        # valmin=geolist_str[0],
-        # valmax=geolist_str[-1],
-        # valinit=geolist_str[-1],
         valmin=mdates.date2num(geolist[0]),
         valmax=mdates.date2num(geolist[-1]),
         valinit=mdates.date2num(geolist[-1]),
