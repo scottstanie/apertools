@@ -323,13 +323,14 @@ def view_stack(
         else:
             legend_entries.append("Row %s, Col %s" % (row, col))
 
-        plt.figure(2)
-        plt.plot(geolist, timeline, **line_plot_kwargs)
-        plt.legend(legend_entries, loc=legend_loc)
+        fig = plt.figure(2)
+        ax = fig.gca()
+        ax.plot(geolist, timeline, **line_plot_kwargs)
+        ax.legend(legend_entries, loc=legend_loc)
         x_axis_str = "SAR image date" if geolist is not None else "Image number"
-        plt.xlabel(x_axis_str)
+        ax.set_xlabel(x_axis_str)
         timefig.autofmt_xdate()
-        plt.ylabel(label)
+        ax.set_ylabel(label)
         plt.show()
 
     imagefig.canvas.mpl_connect("button_press_event", onclick)

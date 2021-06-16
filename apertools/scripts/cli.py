@@ -97,9 +97,22 @@ def view_stack(
     import numpy as np
     import h5py
 
-    with h5py.File(filename, "r") as f:
-        deformation = f[dset][:]
-        geolist = apertools.sario.load_geolist_from_h5(filename, dset)
+    ext = os.path.splitext(filename)[1]
+    if ext == ".h5":
+        with h5py.File(filename, "r") as f:
+            deformation = f[dset][:]
+            geolist = apertools.sario.load_geolist_from_h5(filename, dset)
+    elif ext == ".nc":
+        import xarray as xr
+
+        ds = xr.open_dataset(filename)
+        if dset not in ds.data_vars:
+            print(f"WARNING: {dset} not a data variable in {filename}")
+            dset = list(ds.data_vars)[0]
+            print(f"Using {dset} isntead")
+            deformation = ds[stack]
+            date_dim = deformation.dims[0]
+            geolist = ds[date_dim]
 
     if geolist is None or deformation is None:
         return
@@ -107,7 +120,12 @@ def view_stack(
     if rowcol:
         rsc_data = None
     else:
-        rsc_data = apertools.sario.load_dem_from_h5(filename)
+        if ext == '.h5':
+            rsc_data = apertools.sario.load_dem_from_h5(filename)
+        elif ext == '.nc':
+            lats = ds[deformation.dims[1]]
+            lons = ds[deformation.dims[2]]
+            rsc_data = apertools.latlon.grid_to_rsc(lons, lats, sparse=True)
 
     # deformation = apertools.latlon.LatlonImage(data=deformation, rsc_data=rsc_data)
     deformation = deformation[:, row_start:row_end, col_start:col_end]
