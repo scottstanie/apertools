@@ -349,8 +349,8 @@ def create_nc_stack(
     help="Name of 3d datasets in the .h5 file to convert",
 )
 @click.option(
-    "--stack-dset",
-    help="Name of 3rd dimension for stack. If 'data' passed, will try to load geolist",
+    "--stack-dim",
+    help="Name of 3rd dimension for stack. If 'date' passed, will try to load date list",
 )
 @click.option(
     "--bbox",
@@ -358,5 +358,5 @@ def create_nc_stack(
     type=float,
     help="To only convert a subset, pass lat/lon bounds: left bot right top",
 )
-def run_hdf5_to_netcdf(filename, outname, stack_dset_list, stack_dim_list, bbox):
+def run_hdf5_to_netcdf(filename, outname, stack_dset, stack_dim, bbox):
     hdf5_to_netcdf(filename, [stack_dset], [stack_dim], outname, bbox)
