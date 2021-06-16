@@ -9,6 +9,7 @@ from matplotlib.widgets import Slider
 import matplotlib.dates as mdates
 from apertools.log import get_log
 from apertools import utils, latlon
+from apertools.sario import geolist_to_str
 from .colors import make_shifted_cmap, make_dismph_colors
 
 try:
@@ -17,6 +18,16 @@ except NameError:
     pass
 
 logger = get_log()
+
+
+class DateSlider(Slider):
+    # https://matplotlib.org/stable/_modules/matplotlib/widgets.html#Slider
+    def _format(self, val):
+        """Pretty-print *val*."""
+        if self.valfmt is not None:
+            return mdates.num2date(val).strftime(self.valfmt)
+        else:
+            return mdates.num2date(val).strftime("%Y-%m-%d")
 
 
 def scale_mag(img, expval=0.3, max_pct=99.95):
@@ -263,6 +274,7 @@ def view_stack(
     if geolist is None:
         geolist = np.arange(stack.shape[0])
     geolist = np.array(geolist)
+    geolist_str = geolist_to_str(geolist)
 
     imagefig = plt.figure()
 
@@ -289,13 +301,17 @@ def view_stack(
     # adjust the main plot to make room for the sliders
     plt.subplots_adjust(bottom=0.25)
     # Make a horizontal slider to control the frequency.
-    axdate = plt.axes([0.05, 0.1, 0.95, 0.03])
-    date_slider = Slider(
+    axdate = plt.axes([0.05, 0.1, 0.75, 0.03])
+    date_slider = DateSlider(
         ax=axdate,
         label="Date",
+        # valmin=geolist_str[0],
+        # valmax=geolist_str[-1],
+        # valinit=geolist_str[-1],
         valmin=mdates.date2num(geolist[0]),
         valmax=mdates.date2num(geolist[-1]),
         valinit=mdates.date2num(geolist[-1]),
+        valfmt="%Y-%m-%d",
     )
 
     def update_slider(val):
