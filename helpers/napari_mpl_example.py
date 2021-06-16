@@ -6,13 +6,17 @@ import h5py
 
 import napari
 
+import sys
+
+fname, dset = sys.argv[1:3]
+
 # create image
 x = np.linspace(0, 5, 256)
 y = np.linspace(0, 5, 256)[:, np.newaxis]
 img = np.sin(x) ** 10 + np.cos(10 + y * x) * np.cos(x)
 img_stack = np.stack([x * img for x in range(1, 5)])
-hf = h5py.File("masks.h5")
-ds = hf['geo']
+hf = h5py.File(fname)
+ds = hf[dset]
 
 
 # add it to the viewer

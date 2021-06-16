@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.widgets import Slider
+import matplotlib.dates as mdates
 from apertools.log import get_log
 from apertools import utils, latlon
 from .colors import make_shifted_cmap, make_dismph_colors
@@ -204,8 +206,7 @@ def _abs_max(img):
 
 
 def _get_vminmax(img, vm=None, vmin=None, vmax=None, twoway=True):
-    img_nonan = img[~np.isnan(img)]
-    vm = vm or np.max(np.abs(img_nonan))
+    vm = vm or np.nanmax(np.abs(img))
     if twoway:
         vmax = vm if vmax is None else vmax
         vmin = -vm if vmin is None else vmin
@@ -261,19 +262,20 @@ def view_stack(
     # If we don't have dates, use indices as the x-axis
     if geolist is None:
         geolist = np.arange(stack.shape[0])
+    geolist = np.array(geolist)
 
     imagefig = plt.figure()
 
     if isinstance(display_img, int):
         img = stack[display_img, :, :]
     # TODO: is this the best way to check if it's ndarray?
-    elif hasattr(display_img, "__array_finalize__"):
+    elif np.ndim(display_img) == 2:
         img = display_img
     else:
         raise ValueError("display_img must be an int or ndarray-like obj")
 
     title = title or "Deformation Time Series"  # Default title
-    plot_image(
+    _, _, axes_img = plot_image(
         img,
         fig=imagefig,
         title=title,
@@ -283,6 +285,28 @@ def view_stack(
         vmax=vmax,
         perform_shift=perform_shift,
     )
+
+    # adjust the main plot to make room for the sliders
+    plt.subplots_adjust(bottom=0.25)
+    # Make a horizontal slider to control the frequency.
+    axdate = plt.axes([0.05, 0.1, 0.95, 0.03])
+    date_slider = Slider(
+        ax=axdate,
+        label="Date",
+        valmin=mdates.date2num(geolist[0]),
+        valmax=mdates.date2num(geolist[-1]),
+        valinit=mdates.date2num(geolist[-1]),
+    )
+
+    def update_slider(val):
+        # The function to be called anytime a slider's value changes
+        vald = mdates.num2date(val)
+        closest_idx = np.argmin(np.abs(geolist - vald))
+        axes_img.set_data(stack[closest_idx])
+        imagefig.canvas.draw()
+
+    # register the update function with each slider
+    date_slider.on_changed(update_slider)
 
     timefig = plt.figure()
 
@@ -301,7 +325,7 @@ def view_stack(
         # https://stackoverflow.com/a/20712813
         # MPL version 3.3: https://stackoverflow.com/a/63447351
         if mpl.__version__ >= "3.3":
-            state = timefig.canvas.manager.toolbar.mode
+            state = imagefig.canvas.manager.toolbar.mode
             if state != "":  # Zoom/other tool is active
                 return
         else:
@@ -331,7 +355,8 @@ def view_stack(
         ax.set_xlabel(x_axis_str)
         timefig.autofmt_xdate()
         ax.set_ylabel(label)
-        plt.show()
+
+        timefig.canvas.draw()
 
     imagefig.canvas.mpl_connect("button_press_event", onclick)
     plt.show(block=True)

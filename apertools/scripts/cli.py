@@ -67,10 +67,10 @@ def cli(ctx, verbose, path):
     show_default=True,
 )
 @click.option("--title", help="Title for image plot")
-@click.option("--row-start", default=0, show_default=True)
-@click.option("--row-end", default=-1, show_default=True)
-@click.option("--col-start", default=0, show_default=True)
-@click.option("--col-end", default=-1, show_default=True)
+@click.option("--row-start", type=int)
+@click.option("--row-end", type=int)
+@click.option("--col-start", type=int)
+@click.option("--col-end", type=int)
 @click.option(
     "--rowcol",
     help="Use row,col for legened entries (instead of default lat,lon)",
@@ -104,15 +104,18 @@ def view_stack(
             geolist = apertools.sario.load_geolist_from_h5(filename, dset)
     elif ext == ".nc":
         import xarray as xr
+        import pandas as pd
 
         ds = xr.open_dataset(filename)
         if dset not in ds.data_vars:
             print(f"WARNING: {dset} not a data variable in {filename}")
             dset = list(ds.data_vars)[0]
             print(f"Using {dset} isntead")
-            deformation = ds[stack]
-            date_dim = deformation.dims[0]
-            geolist = ds[date_dim]
+        deformation = ds[dset]
+        date_dim = deformation.dims[0]
+        geolist = ds[date_dim].values
+        # convert from numpy datetime64 to datetime.datetime objects
+        geolist = pd.to_datetime(geolist).tz_localize('utc').to_pydatetime()
 
     if geolist is None or deformation is None:
         return
@@ -120,15 +123,17 @@ def view_stack(
     if rowcol:
         rsc_data = None
     else:
-        if ext == '.h5':
+        if ext == ".h5":
             rsc_data = apertools.sario.load_dem_from_h5(filename)
-        elif ext == '.nc':
-            lats = ds[deformation.dims[1]]
-            lons = ds[deformation.dims[2]]
+        elif ext == ".nc":
+            lats = ds[deformation.dims[1]].values
+            lons = ds[deformation.dims[2]].values
             rsc_data = apertools.latlon.grid_to_rsc(lons, lats, sparse=True)
+            # TODO: to in want to try and lazy load?
 
     # deformation = apertools.latlon.LatlonImage(data=deformation, rsc_data=rsc_data)
-    deformation = deformation[:, row_start:row_end, col_start:col_end]
+    if any((row_start, row_end, col_start, col_end)): 
+        deformation = deformation[:, row_start:row_end, col_start:col_end]
     img = np.mean(deformation[-3:], axis=0)
 
     apertools.plotting.view_stack(
