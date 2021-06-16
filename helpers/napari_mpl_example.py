@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_qt5agg import FigureCanvas
+import hdf5plugin
+import h5py
 
 import napari
 
@@ -9,10 +11,14 @@ x = np.linspace(0, 5, 256)
 y = np.linspace(0, 5, 256)[:, np.newaxis]
 img = np.sin(x) ** 10 + np.cos(10 + y * x) * np.cos(x)
 img_stack = np.stack([x * img for x in range(1, 5)])
+hf = h5py.File("masks.h5")
+ds = hf['geo']
+
 
 # add it to the viewer
 # viewer = napari.view_image(img, colormap="viridis")
-viewer = napari.view_image(img_stack, colormap="viridis")
+# viewer = napari.view_image(img_stack, colormap="viridis")
+viewer = napari.view_image(ds, colormap="viridis")
 layer = viewer.layers[-1]
 
 # create mpl figure with subplots

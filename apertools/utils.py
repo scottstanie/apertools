@@ -746,16 +746,21 @@ def pprint_lon_lat(lon, lat, decimals=0):
     return f"{lat_str}{lon_str}"
 
 
-def block_iterator(arr_shape, window_shape, overlaps=(0, 0), start_offsets=(0, 0)):
-    """Iterator to get indexes for accessing chunks of a raster
+def block_iterator(arr_shape, block_shape, overlaps=(0, 0), start_offsets=(0, 0)):
+    """Iterator to get indexes for accessing blocks of a raster
 
     Args:
-        arr_shape = (num_rows, num_cols)
-        window_shape = (height, width)
-        overlaps = (row_overlap, col_overlap)
-        start_offset = (row_offset, col_offset)
+        arr_shape = (num_rows, num_cols), full size of array to access
+        block_shape = (height, width), size of accessing blocks
+        overlaps = (row_overlap, col_overlap), number of pixels to re-include
+            after sliding the block (default (0, 0))
+        start_offset = (row_offset, col_offset) starting location (default (0,0))
     Yields:
         iterator: ((row_start, row_end), (col_start, col_end))
+
+    Notes:
+        If the block_shape/overlaps don't evenly divide the full arr_shape,
+        It will return the edges as smaller blocks, rather than skip them
 
     Examples:
     >>> list(block_iterator((180, 250), (100, 100)))
@@ -768,7 +773,7 @@ def block_iterator(arr_shape, window_shape, overlaps=(0, 0), start_offsets=(0, 0
     rows, cols = arr_shape
     row_off, col_off = start_offsets
     row_overlap, col_overlap = overlaps
-    height, width = window_shape
+    height, width = block_shape
 
     if height is None:
         height = rows
@@ -782,12 +787,12 @@ def block_iterator(arr_shape, window_shape, overlaps=(0, 0), start_offsets=(0, 0
         raise ValueError(f"{col_overlap = } must be less than {width = }")
     while row_off < rows:
         while col_off < cols:
-            row_end = min(row_off + height, rows)
+            row_end = min(row_off + height, rows)  # Dont yield something OOB
             col_end = min(col_off + width, cols)
             yield ((row_off, row_end), (col_off, col_end))
 
             col_off += width
-            if col_off < cols: # dont bring back if already at edge
+            if col_off < cols:  # dont bring back if already at edge
                 col_off -= col_overlap
 
         row_off += height
