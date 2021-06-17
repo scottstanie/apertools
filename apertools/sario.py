@@ -67,21 +67,21 @@ COMPLEX_EXTS = [
     ".int",
     ".slc",
     ".geo",
-    ".cc",
-    ".unw",
     ".unwflat",
     ".mlc",
     ".int.grd",
-    ".unw.grd",
 ]
 REAL_EXTS = [
     ".amp",
     ".cor",
     ".mlc",
+    ".unw",
     ".grd",
+    ".cc",
     ".cor.grd",
     ".amp1.grd",
     ".amp2.grd",
+    ".unw.grd",
     ".phs",  # GACOS, ROI_PAC?
     ".ztd",  # GACOS
 ]  # NOTE: .cor might only be real for UAVSAR
@@ -92,7 +92,7 @@ ELEVATION_EXTS = [".dem", ".hgt"]
 
 # These file types are not simple complex matrices: see load_stacked_img for detail
 # .unwflat are same as .unw, but with a linear ramp removed
-STACKED_FILES = [".cc", ".unw", ".unwflat", ".unw.grd", ".cc.grd"]
+STACKED_FILES = [".cc", ".unw", ".unwflat"]
 # real or complex for these depends on the polarization
 UAVSAR_POL_DEPENDENT = [".grd", ".mlc"]
 
@@ -124,12 +124,16 @@ DEM_RSC_DSET = "dem_rsc"
 GEOLIST_DSET = "geo_dates"
 INTLIST_DSET = "int_dates"
 
+# List of platforms where i've set up loading for their files
+PLATFORMS = ("sentinel", "uavsar")
+
 
 def load_file(
     filename,
     arr=None,
     downsample=None,
     looks=None,
+    platform="sentinel",
     rsc_file=None,
     rsc_data=None,
     ann_info=None,
@@ -218,35 +222,38 @@ def load_file(
             Image.open(filename).convert("L")
         )  # L for luminance == grayscale
 
-    # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
-    if rows is not None and cols is not None:
-        rsc_data = {"rows": rows, "cols": cols, "width": cols, "height": rows}
-    elif not rsc_file and os.path.exists(filename + ".rsc"):
-        rsc_file = filename + ".rsc"
-    elif not rsc_file and (
-        ext in SENTINEL_EXTS or ext in ROI_PAC_EXTS or ext in BOOL_EXTS
-    ):
-        # Try harder for .rsc
-        rsc_file = find_rsc_file(filename, verbose=verbose)
-
-    if rsc_file and rsc_data is None:
-        rsc_data = load_dem_rsc(rsc_file)
-
     if ext == ".grd":
         ext = _get_full_grd_ext(filename)
 
-    # UAVSAR files have an annotation file for metadata
-    if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
-        try:
-            u = apertools.parsers.Uavsar(filename, verbose=verbose)
-            ann_info = u.parse_ann_file()
-        except ValueError:
+    # If it hasn't been loaded by now, it's probably a radar file type
+    if platform == 'sentinel':
+        # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
+        if rows is not None and cols is not None:
+            rsc_data = {"rows": rows, "cols": cols, "width": cols, "height": rows}
+        elif not rsc_file and os.path.exists(filename + ".rsc"):
+            rsc_file = filename + ".rsc"
+        elif not rsc_file and (
+            ext in SENTINEL_EXTS or ext in ROI_PAC_EXTS or ext in BOOL_EXTS
+        ):
+            # Try harder for .rsc
+            rsc_file = find_rsc_file(filename, verbose=verbose)
+        if rsc_file and rsc_data is None:
+            rsc_data = load_dem_rsc(rsc_file)
+    elif platform == 'uavsar':
+        # UAVSAR files have an annotation file for metadata
+        if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
             try:
-                u = apertools.parsers.UavsarInt(filename, verbose=verbose)
+                u = apertools.parsers.Uavsar(filename, verbose=verbose)
                 ann_info = u.parse_ann_file()
             except ValueError:
-                print("Failed loading ann_info")
-                pass
+                try:
+                    u = apertools.parsers.UavsarInt(filename, verbose=verbose)
+                    ann_info = u.parse_ann_file()
+                except ValueError:
+                    print("Failed loading ann_info")
+                    pass
+    else:
+        raise NotImplementedError(f"platform choices are {PLATFORMS}")
 
     if not ann_info and not rsc_data:
         raise ValueError("Need .rsc file or .ann file to load")
@@ -256,7 +263,8 @@ def load_file(
             load_bool(filename, arr=arr, rsc_data=rsc_data, rows=rows, cols=cols),
             *looks,
         )
-    elif ext in STACKED_FILES:
+    # Note on UAVSAR loading: they dont seem to do any stacked files
+    elif ext in STACKED_FILES and platform == 'sentinel':
         stacked = load_stacked_img(
             filename,
             arr=arr,
@@ -425,7 +433,7 @@ def load_binary_img(
         dtype=dtype,
         arr=arr,
         rows=rows,
-        cols=rows,
+        cols=cols,
         ann_info=ann_info,
         rsc_data=rsc_data,
     )
@@ -552,7 +560,7 @@ def load_stacked_img(
         dtype=dtype,
         arr=arr,
         rows=rows,
-        cols=rows,
+        cols=cols,
         ann_info=ann_info,
         rsc_data=rsc_data,
     )
@@ -1280,7 +1288,7 @@ def save_as_vrt(
 
     Ref: https://gdal.org/drivers/raster/vrt.html#vrt-descriptions-for-raw-files
     """
-    # TODO: need to shift half pixel from RSC file to use GDAL conventions of 
+    # TODO: need to shift half pixel from RSC file to use GDAL conventions of
     # top left edge
     from osgeo import gdal
 
