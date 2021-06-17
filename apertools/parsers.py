@@ -564,18 +564,14 @@ class Uavsar(Base):
 class UavsarInt(Uavsar):
     """See https://uavsar.jpl.nasa.gov/science/documents/rpi-format.html"""
 
-    FILE_REGEX = r"([\w\d]{6})_(\d{2})(\d{3})_(\d{2})(\d{3})-(\d{3})_(\d{5})-(\d{3})_(\d{4})d_s01_([\w\d]{6,8})_(\d{2})"
-    _FIELD_MEANINGS = (
-        "target site",
-        "heading",
-        "counter",
-        "track1 year",
-        "track1 flight number",
-        "track1 flight line",
-        # TODO: fill in rest
-        "flight year",
-        "flight number",
-        "flight line",
+    FILE_REGEX = (
+        r"(?P<target_site>[\w\d]{6})_"
+        r"(?P<heading>\d{3})(?P<counter>\d{2})_" # this is lineID
+        r"(?P<line_id1>\d{5})-(?P<flight_number1>\d{3})_"
+        r"(?P<line_id2>\d{5})-(?P<flight_number2>\d{3})_"
+        r"(?P<baseline_days>\d{4})d_s01_"
+        r"(?P<band_squint_pol>\w{0,8})_"
+        r"(?P<version>\d{2})\.?(?P<ext>\w{2,5})?"
     )
 
     def __str__(self):
