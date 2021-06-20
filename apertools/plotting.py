@@ -589,6 +589,9 @@ def rescale_and_color(in_name, outname, vmin=None, vmax=None, cmap=None):
     return arr
 
 
+save_as_rgv_tiff = rescale_and_color
+
+
 def cmap_to_dict(cmap_name, vmin=None, vmax=None):
     # for matplotlib.colors.LinearSegmentedColormap
     # syd = {r: tuple(256*np.array(sy(r))) for r in range(256) }
