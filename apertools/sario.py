@@ -224,6 +224,10 @@ def load_file(
 
     if ext == ".grd":
         ext = _get_full_grd_ext(filename)
+    
+    # Double check the platform if there's only one option
+    if ext in UAVSAR_EXTS and ext not in SENTINEL_EXTS:
+        platform = 'uavsar'
 
     # If it hasn't been loaded by now, it's probably a radar file type
     if platform == 'sentinel':
@@ -240,6 +244,8 @@ def load_file(
         if rsc_file and rsc_data is None:
             rsc_data = load_dem_rsc(rsc_file)
     elif platform == 'uavsar':
+        if rows is not None and cols is not None:
+            ann_info = {"rows": rows, "cols": cols, "width": cols, "height": rows}
         # UAVSAR files have an annotation file for metadata
         if not ann_info and not rsc_data and ext in UAVSAR_EXTS:
             try:

@@ -44,7 +44,7 @@ def cli(ctx, verbose, path):
 
 # COMMAND: view-stack
 @cli.command("view-stack")
-@click.option("filename", help="Name of saved file containing deformation stack")
+@click.argument("filename")
 @click.option(
     "--dset", default="stack", help="Dataset within hdf5 file", show_default=True
 )

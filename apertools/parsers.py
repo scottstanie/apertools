@@ -68,7 +68,7 @@ class Base(object):
     def _get_field(self, fieldname):
         """Pick a specific field based on its name"""
         return self.full_parse()[fieldname]
-        
+
     def __getitem__(self, item):
         """Access properties with uavsar[item] syntax"""
         return self._get_field(item)
@@ -496,7 +496,7 @@ class Uavsar(Base):
     @property
     def target_site(self):
         """Target site of acquisition"""
-        return self._get_field("target site")
+        return self._get_field("target_site")
 
     @property
     def downsampling(self):
@@ -566,7 +566,7 @@ class UavsarInt(Uavsar):
 
     FILE_REGEX = (
         r"(?P<target_site>[\w\d]{6})_"
-        r"(?P<heading>\d{3})(?P<counter>\d{2})_" # this is lineID
+        r"(?P<heading>\d{3})(?P<counter>\d{2})_"  # this is lineID
         r"(?P<line_id1>\d{5})-(?P<flight_number1>\d{3})_"
         r"(?P<line_id2>\d{5})-(?P<flight_number2>\d{3})_"
         r"(?P<baseline_days>\d{4})d_s01_"
@@ -575,7 +575,61 @@ class UavsarInt(Uavsar):
     )
 
     def __str__(self):
-        return "{} from {}".format(self.__class__.__name__, self.target_site)
+        return "{} from {}: {} - {}".format(
+            self.__class__.__name__, self.target_site, self.line_id1, self.line_id2
+        )
+
+    @property
+    def line_id1(self):
+        """First pass line id"""
+        return self._get_field("line_id1")
+
+    @property
+    def line_id2(self):
+        """Second pass line id"""
+        return self._get_field("line_id2")
+
+
+class UavsarStack(Uavsar):
+    """See https://uavsar.jpl.nasa.gov/science/documents/stack-format.html
+
+    {site name}_{line ID}_{flight ID}_{data take counter}_{acquisition date}_{stack number}_
+    {band}{steering}{polarization}_{stack_version}_{baseline correction}_
+    {segment number}_{downsample factor}.slc
+    """
+
+    FILE_REGEX = (
+        r"(?P<target_site>[\w\d]{6})_"
+        r"(?P<line_id>\d{5})_"
+        r"(?P<flight_id>\d{5})_"
+        r"(?P<data_take>\d{3})_"
+        r"(?P<date>\d{6})_"
+        r"(?P<band_squint_pol>\w{0,8})_"
+        r"(?P<stack_version>\d{2})_"
+        r"(?P<baseline_correction>[B|U]C)_"
+        r"s(?P<segment_number>\d{0,4})_"
+        r"(?P<downsample_factor>[x\d]{0,4})"
+        r".?(?P<ext>\w{2,5})?"
+    )
+
+    def __str__(self):
+        return "{} from {} on {}".format(
+            self.__class__.__name__, self.target_site, self.date
+        )
+
+    @property
+    def baseline_correction(self):
+        """First pass line id"""
+        return (
+            "baseline corrected"
+            if self._get_field("baseline_correction") == "BC"
+            else "UC"
+        )
+
+    @property
+    def downsample_factor(self):
+        """Second pass line id"""
+        return self._get_field("downsample_factor")
 
 
 def parse_ann_file(ann_filename, filename=None, ext=None, verbose=False):
