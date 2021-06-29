@@ -175,7 +175,7 @@ def create_stack(
         cur_phase_sum *= PHASE_TO_CM
 
     if sigma_filter:
-        import insar.blob.utils as blob_utils
+        import blobsar.utils as blob_utils
 
         cur_phase_sum = blob_utils.gaussian_filter_nan(cur_phase_sum, sigma_filter)
 
