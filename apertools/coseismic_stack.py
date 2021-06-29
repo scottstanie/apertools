@@ -32,19 +32,17 @@ def stack_igrams(
     print(f"Event date: {event_date}")
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
-    stack_igrams = select_cross_event(
-        geolist, intlist, event_date, num_igrams=num_igrams
-    )
+    ifgs = select_cross_event(geolist, event_date, num_igrams=num_igrams)
     # stack_igrams = select_pre_event(geolist, intlist, event_date)
     # stack_igrams = select_post_event(geolist, intlist, event_date)
 
-    stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
+    stack_fnames = sario.intlist_to_filenames(ifgs, ".unw")
     if verbose:
         print(f"Using the following {len(stack_fnames)} igrams in stack:")
         for f in stack_fnames:
             print(f)
 
-    dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
+    dts = [(pair[1] - pair[0]).days for pair in ifgs]
 
     cur_phase_sum, cc_stack = create_stack(
         stack_fnames,
@@ -197,13 +195,13 @@ def subset_stack(
     gi_file = "geolist_ignore.txt" if ignore_geos else None
     geolist, intlist = sario.load_geolist_intlist(".", geolist_ignore_file=gi_file)
 
-    stack_igrams = select_cross_event(geolist, event_date, nigrams)
+    ifgs = select_cross_event(geolist, event_date, nigrams)
     # stack_igrams = select_pre_event(geolist, event_date, min_date=date(2019, 7, 1))
     # stack_igrams = select_post_event(
     #     geolist, event_date, max_date=date(2020, 5, 1)
     # )
 
-    stack_fnames = sario.intlist_to_filenames(stack_igrams, ".unw")
+    stack_fnames = sario.intlist_to_filenames(ifgs, ".unw")
     # dts = [(pair[1] - pair[0]).days for pair in stack_igrams]
     phase_subset_stack = []
     for f in stack_fnames:

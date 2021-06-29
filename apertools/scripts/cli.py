@@ -44,7 +44,7 @@ def cli(ctx, verbose, path):
 
 # COMMAND: view-stack
 @cli.command("view-stack")
-@click.option("filename", help="Name of saved file containing deformation stack")
+@click.argument("filename")
 @click.option(
     "--dset", default="stack", help="Dataset within hdf5 file", show_default=True
 )
@@ -74,9 +74,7 @@ def cli(ctx, verbose, path):
 )
 @click.option("--vmax", type=int)
 @click.option("--vmin", type=int)
-@click.pass_obj
 def view_stack(
-    context,
     filename,
     dset,
     cmap,
@@ -113,7 +111,7 @@ def view_stack(
         date_dim = deformation.dims[0]
         geolist = ds[date_dim].values
         # convert from numpy datetime64 to datetime.datetime objects
-        geolist = pd.to_datetime(geolist).tz_localize('utc').to_pydatetime()
+        geolist = pd.to_datetime(geolist).tz_localize("utc").to_pydatetime()
 
     if geolist is None or deformation is None:
         return
@@ -130,7 +128,7 @@ def view_stack(
             # TODO: to in want to try and lazy load?
 
     # deformation = apertools.latlon.LatlonImage(data=deformation, rsc_data=rsc_data)
-    if any((row_start, row_end, col_start, col_end)): 
+    if any((row_start, row_end, col_start, col_end)):
         deformation = deformation[:, row_start:row_end, col_start:col_end]
     img = np.mean(deformation[-3:], axis=0)
 
