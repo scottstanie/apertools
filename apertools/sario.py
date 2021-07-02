@@ -53,7 +53,7 @@ UAVSAR_EXTS = [
     ".amp.grd",
 ]
 ALOS_EXTS = [".slc", ".cc", ".int", ".amp", ".unw", ".unwflat"]  # TODO: check these
-BOOL_EXTS = [".mask"]
+BOOL_EXTS = [".mask", ".msk", ".wbd"]
 ROI_PAC_EXTS = [".phs"]
 GDAL_FORMATS = [".vrt", ".tif"]
 IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]

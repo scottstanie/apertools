@@ -817,3 +817,27 @@ def read_blocks(
         for win_slice in block_iter:
             window = Window.from_slices(*win_slice)
             yield src.read(band, window=window)
+
+
+def memmap_blocks(
+    filename, full_shape, block_rows, dtype, overlaps=(0, 0), start_offsets=(0, 0)
+):
+    total_rows, total_cols = full_shape
+    block_iter = block_iterator(
+        full_shape,
+        (block_rows, total_cols),
+        overlaps=overlaps,
+        start_offsets=start_offsets,
+    )
+    dtype = np.dtype(dtype)
+    for block_idxs in block_iter:
+        row_start = block_idxs[0][0]
+        offset = total_cols * row_start * dtype.itemsize
+        cur_block = np.memmap(
+            filename,
+            mode="r",
+            dtype=dtype,
+            offset=offset,
+            shape=(block_rows, total_cols),
+        )
+        yield cur_block
