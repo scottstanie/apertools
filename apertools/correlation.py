@@ -25,20 +25,20 @@ def create_cor_matrix(row_col=None, lat_lon=None, filename="cor_stack.nc", windo
         cv_cube = ds["stack"][:, row - win : row + win + 1, col - win : col + win + 1]
         corr_values = cv_cube.mean(dim=("lat", "lon"))
 
-    intlist = np.array(sario.parse_intlist_strings(filenames))
-    geolist = np.array(utils.geolist_from_igrams(intlist))
-    full_igram_list = np.array(utils.full_igram_list(geolist))
+    ifglist = np.array(sario.parse_ifglist_strings(filenames))
+    slclist = np.array(utils.slclist_from_igrams(ifglist))
+    full_igram_list = np.array(utils.full_igram_list(slclist))
 
     valid_idxs = np.searchsorted(
-        sario.intlist_to_filenames(full_igram_list),
-        sario.intlist_to_filenames(intlist),
+        sario.ifglist_to_filenames(full_igram_list),
+        sario.ifglist_to_filenames(ifglist),
     )
 
     full_corr_values = np.nan * np.ones((len(full_igram_list),))
     full_corr_values[valid_idxs] = corr_values
 
     # Now arange into a matrix: fill the upper triangle
-    ngeos = len(geolist)
+    ngeos = len(slclist)
     out = np.full((ngeos, ngeos), np.nan)
 
     # Diagonal is always 1
@@ -47,17 +47,17 @@ def create_cor_matrix(row_col=None, lat_lon=None, filename="cor_stack.nc", windo
 
     rows, cols = np.triu_indices(ngeos, k=1)
     out[rows, cols] = full_corr_values
-    return out, geolist
+    return out, slclist
 
 
 # TODO: plot with dates
-def plot_corr_matrix(corrmatrix, geolist, vmax=None, vmin=0):
+def plot_corr_matrix(corrmatrix, slclist, vmax=None, vmin=0):
     if vmax is None:
         # Make it slightly different color than the 1s on the diag
         vmax = 1.05 * np.nanmax(np.triu(corrmatrix, k=1))
 
     # Source for plot: https://stackoverflow.com/a/23142190
-    x_lims = y_lims = mdates.date2num(geolist)
+    x_lims = y_lims = mdates.date2num(slclist)
 
     fig, ax = plt.subplots()
     axim = ax.imshow(
@@ -84,7 +84,7 @@ def plot_corr_matrix(corrmatrix, geolist, vmax=None, vmin=0):
     return fig, ax
 
 
-# In [93]: out = apertools.correlation.plot_bandwidth(utils.filter_geolist_intlist(ifglist_full, max_temporal_baseline=300)[1])
+# In [93]: out = apertools.correlation.plot_bandwidth(utils.filter_slclist_ifglist(ifglist_full, max_temporal_baseline=300)[1])
 def plot_bandwidth(ifg_dates):
     all_sar_dates = list(sorted(set(itertools.chain.from_iterable(ifg_dates))))
     nsar = len(all_sar_dates)

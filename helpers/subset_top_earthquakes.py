@@ -192,11 +192,11 @@ def calc_avg_geos(
     stack_igrams, _ = select_subset_igrams(
         event_date, igram_dir, geo_dir, num_igrams=num_igrams
     )
-    geo_date_list = utils.geolist_from_igrams(stack_igrams)
+    geo_date_list = utils.slclist_from_igrams(stack_igrams)
     fully_connected_igrams = utils.full_igram_list(geo_date_list)
     src_fullpaths = [
         os.path.join(os.path.abspath(igram_dir), f)
-        for f in sario.intlist_to_filenames(fully_connected_igrams, ext)
+        for f in sario.ifglist_to_filenames(fully_connected_igrams, ext)
     ]
 
     print(f"Creating directory: {outdir}")
@@ -211,7 +211,7 @@ def calc_avg_geos(
     geo_to_fname_dict = {
         geo: [
             os.path.join(outdir, f)
-            for f in sario.intlist_to_filenames(ig_list, vrt_ext)
+            for f in sario.ifglist_to_filenames(ig_list, vrt_ext)
         ]
         for (geo, ig_list) in geo_to_igram_dict.items()
     }
@@ -251,7 +251,7 @@ def run_jackknife(
     plot_std=True,
 ):
     stack_igrams, _ = select_subset_igrams(event_date, igram_dir, geo_dir)
-    geos = utils.geolist_from_igrams(stack_igrams)
+    geos = utils.slclist_from_igrams(stack_igrams)
     imgs = []
     leave_out_dates = []
     for idx, g in enumerate(geos):
@@ -336,32 +336,32 @@ def select_subset_igrams(
     **kwargs,
 ):
     """Pick the igrams to use for the stack, and form full filepaths """
-    gi_file = "geolist_ignore.txt" if ignore_geos else None
-    geolist, intlist = sario.load_geolist_intlist(
-        igram_dir, geo_dir=geo_dir, geolist_ignore_file=gi_file
+    gi_file = "slclist_ignore.txt" if ignore_geos else None
+    slclist, ifglist = sario.load_slclist_ifglist(
+        igram_dir, geo_dir=geo_dir, slclist_ignore_file=gi_file
     )
     if extra_geo_ignores is not None:
-        geolist = [g for g in geolist if g not in extra_geo_ignores]
-        intlist = [
-            pair for pair in intlist if all(g not in pair for g in extra_geo_ignores)
+        slclist = [g for g in slclist if g not in extra_geo_ignores]
+        ifglist = [
+            pair for pair in ifglist if all(g not in pair for g in extra_geo_ignores)
         ]
     if igram_type == "cross":
         stack_igrams = coseismic_stack.select_cross_event(
-            geolist, intlist, event_date, num_igrams=num_igrams
+            slclist, ifglist, event_date, num_igrams=num_igrams
         )
     elif igram_type == "pre":
         min_date = event_date - datetime.timedelta(days=180)
         stack_igrams = coseismic_stack.select_pre_event(
-            geolist, intlist, event_date, min_date=min_date
+            slclist, ifglist, event_date, min_date=min_date
         )
     elif igram_type == "post":
         max_date = event_date + datetime.timedelta(days=180)
         stack_igrams = coseismic_stack.select_post_event(
-            geolist, intlist, event_date, max_date=max_date
+            slclist, ifglist, event_date, max_date=max_date
         )
     else:
         raise ValueError("igram_type must be 'cross', 'pre', 'post")
-    stack_fnames = sario.intlist_to_filenames(stack_igrams, ext)
+    stack_fnames = sario.ifglist_to_filenames(stack_igrams, ext)
     src_fullpaths = [os.path.join(os.path.abspath(igram_dir), f) for f in stack_fnames]
     return stack_igrams, src_fullpaths
 
@@ -478,15 +478,15 @@ def plot_avg(
     fig.colorbar(axim, ax=ax)
     plt.tight_layout()
 
-    geolist = sario.parse_geolist_strings([os.path.split(s)[1] for s in filenames])
-    plot_variances(geolist, imgs)
+    slclist = sario.parse_slclist_strings([os.path.split(s)[1] for s in filenames])
+    plot_variances(slclist, imgs)
     return fig, axes, imgs
 
 
-def plot_variances(geolist, imgs, title="Variance of SAR images"):
+def plot_variances(slclist, imgs, title="Variance of SAR images"):
     fig, ax = plt.subplots()
     variances = np.var(imgs, axis=(1, 2))
-    ax.plot(geolist, variances, "-x")
+    ax.plot(slclist, variances, "-x")
     ax.set_title(title)
     ax.set_ylabel("Variance of image")
     return fig, ax, variances
@@ -635,7 +635,7 @@ def get_cli_args():
     p.add_argument(
         "--no-ignore-geos",
         action="store_false",
-        help="Skip applying the geolist_ignore.txt file (default=%(default)s)",
+        help="Skip applying the slclist_ignore.txt file (default=%(default)s)",
     )
     p.add_argument(
         "--no-plot",

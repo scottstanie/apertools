@@ -737,7 +737,7 @@ def find_insar_ts(defo_filename="deformation.h5", station_name_list=[], window_s
         station_name_list
         window_size (int): number of pixels in sqaure to average for insar timeseries
     """
-    # geolist, deformation_stack = apertools.sario.load_deformation(full_path=defo_filename)
+    # slclist, deformation_stack = apertools.sario.load_deformation(full_path=defo_filename)
     # defo_img = apertools.latlon.load_deformation_img(full_path=defo_filename)
 
     insar_ts_list = []
@@ -753,10 +753,10 @@ def find_insar_ts(defo_filename="deformation.h5", station_name_list=[], window_s
             )
         )
 
-    geolist = apertools.sario.load_geolist_from_h5(
+    slclist = apertools.sario.load_slclist_from_h5(
         defo_filename, dset=apertools.sario.STACK_DSET
     )
-    return geolist, insar_ts_list
+    return slclist, insar_ts_list
 
 
 def get_stack_timeseries(
@@ -873,12 +873,12 @@ def create_insar_df(
     defo_filename="deformation.h5", station_name_list=[], window_size=1, days_smooth=5
 ):
     """Set days_smooth to None or 0 to avoid any data smoothing"""
-    geolist, insar_ts_list = find_insar_ts(
+    slclist, insar_ts_list = find_insar_ts(
         defo_filename=defo_filename,
         station_name_list=station_name_list,
         window_size=window_size,
     )
-    insar_df = pd.DataFrame({"dts": _series_to_date(pd.Series(geolist))})
+    insar_df = pd.DataFrame({"dts": _series_to_date(pd.Series(slclist))})
     for stat, ts in zip(station_name_list, insar_ts_list):
         insar_df[stat + "_insar"] = moving_average(ts, days_smooth)
         # insar_df[stat + "_smooth_insar"] = moving_average(ts, days_smooth)

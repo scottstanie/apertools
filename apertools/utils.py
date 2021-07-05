@@ -132,19 +132,19 @@ def scale_dset(filename, dset, scale):
         data[...] *= scale
 
 
-def geolist_from_igrams(igram_list):
+def slclist_from_igrams(igram_list):
     """Takes a list of [(reference, secondary),...] igram date pairs
     and returns the list of unique dates of SAR images used to form them
     """
     return sorted(list(set(itertools.chain(*igram_list))))
 
 
-def full_igram_list(geolist):
-    """Create the list of all possible igram pairs from geolist"""
+def full_igram_list(slclist):
+    """Create the list of all possible igram pairs from slclist"""
     return [
         (early, late)
-        for (idx, early) in enumerate(geolist[:-1])
-        for late in geolist[idx + 1 :]
+        for (idx, early) in enumerate(slclist[:-1])
+        for late in slclist[idx + 1 :]
     ]
 
 
@@ -168,7 +168,7 @@ def filter_min_max_date(ifg_list, min_date=None, max_date=None, verbose=False):
     return ifg_list
 
 
-def filter_geolist_intlist(
+def filter_slclist_ifglist(
     ifg_date_list,
     min_date=None,
     max_date=None,
@@ -702,8 +702,8 @@ def enu_to_az_inc(infile, outfile="los_az_inc.tif"):
     subprocess.run(f"rm -f {tmp_inc} {tmp_az}", shell=True, check=True)
 
 
-def velo_to_cumulative_scale(geolist):
-    ndays = (geolist[-1] - geolist[0]).days
+def velo_to_cumulative_scale(slclist):
+    ndays = (slclist[-1] - slclist[0]).days
     # input is MM/year
     # (mm/year) * (1 yr / 365 days) * (1 cm / 10 mm) * ndays => [cm]
     return ndays / 365 / 10

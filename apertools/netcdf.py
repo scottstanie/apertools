@@ -52,10 +52,10 @@ def hdf5_to_netcdf(
 
         if stack_dim == "date":
             try:
-                geolist = sario.load_geolist_from_h5(filename, dset=dset_name)
+                slclist = sario.load_slclist_from_h5(filename, dset=dset_name)
             except KeyError:  # Give this one a shot too
-                geolist = sario.load_geolist_from_h5(filename)
-            stack_dim_arr = to_datetimes(geolist)
+                slclist = sario.load_slclist_from_h5(filename)
+            stack_dim_arr = to_datetimes(slclist)
         else:
             stack_dim_arr = np.arange(nstack)
 
@@ -80,7 +80,7 @@ def hdf5_to_netcdf(
             if stack_dim not in f.variables:
                 if stack_dim == "date":
                     idxs = f.createVariable(stack_dim, "f4", (stack_dim,), zlib=True)
-                    idxs.units = f"days since {geolist[0]}"
+                    idxs.units = f"days since {slclist[0]}"
                 else:
                     idxs = f.createVariable(stack_dim, "i4", (stack_dim,))
 

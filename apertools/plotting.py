@@ -9,7 +9,7 @@ from matplotlib.widgets import Slider
 import matplotlib.dates as mdates
 from apertools.log import get_log
 from apertools import utils, latlon
-from apertools.sario import geolist_to_str
+from apertools.sario import slclist_to_str
 from .colors import make_shifted_cmap, make_dismph_colors
 
 try:
@@ -230,7 +230,7 @@ def _get_vminmax(img, vm=None, vmin=None, vmax=None, twoway=True):
 def view_stack(
     stack,
     display_img,
-    geolist=None,
+    slclist=None,
     label="Centimeters",
     cmap="seismic_wide_y",
     perform_shift=False,
@@ -248,7 +248,7 @@ def view_stack(
     Args:
         stack (ndarray): 3D np.ndarray, 1st index is image number
             i.e. the idx image is stack[idx, :, :]
-        geolist (list[datetime]): Optional: times of acquisition for
+        slclist (list[datetime]): Optional: times of acquisition for
             each stack layer. Used as xaxis if provided
         display_img (LatlonImage): Give which image in the stack you want as the display
         label (str): Optional- Label on colorbar/yaxis for plot
@@ -271,9 +271,9 @@ def view_stack(
 
     """
     # If we don't have dates, use indices as the x-axis
-    if geolist is None:
-        geolist = np.arange(stack.shape[0])
-    geolist = np.array(geolist)
+    if slclist is None:
+        slclist = np.arange(stack.shape[0])
+    slclist = np.array(slclist)
 
     imagefig = plt.figure()
 
@@ -304,16 +304,16 @@ def view_stack(
     date_slider = DateSlider(
         ax=axdate,
         label="Date",
-        valmin=mdates.date2num(geolist[0]),
-        valmax=mdates.date2num(geolist[-1]),
-        valinit=mdates.date2num(geolist[-1]),
+        valmin=mdates.date2num(slclist[0]),
+        valmax=mdates.date2num(slclist[-1]),
+        valinit=mdates.date2num(slclist[-1]),
         valfmt="%Y-%m-%d",
     )
 
     def update_slider(val):
         # The function to be called anytime a slider's value changes
         vald = mdates.num2date(val)
-        closest_idx = np.argmin(np.abs(geolist - vald))
+        closest_idx = np.argmin(np.abs(slclist - vald))
         axes_img.set_data(stack[closest_idx])
         imagefig.canvas.draw()
 
@@ -361,9 +361,9 @@ def view_stack(
 
         fig = plt.figure(2)
         ax = fig.gca()
-        ax.plot(geolist, timeline, **line_plot_kwargs)
+        ax.plot(slclist, timeline, **line_plot_kwargs)
         ax.legend(legend_entries, loc=legend_loc)
-        x_axis_str = "SAR image date" if geolist is not None else "Image number"
+        x_axis_str = "SAR image date" if slclist is not None else "Image number"
         ax.set_xlabel(x_axis_str)
         timefig.autofmt_xdate()
         ax.set_ylabel(label)

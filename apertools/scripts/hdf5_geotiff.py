@@ -92,6 +92,6 @@ def hdf5_to_geotiff(
 
     if convert_to_cumulative:
         logger.info(f"Converting velocities to cumulative deformation")
-        geolist = apertools.sario.load_geolist_from_h5(infile, dset=dset)
-        scale = apertools.utils.velo_to_cumulative_scale(geolist)
+        slclist = apertools.sario.load_slclist_from_h5(infile, dset=dset)
+        scale = apertools.utils.velo_to_cumulative_scale(slclist)
         rescale_dset(output, scale, nodata)

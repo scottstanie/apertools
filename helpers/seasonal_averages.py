@@ -9,7 +9,7 @@ from apertools.constants import PHASE_TO_CM
 
 
 def select_nearby_igrams(
-    intlist,
+    ifglist,
     day_lim=30,
     min_temporal=0,
     max_temporal=5000,
@@ -21,7 +21,7 @@ def select_nearby_igrams(
     """
     import pandas as pd
 
-    int_df = pd.DataFrame(intlist, columns=["day1", "day2"])
+    int_df = pd.DataFrame(ifglist, columns=["day1", "day2"])
     int_df["month1"] = pd.DatetimeIndex(int_df["day1"]).month
     int_df["month2"] = pd.DatetimeIndex(int_df["day2"]).month
     int_df["ddiff"] = (int_df.day2 - int_df.day1) / pd.offsets.Day(1)
@@ -38,12 +38,12 @@ def select_nearby_igrams(
 
     good_igram_idxs = int_df[close_dates & ~too_near & ~too_long & month_in_range]
 
-    return [intlist[i] for i in good_igram_idxs.index]
+    return [ifglist[i] for i in good_igram_idxs.index]
 
 
 def average_seasonal_igrams(
     ifg_dir=".",
-    gi_file="geolist_ignore.txt",
+    gi_file="slclist_ignore.txt",
     ext=".unw",
     day_lim=30,
     min_temporal=30,
@@ -53,15 +53,15 @@ def average_seasonal_igrams(
     to_cm=True,
     to_yearly_rate=True,
 ):
-    geolist, intlist = sario.load_geolist_intlist(ifg_dir, geolist_ignore_file=gi_file)
-    nearby_intlist = select_nearby_igrams(
-        intlist,
+    slclist, ifglist = sario.load_slclist_ifglist(ifg_dir, slclist_ignore_file=gi_file)
+    nearby_ifglist = select_nearby_igrams(
+        ifglist,
         day_lim=day_lim,
         min_temporal=min_temporal,
         month_range=month_range,
     )
-    print(f"Filtered {len(intlist)} original igrams down to {len(nearby_intlist)}")
-    fnames = sario.intlist_to_filenames(nearby_intlist, ext=ext)
+    print(f"Filtered {len(ifglist)} original igrams down to {len(nearby_ifglist)}")
+    fnames = sario.ifglist_to_filenames(nearby_ifglist, ext=ext)
 
     out = np.zeros(sario.load(fnames[0]).shape)
 
@@ -72,10 +72,10 @@ def average_seasonal_igrams(
     out_mask = np.zeros_like(out).astype(bool)
 
     # Get masks for deramping
-    mask_igram_date_list = sario.load_intlist_from_h5(mask_fname)
+    mask_igram_date_list = sario.load_ifglist_from_h5(mask_fname)
 
     total_days = 0
-    for (f, date_pair) in zip(fnames, nearby_intlist):
+    for (f, date_pair) in zip(fnames, nearby_ifglist):
         img = sario.load(f)
         baseline_days = (date_pair[1] - date_pair[0]).days
         if normalize_by == "per_date":

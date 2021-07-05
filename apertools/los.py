@@ -238,18 +238,18 @@ def project_enu_to_los(
     return np.array(enu_coeffs) @ np.array(data_enu)
 
 
-def merge_geolists(geolist1, geolist2):
-    """Take asc and desc geolists, makes one merged
+def merge_slclists(slclist1, slclist2):
+    """Take asc and desc slclists, makes one merged
 
     Gives the overlap indices of the merged list for each smaller
 
     """
-    merged_geolist = np.concatenate((geolist1, geolist2))
-    merged_geolist.sort()
+    merged_slclist = np.concatenate((slclist1, slclist2))
+    merged_slclist.sort()
 
-    _, indices1, _ = np.intersect1d(merged_geolist, geolist1, return_indices=True)
-    _, indices2, _ = np.intersect1d(merged_geolist, geolist2, return_indices=True)
-    return merged_geolist, indices1, indices2
+    _, indices1, _ = np.intersect1d(merged_slclist, slclist1, return_indices=True)
+    _, indices2, _ = np.intersect1d(merged_slclist, slclist2, return_indices=True)
+    return merged_slclist, indices1, indices2
 
 
 def plot_enu_maps(enu_ll, title=None, cmap="jet"):

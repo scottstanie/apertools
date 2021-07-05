@@ -64,7 +64,7 @@ def create_averages(
     geo_date_list, ifg_date_list = sario.ignore_geo_dates(
         geo_date_list,
         ifg_date_list,
-        ignore_file=os.path.join(search_path, "geolist_ignore.txt"),
+        ignore_file=os.path.join(search_path, "slclist_ignore.txt"),
     )
     with rio.open(unw_file_list[0]) as ds:
         out = np.zeros((ds.height, ds.width))
@@ -78,7 +78,7 @@ def create_averages(
     out_mask = np.zeros_like(out).astype(bool)
 
     # Get masks for deramping
-    mask_igram_date_list = sario.load_intlist_from_h5(mask_fname)
+    mask_igram_date_list = sario.load_ifglist_from_h5(mask_fname)
 
     for (idx, gdate) in enumerate(geo_date_list):
         outfile = "avg_" + gdate.strftime("%Y%m%d") + ".tif"

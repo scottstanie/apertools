@@ -97,7 +97,7 @@ def view_stack(
     if ext == ".h5":
         with h5py.File(filename, "r") as f:
             deformation = f[dset][:]
-            geolist = apertools.sario.load_geolist_from_h5(filename, dset)
+            slclist = apertools.sario.load_slclist_from_h5(filename, dset)
     elif ext == ".nc":
         import xarray as xr
         import pandas as pd
@@ -109,11 +109,11 @@ def view_stack(
             print(f"Using {dset} isntead")
         deformation = ds[dset]
         date_dim = deformation.dims[0]
-        geolist = ds[date_dim].values
+        slclist = ds[date_dim].values
         # convert from numpy datetime64 to datetime.datetime objects
-        geolist = pd.to_datetime(geolist).tz_localize("utc").to_pydatetime()
+        slclist = pd.to_datetime(slclist).tz_localize("utc").to_pydatetime()
 
-    if geolist is None or deformation is None:
+    if slclist is None or deformation is None:
         return
 
     if rowcol:
@@ -135,7 +135,7 @@ def view_stack(
     apertools.plotting.view_stack(
         deformation,
         img,
-        geolist=geolist,
+        slclist=slclist,
         title=title,
         label=label,
         cmap=cmap,
@@ -287,9 +287,9 @@ def kml(
     "--file-ext", help="If not loading deformation.npy, the extension of files to load"
 )
 @click.option(
-    "--intlist/--no-intlist",
+    "--ifglist/--no-ifglist",
     default=False,
-    help="If loading other file type, also load `intlist` file  for titles",
+    help="If loading other file type, also load `ifglist` file  for titles",
 )
 @click.option(
     "--db/--no-db", help="Use dB scale for images (default false)", default=False
@@ -298,11 +298,11 @@ def kml(
 @click.option("--vmin", type=float, help="Minimum value for imshow")
 @click.pass_obj
 def animate(
-    context, pause, save, display, cmap, shifted, file_ext, intlist, db, vmin, vmax
+    context, pause, save, display, cmap, shifted, file_ext, ifglist, db, vmin, vmax
 ):
     """Creates animation for 3D image stack.
 
-    If deformation.npy and geolist.npy or .unw files are not in current directory,
+    If deformation.npy and slclist.npy or .unw files are not in current directory,
     use the --path option:
 
         aper --path /path/to/igrams animate
@@ -317,9 +317,9 @@ def animate(
         stack = apertools.sario.load_stack(directory=context["path"], file_ext=file_ext)
         titles = sorted(apertools.sario.find_files(context["path"], "*" + file_ext))
     else:
-        geolist, deformation = apertools.sario.load_deformation(context["path"])
+        slclist, deformation = apertools.sario.load_deformation(context["path"])
         stack = deformation
-        titles = [d.strftime("%Y-%m-%d") for d in geolist]
+        titles = [d.strftime("%Y-%m-%d") for d in slclist]
 
     if db:
         stack = apertools.utils.db(stack)
@@ -771,7 +771,7 @@ def subset(bbox, out_dir, in_dir, start_date, end_date):
 
     # geos and .orbtimings
     for in_fname in glob.glob(join(in_dir, "*.geo.vrt")):
-        cur_date = apertools.sario.parse_geolist_strings(os.path.split(in_fname)[1])
+        cur_date = apertools.sario.parse_slclist_strings(os.path.split(in_fname)[1])
         if (end_date is not None and cur_date > end_date.date()) or (
             start_date is not None and cur_date < start_date.date()
         ):

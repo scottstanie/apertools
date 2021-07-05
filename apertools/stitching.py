@@ -22,9 +22,9 @@ def stitch_same_dates(
     """
     grouped_geos = group_geos_by_date(geo_path, reverse=reverse)
 
-    for _, geolist in grouped_geos:
+    for _, slclist in grouped_geos:
         stitch_geos(
-            geolist,
+            slclist,
             reverse,
             output_path,
             overwrite=overwrite,
@@ -35,7 +35,7 @@ def stitch_same_dates(
 
 
 def group_geos_by_date(geo_path, reverse=True):
-    def _make_groupby(geolist):
+    def _make_groupby(slclist):
         """Groups into sub-lists sharing dates
         example input:
         [Sentinel S1B, path 78 from 2017-10-13,
@@ -54,7 +54,7 @@ def group_geos_by_date(geo_path, reverse=True):
         """
         return [
             (date, list(g))
-            for date, g in itertools.groupby(geolist, key=lambda x: x.date)
+            for date, g in itertools.groupby(slclist, key=lambda x: x.date)
         ]
 
     # Assuming only IW products are used (included IW to differentiate from my date-only naming)
@@ -76,15 +76,15 @@ def group_geos_by_date(geo_path, reverse=True):
     return grouped_geos
 
 
-def stitch_geos(geolist, reverse, output_path, overwrite=False, verbose=True):
+def stitch_geos(slclist, reverse, output_path, overwrite=False, verbose=True):
     """Combines multiple .geo files of the same date into one image"""
     if verbose:
-        print("Stitching geos for %s" % geolist[0].date)
+        print("Stitching geos for %s" % slclist[0].date)
         print("reverse=", reverse)
-        for g in geolist:
+        for g in slclist:
             print("image:", g.filename, g.start_time)
 
-    g = geolist[0]
+    g = slclist[0]
     new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
     new_name = os.path.join(output_path, new_name)
     if os.path.exists(new_name):
@@ -99,8 +99,8 @@ def stitch_geos(geolist, reverse, output_path, overwrite=False, verbose=True):
             return
 
     # TODO: load as blocks, not all at once
-    # stitched_img = combine_complex([sario.load(g.filename) for g in geolist])
-    stitched_img = combine_complex([g.filename for g in geolist])
+    # stitched_img = combine_complex([sario.load(g.filename) for g in slclist])
+    stitched_img = combine_complex([g.filename for g in slclist])
 
     print("Saving stitched to %s" % new_name)
     # Remove any file with same name before saving

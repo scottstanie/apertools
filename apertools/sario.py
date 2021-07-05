@@ -121,8 +121,8 @@ IGRAM_MASK_SUM_DSET = "igram_sum"
 
 DEM_RSC_DSET = "dem_rsc"
 
-GEOLIST_DSET = "geo_dates"
-INTLIST_DSET = "int_dates"
+slclist_DSET = "geo_dates"
+ifglist_DSET = "int_dates"
 
 # List of platforms where i've set up loading for their files
 PLATFORMS = ("sentinel", "uavsar")
@@ -727,7 +727,7 @@ def load_deformation(
     """Loads a stack of deformation images from igram_path
 
     if using the "deformation.npy" version, igram_path must also contain
-    the "geolist.npy" file
+    the "slclist.npy" file
 
     Args:
         igram_path (str): directory of .npy file
@@ -735,7 +735,7 @@ def load_deformation(
         n (int): only load the last `n` layers of the stack
 
     Returns:
-        tuple[ndarray, ndarray]: geolist 1D array, deformation 3D array
+        tuple[ndarray, ndarray]: slclist 1D array, deformation 3D array
     """
     igram_path, filename, full_path = get_full_path(igram_path, filename, full_path)
 
@@ -767,20 +767,20 @@ def _load_deformation_h5(
                 deformation = f[dset][-n:]
             else:
                 deformation = f[dset][:]
-            # geolist attr will be is a list of strings: need them as datetimes
+            # slclist attr will be is a list of strings: need them as datetimes
 
     except (IOError, OSError) as e:
         logger.error("Can't load %s in path %s: %s", filename, igram_path, e)
         return None, None
     try:
-        geolist = load_geolist_from_h5(full_path, dset=dset)
+        slclist = load_slclist_from_h5(full_path, dset=dset)
     except Exception as e:
         logger.error(
-            "Can't load geolist from %s in path %s: %s", filename, igram_path, e
+            "Can't load slclist from %s in path %s: %s", filename, igram_path, e
         )
-        geolist = None
+        slclist = None
 
-    return geolist, deformation
+    return slclist, deformation
 
 
 def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None):
@@ -790,56 +790,56 @@ def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None
         deformation = np.load(os.path.join(igram_path, filename))
         if n is not None:
             deformation = deformation[-n:]
-        # geolist is a list of datetimes: encoding must be bytes
-        geolist = np.load(
-            os.path.join(igram_path, "geolist.npy"), encoding="bytes", allow_pickle=True
+        # slclist is a list of datetimes: encoding must be bytes
+        slclist = np.load(
+            os.path.join(igram_path, "slclist.npy"), encoding="bytes", allow_pickle=True
         )
     except (IOError, OSError):
-        logger.error("%s or geolist.npy not found in path %s", filename, igram_path)
+        logger.error("%s or slclist.npy not found in path %s", filename, igram_path)
         return None, None
 
-    return geolist, deformation
+    return slclist, deformation
 
 
-def load_geolist_from_h5(h5file, dset=None, parse=True):
+def load_slclist_from_h5(h5file, dset=None, parse=True):
     with h5py.File(h5file, "r") as f:
         if dset is None:
-            geolist_str = f[GEOLIST_DSET][()].astype(str)
+            slclist_str = f[slclist_DSET][()].astype(str)
         else:
-            geolist_str = f[dset].attrs[GEOLIST_DSET][()].astype(str)
+            slclist_str = f[dset].attrs[slclist_DSET][()].astype(str)
 
     if parse:
-        return parse_geolist_strings(geolist_str)
+        return parse_slclist_strings(slclist_str)
     else:
-        return geolist_str
+        return slclist_str
 
 
-def load_intlist_from_h5(h5file, dset=None, parse=True):
+def load_ifglist_from_h5(h5file, dset=None, parse=True):
     with h5py.File(h5file, "r") as f:
-        date_pair_strs = f[INTLIST_DSET][:].astype(str)
+        date_pair_strs = f[ifglist_DSET][:].astype(str)
 
     if parse:
-        return parse_intlist_strings(date_pair_strs)
+        return parse_ifglist_strings(date_pair_strs)
     else:
         return date_pair_strs
 
 
-def parse_geolist_strings(geolist_str):
+def parse_slclist_strings(slclist_str):
     # The re.search will find YYYYMMDD anywhere in string
-    if isinstance(geolist_str, str):
-        match = re.search(r"\d{4}\d{2}\d{2}", geolist_str)
+    if isinstance(slclist_str, str):
+        match = re.search(r"\d{4}\d{2}\d{2}", slclist_str)
         if not match:
-            raise ValueError(f"{geolist_str} does not contain date as YYYYMMDD")
+            raise ValueError(f"{slclist_str} does not contain date as YYYYMMDD")
         return _parse(match.group())
     else:
-        matches = [re.search(r"\d{4}\d{2}\d{2}", f) for f in geolist_str]
+        matches = [re.search(r"\d{4}\d{2}\d{2}", f) for f in slclist_str]
         try:
             return [_parse(m.group()) for m in matches]
         except AttributeError:
-            raise ValueError(f"{geolist_str} does not contain dates as YYYYMMDD")
+            raise ValueError(f"{slclist_str} does not contain dates as YYYYMMDD")
 
 
-def parse_intlist_strings(date_pairs, ext=".int"):
+def parse_ifglist_strings(date_pairs, ext=".int"):
     # If we passed filename YYYYmmdd_YYYYmmdd.int
     if isinstance(date_pairs, str):
         # TODO: isn't this better than stripping 'ext'?
@@ -850,7 +850,7 @@ def parse_intlist_strings(date_pairs, ext=".int"):
     return [(_parse(early), _parse(late)) for early, late in date_pairs]
 
 
-def load_geolist_from_nc(ncfile, dim="date", parse=True):
+def load_slclist_from_nc(ncfile, dim="date", parse=True):
     import xarray as xr
 
     with xr.open_dataset(ncfile) as ds:
@@ -871,7 +871,7 @@ def find_geos(directory=".", ext=".geo", parse=True, filename=None):
     Can also pass a filename containing .geo files as lines.
 
     Args:
-        directory (str): path to the geolist file or directory
+        directory (str): path to the slclist file or directory
         ext (str): file extension when searching a directory
         parse (bool): output as parsed datetime tuples. False returns the filenames
         filename (string): name of a file with .geo filenames
@@ -894,24 +894,24 @@ def find_geos(directory=".", ext=".geo", parse=True, filename=None):
         return geo_file_list
 
     # Stripped of path for parser
-    geolist = [os.path.split(fname)[1] for fname in geo_file_list]
-    if not geolist:
+    slclist = [os.path.split(fname)[1] for fname in geo_file_list]
+    if not slclist:
         return []
         # raise ValueError("No .geo files found in %s" % directory)
-    return parse_geolist(geolist, ext=ext)
+    return parse_slclist(slclist, ext=ext)
 
 
-def parse_geolist(geolist, ext=".geo"):
+def parse_slclist(slclist, ext=".geo"):
     pat = r"\w*S1[AB]_(?P<date>\d{8})" + ext
-    if re.match(pat, geolist[0]):  # S1A_YYYYmmdd.geo
+    if re.match(pat, slclist[0]):  # S1A_YYYYmmdd.geo
         # Note: will match even if file is S1A_YYYYmmdd.geo.vrt
-        dates = [re.match(pat, geo).groupdict()["date"] for geo in geolist]
+        dates = [re.match(pat, geo).groupdict()["date"] for geo in slclist]
         return sorted([_parse(d) for d in dates])
-    elif re.match(r"\d{8}", geolist[0]):  # YYYYmmdd , just a date string
-        return sorted([_parse(geo) for geo in geolist if geo])
+    elif re.match(r"\d{8}", slclist[0]):  # YYYYmmdd , just a date string
+        return sorted([_parse(geo) for geo in slclist if geo])
     else:  # Full sentinel product name
         return sorted(
-            [apertools.parsers.Sentinel(geo).start_time.date() for geo in geolist]
+            [apertools.parsers.Sentinel(geo).start_time.date() for geo in slclist]
         )
 
 
@@ -942,7 +942,7 @@ def find_igrams(directory=".", ext=".int", parse=True, filename=None):
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
         date_pairs = [intname.strip(ext).split("_")[:2] for intname in igram_fnames]
-        return parse_intlist_strings(date_pairs, ext=ext)
+        return parse_ifglist_strings(date_pairs, ext=ext)
     else:
         return igram_file_list
 
@@ -960,7 +960,7 @@ def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
         f[dset_name] = json.dumps(dem_rsc)
 
 
-def save_geolist_to_h5(
+def save_slclist_to_h5(
     igram_path=None,
     out_file=None,
     dset_name=None,
@@ -969,27 +969,27 @@ def save_geolist_to_h5(
     overwrite=False,
 ):
     if geo_date_list is None:
-        geo_date_list, _ = load_geolist_intlist(igram_path, igram_ext=igram_ext)
+        geo_date_list, _ = load_slclist_ifglist(igram_path, igram_ext=igram_ext)
 
     if dset_name is not None:
-        if not check_dset(out_file, dset_name, overwrite, attr_name=GEOLIST_DSET):
+        if not check_dset(out_file, dset_name, overwrite, attr_name=slclist_DSET):
             return geo_date_list
     else:
-        if not check_dset(out_file, GEOLIST_DSET, overwrite):
+        if not check_dset(out_file, slclist_DSET, overwrite):
             return geo_date_list
 
-    geo_str_list = geolist_to_str(geo_date_list)
+    geo_str_list = slclist_to_str(geo_date_list)
     with h5py.File(out_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
-        # f[GEOLIST_DSET] = json.dumps(geolist_to_str(geo_date_list))
+        # f[slclist_DSET] = json.dumps(slclist_to_str(geo_date_list))
         if dset_name is not None:
-            f[dset_name].attrs[GEOLIST_DSET] = geo_str_list
+            f[dset_name].attrs[slclist_DSET] = geo_str_list
         else:
-            f[GEOLIST_DSET] = geo_str_list
+            f[slclist_DSET] = geo_str_list
     return geo_date_list
 
 
-def save_intlist_to_h5(
+def save_ifglist_to_h5(
     igram_path=None,
     dset_name=None,
     out_file=None,
@@ -998,38 +998,38 @@ def save_intlist_to_h5(
     ifg_date_list=None,
 ):
     if ifg_date_list is None:
-        _, ifg_date_list = load_geolist_intlist(igram_path, igram_ext=igram_ext)
+        _, ifg_date_list = load_slclist_ifglist(igram_path, igram_ext=igram_ext)
 
-    if not check_dset(out_file, INTLIST_DSET, overwrite):
+    if not check_dset(out_file, ifglist_DSET, overwrite):
         return ifg_date_list
 
-    igram_str_list = intlist_to_str(ifg_date_list)
-    logger.info("Saving igram dates to %s / %s" % (out_file, INTLIST_DSET))
+    igram_str_list = ifglist_to_str(ifg_date_list)
+    logger.info("Saving igram dates to %s / %s" % (out_file, ifglist_DSET))
     with h5py.File(out_file, "a") as f:
         if dset_name is not None:
-            f[dset_name].attrs[INTLIST_DSET] = igram_str_list
+            f[dset_name].attrs[ifglist_DSET] = igram_str_list
         else:
-            f[INTLIST_DSET] = igram_str_list
+            f[ifglist_DSET] = igram_str_list
     return ifg_date_list
 
 
-def geolist_to_str(geo_date_list):
+def slclist_to_str(geo_date_list):
     return np.array([d.strftime(DATE_FMT) for d in geo_date_list]).astype("S")
 
 
-# def geolist_to_filenames(geo_date_list, ext=".geo"):
+# def slclist_to_filenames(geo_date_list, ext=".geo"):
 #     """Convert SAR date list to list of filename strings"""
 #     return ["{}{ext}".format(a.strftime(DATE_FMT), ext=ext) for a in geo_date_list]
 
 
-def intlist_to_str(ifg_date_list):
+def ifglist_to_str(ifg_date_list):
     """Date pairs to Nx2 numpy array or strings"""
     return np.array(
         [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in ifg_date_list]
     ).astype("S")
 
 
-def intlist_to_filenames(ifg_date_list, ext=".int"):
+def ifglist_to_filenames(ifg_date_list, ext=".int"):
     """Convert date pairs to list of string filenames"""
     return [
         "{}_{}{ext}".format(a.strftime(DATE_FMT), b.strftime(DATE_FMT), ext=ext)
@@ -1037,11 +1037,11 @@ def intlist_to_filenames(ifg_date_list, ext=".int"):
     ]
 
 
-def load_geolist_intlist(
+def load_slclist_ifglist(
     igram_dir=None,
     geo_dir=None,
     h5file=None,
-    geolist_ignore_file=None,
+    slclist_ignore_file=None,
     igram_ext=".int",
     parse=True,
 ):
@@ -1050,16 +1050,16 @@ def load_geolist_intlist(
     if geo_dir is None, assumes that the .geo files are one diretory up from the igrams
     """
     if h5file is not None:
-        ifg_date_list = load_intlist_from_h5(h5file, parse=parse)
-        geo_date_list = load_geolist_from_h5(h5file, parse=parse)
+        ifg_date_list = load_ifglist_from_h5(h5file, parse=parse)
+        geo_date_list = load_slclist_from_h5(h5file, parse=parse)
     elif igram_dir is not None:
         ifg_date_list = find_igrams(directory=igram_dir, parse=parse, ext=igram_ext)
         if geo_dir is None:
             geo_dir = apertools.utils.get_parent_dir(igram_dir)
         geo_date_list = find_geos(directory=geo_dir, parse=parse)
 
-    if geolist_ignore_file is not None:
-        ignore_filepath = os.path.join(igram_dir or ".", geolist_ignore_file)
+    if slclist_ignore_file is not None:
+        ignore_filepath = os.path.join(igram_dir or ".", slclist_ignore_file)
         geo_date_list, ifg_date_list = ignore_geo_dates(
             geo_date_list, ifg_date_list, ignore_file=ignore_filepath, parse=parse
         )
@@ -1067,7 +1067,7 @@ def load_geolist_intlist(
 
 
 def ignore_geo_dates(
-    geo_date_list, ifg_date_list, ignore_file="geolist_ignore.txt", parse=True
+    geo_date_list, ifg_date_list, ignore_file="slclist_ignore.txt", parse=True
 ):
     """Read extra file to ignore certain dates of interferograms"""
     ignore_geos = set(find_geos(filename=ignore_file, parse=parse))
@@ -1139,10 +1139,10 @@ def load_mask(
     if deformation_filename is not None:
         if directory is not None:
             deformation_filename = os.path.join(directory, deformation_filename)
-            geo_date_list = load_geolist_from_h5(deformation_filename, dset=dset)
+            geo_date_list = load_slclist_from_h5(deformation_filename, dset=dset)
 
     # Get the indices of the mask layers that were used in the deformation stack
-    all_geo_dates = load_geolist_from_h5(mask_full_path)
+    all_geo_dates = load_slclist_from_h5(mask_full_path)
     if geo_date_list is None:
         used_bool_arr = np.full(len(all_geo_dates), True)
     else:
@@ -1169,12 +1169,12 @@ def load_single_mask(
     `20170101_20170104.int` or `20170101_20170303` to int_date_string
     """
     if ifg_date_list is None:
-        ifg_date_list = load_intlist_from_h5(mask_filename)
+        ifg_date_list = load_ifglist_from_h5(mask_filename)
 
     if int_date_string is not None:
         # If the pass string with ., only take first part
         date_str_pair = int_date_string.split(".")[0].split("_")
-        date_pair = parse_intlist_strings([date_str_pair])[0]
+        date_pair = parse_ifglist_strings([date_str_pair])[0]
 
     with h5py.File(mask_filename, "r") as f:
         idx = ifg_date_list.index(date_pair)
