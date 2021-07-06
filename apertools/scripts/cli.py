@@ -491,6 +491,8 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     help="Location of output file",
     show_default=True,
 )
+@click.option("--metadata", "-m", multiple=True)
+@click.option("--metadata-domain")
 def save_vrt(
     filenames,
     rsc_file,
@@ -501,6 +503,8 @@ def save_vrt(
     interleave,
     num_bands,
     out_dir,
+    metadata,
+    metadata_domain,
 ):
     """Save GDAL .vrt file for easier binary raster loading
 
@@ -508,6 +512,8 @@ def save_vrt(
     """
     import apertools.sario
 
+    if metadata:
+        print("metadata dict:", _args_to_dict(metadata))
     for f in filenames:
         outfile = os.path.join(out_dir, os.path.split(f)[1]) + ".vrt"
         apertools.sario.save_vrt(
@@ -521,8 +527,14 @@ def save_vrt(
             num_bands=num_bands,
             outfile=outfile,
             relative=False,
+            metadata_dict=_args_to_dict(metadata),
+            metadata_domain=metadata_domain,
         )
 
+def _args_to_dict(args):
+    if len(args) % 2 != 0:
+        raise ValueError("Must pass pairse of key/value pairs")
+    return dict(zip(args[::2], args[1::2]))
 
 @cli.command("smallslc")
 @click.argument("filenames", nargs=-1)

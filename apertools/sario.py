@@ -1215,6 +1215,8 @@ def save_vrt(
     band=None,
     num_bands=None,
     relative=True,
+    metadata_dict=None,
+    metadata_domain=None,
     verbose=True,
 ):
     """Save a VRT corresponding to a raw raster file
@@ -1334,6 +1336,11 @@ def save_vrt(
     gdal_dtype = numpy_to_gdal_type(dtype)
     # print("gdal dtype", gdal_dtype, dtype)
     out_raster.AddBand(gdal_dtype, options)
+    if metadata_dict is not None:
+        out_raster.SetMetadata(metadata_dict, metadata_domain)
+        # To write to a specific band:
+        # band = out_raster.GetRasterBand(1)
+        # band.SetMetadata(metadata_dict, metadata_domain)
     out_raster = None  # Force write
 
     # if geotrans is not None:
