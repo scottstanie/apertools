@@ -6,12 +6,10 @@ Email: scott.stanie@utexas.edu
 
 from __future__ import division, print_function
 from collections.abc import Iterable
-import copy
 import datetime
 import fileinput
 import glob
 import math
-import itertools
 import json
 import os
 import re
@@ -224,13 +222,13 @@ def load_file(
 
     if ext == ".grd":
         ext = _get_full_grd_ext(filename)
-    
+
     # Double check the platform if there's only one option
     if ext in UAVSAR_EXTS and ext not in SENTINEL_EXTS:
-        platform = 'uavsar'
+        platform = "uavsar"
 
     # If it hasn't been loaded by now, it's probably a radar file type
-    if platform == 'sentinel':
+    if platform == "sentinel":
         # Sentinel files should have .rsc file: check for dem.rsc, or elevation.rsc
         if rows is not None and cols is not None:
             rsc_data = {"rows": rows, "cols": cols, "width": cols, "height": rows}
@@ -243,7 +241,7 @@ def load_file(
             rsc_file = find_rsc_file(filename, verbose=verbose)
         if rsc_file and rsc_data is None:
             rsc_data = load_dem_rsc(rsc_file)
-    elif platform == 'uavsar':
+    elif platform == "uavsar":
         if rows is not None and cols is not None:
             ann_info = {"rows": rows, "cols": cols, "width": cols, "height": rows}
         # UAVSAR files have an annotation file for metadata
@@ -270,7 +268,7 @@ def load_file(
             *looks,
         )
     # Note on UAVSAR loading: they dont seem to do any stacked files
-    elif ext in STACKED_FILES and platform == 'sentinel':
+    elif ext in STACKED_FILES and platform == "sentinel":
         stacked = load_stacked_img(
             filename,
             arr=arr,
@@ -356,7 +354,7 @@ def find_files(directory, search_term):
 def find_rsc_file(filename=None, directory=None, verbose=False):
     if filename:
         directory = os.path.split(os.path.abspath(filename))[0]
-    # Should be just elevation.dem.rsc (for .geo folder) or dem.rsc (for igrams)
+    # Should be just elevation.dem.rsc (for slc folder) or dem.rsc (for igrams)
     possible_rscs = find_files(directory, "*.rsc")
     if verbose:
         logger.info("Searching %s for rsc files", directory)
@@ -865,39 +863,38 @@ def _parse(datestr):
     return datetime.datetime.strptime(datestr, DATE_FMT).date()
 
 
-def find_geos(directory=".", ext=".geo", parse=True, filename=None):
-    """Reads in the list of .geo files used, in time order
+def find_slcs(directory=".", ext=".geo", parse=True, filename=None):
+    """Reads in the list of slc files used, in time order
 
-    Can also pass a filename containing .geo files as lines.
+    Can also pass a filename containing slc files as lines.
 
     Args:
         directory (str): path to the slclist file or directory
         ext (str): file extension when searching a directory
         parse (bool): output as parsed datetime tuples. False returns the filenames
-        filename (string): name of a file with .geo filenames
+        filename (string): name of a file with slc filenames
 
     Returns:
-        list[date]: the parse dates of each .geo used, in date order
+        list[date]: the parse dates of each slc used, in date order
 
     """
     if filename is not None:
         with open(filename) as f:
-            geo_file_list = [
+            slc_file_list = [
                 line
                 for line in f.read().splitlines()
                 if not line.strip().startswith("#")
             ]
     else:
-        geo_file_list = find_files(directory, "*" + ext)
+        slc_file_list = find_files(directory, "*" + ext)
 
     if not parse:
-        return geo_file_list
+        return slc_file_list
 
     # Stripped of path for parser
-    slclist = [os.path.split(fname)[1] for fname in geo_file_list]
+    slclist = [os.path.split(fname)[1] for fname in slc_file_list]
     if not slclist:
         return []
-        # raise ValueError("No .geo files found in %s" % directory)
     return parse_slclist(slclist, ext=ext)
 
 
@@ -922,7 +919,7 @@ def find_igrams(directory=".", ext=".int", parse=True, filename=None):
         directory (str): path to the igram directory
         ext (str): file extension when searching a directory
         parse (bool): output as parsed datetime tuples. False returns the filenames
-        filename (str): name of a file with .geo filenames
+        filename (str): name of a file with filenames
 
     Returns:
         tuple(date, date) of (early, late) dates for all igrams (if parse=True)
@@ -964,29 +961,29 @@ def save_slclist_to_h5(
     igram_path=None,
     out_file=None,
     dset_name=None,
-    geo_date_list=None,
+    slc_date_list=None,
     igram_ext=".int",
     overwrite=False,
 ):
-    if geo_date_list is None:
-        geo_date_list, _ = load_slclist_ifglist(igram_path, igram_ext=igram_ext)
+    if slc_date_list is None:
+        slc_date_list, _ = load_slclist_ifglist(igram_path, igram_ext=igram_ext)
 
     if dset_name is not None:
         if not check_dset(out_file, dset_name, overwrite, attr_name=SLCLIST_DSET):
-            return geo_date_list
+            return slc_date_list
     else:
         if not check_dset(out_file, SLCLIST_DSET, overwrite):
-            return geo_date_list
+            return slc_date_list
 
-    geo_str_list = slclist_to_str(geo_date_list)
+    slc_str_list = slclist_to_str(slc_date_list)
     with h5py.File(out_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
-        # f[SLCLIST_DSET] = json.dumps(slclist_to_str(geo_date_list))
+        # f[SLCLIST_DSET] = json.dumps(slclist_to_str(slc_date_list))
         if dset_name is not None:
-            f[dset_name].attrs[SLCLIST_DSET] = geo_str_list
+            f[dset_name].attrs[SLCLIST_DSET] = slc_str_list
         else:
-            f[SLCLIST_DSET] = geo_str_list
-    return geo_date_list
+            f[SLCLIST_DSET] = slc_str_list
+    return slc_date_list
 
 
 def save_ifglist_to_h5(
@@ -1013,13 +1010,13 @@ def save_ifglist_to_h5(
     return ifg_date_list
 
 
-def slclist_to_str(geo_date_list):
-    return np.array([d.strftime(DATE_FMT) for d in geo_date_list]).astype("S")
+def slclist_to_str(slc_date_list):
+    return np.array([d.strftime(DATE_FMT) for d in slc_date_list]).astype("S")
 
 
-# def slclist_to_filenames(geo_date_list, ext=".geo"):
+# def slclist_to_filenames(slc_date_list, ext=".geo"):
 #     """Convert SAR date list to list of filename strings"""
-#     return ["{}{ext}".format(a.strftime(DATE_FMT), ext=ext) for a in geo_date_list]
+#     return ["{}{ext}".format(a.strftime(DATE_FMT), ext=ext) for a in slc_date_list]
 
 
 def ifglist_to_str(ifg_date_list):
@@ -1039,48 +1036,48 @@ def ifglist_to_filenames(ifg_date_list, ext=".int"):
 
 def load_slclist_ifglist(
     igram_dir=None,
-    geo_dir=None,
+    slc_dir=None,
     h5file=None,
     slclist_ignore_file=None,
     igram_ext=".int",
     parse=True,
 ):
-    """Load the geo_date_list and ifg_date_list from a igram_dir with igrams
+    """Load the slc_date_list and ifg_date_list from a igram_dir with igrams
 
-    if geo_dir is None, assumes that the .geo files are one diretory up from the igrams
+    if slc_dir is None, assumes that the slc files are one diretory up from the igrams
     """
     if h5file is not None:
         ifg_date_list = load_ifglist_from_h5(h5file, parse=parse)
-        geo_date_list = load_slclist_from_h5(h5file, parse=parse)
+        slc_date_list = load_slclist_from_h5(h5file, parse=parse)
     elif igram_dir is not None:
         ifg_date_list = find_igrams(directory=igram_dir, parse=parse, ext=igram_ext)
-        if geo_dir is None:
-            geo_dir = apertools.utils.get_parent_dir(igram_dir)
-        geo_date_list = find_geos(directory=geo_dir, parse=parse)
+        if slc_dir is None:
+            slc_dir = apertools.utils.get_parent_dir(igram_dir)
+        slc_date_list = find_slcs(directory=slc_dir, parse=parse)
 
     if slclist_ignore_file is not None:
         ignore_filepath = os.path.join(igram_dir or ".", slclist_ignore_file)
-        geo_date_list, ifg_date_list = ignore_geo_dates(
-            geo_date_list, ifg_date_list, ignore_file=ignore_filepath, parse=parse
+        slc_date_list, ifg_date_list = ignore_slc_dates(
+            slc_date_list, ifg_date_list, ignore_file=ignore_filepath, parse=parse
         )
-    return geo_date_list, ifg_date_list
+    return slc_date_list, ifg_date_list
 
 
-def ignore_geo_dates(
-    geo_date_list, ifg_date_list, ignore_file="slclist_ignore.txt", parse=True
+def ignore_slc_dates(
+    slc_date_list, ifg_date_list, ignore_file="slclist_ignore.txt", parse=True
 ):
     """Read extra file to ignore certain dates of interferograms"""
-    ignore_geos = set(find_geos(filename=ignore_file, parse=parse))
-    logger.info("Ignoring the following .geo dates:")
-    logger.info(sorted(ignore_geos))
-    valid_geos = [g for g in geo_date_list if g not in ignore_geos]
+    ignore_slcs = set(find_slcs(filename=ignore_file, parse=parse))
+    logger.info("Ignoring the following slc dates:")
+    logger.info(sorted(ignore_slcs))
+    valid_slcs = [g for g in slc_date_list if g not in ignore_slcs]
     valid_igrams = [
-        i for i in ifg_date_list if i[0] not in ignore_geos and i[1] not in ignore_geos
+        i for i in ifg_date_list if i[0] not in ignore_slcs and i[1] not in ignore_slcs
     ]
     logger.info(
         f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in {ignore_file}"
     )
-    return valid_geos, valid_igrams
+    return valid_slcs, valid_igrams
 
 
 def check_dset(h5file, dset_name, overwrite, attr_name=None):
@@ -1113,7 +1110,7 @@ def check_dset(h5file, dset_name, overwrite, attr_name=None):
 
 
 def load_mask(
-    geo_date_list=None,
+    slc_date_list=None,
     perform_mask=True,
     deformation_filename=None,
     dset=None,
@@ -1139,21 +1136,21 @@ def load_mask(
     if deformation_filename is not None:
         if directory is not None:
             deformation_filename = os.path.join(directory, deformation_filename)
-            geo_date_list = load_slclist_from_h5(deformation_filename, dset=dset)
+            slc_date_list = load_slclist_from_h5(deformation_filename, dset=dset)
 
     # Get the indices of the mask layers that were used in the deformation stack
-    all_geo_dates = load_slclist_from_h5(mask_full_path)
-    if geo_date_list is None:
-        used_bool_arr = np.full(len(all_geo_dates), True)
+    all_slc_dates = load_slclist_from_h5(mask_full_path)
+    if slc_date_list is None:
+        used_bool_arr = np.full(len(all_slc_dates), True)
     else:
-        used_bool_arr = np.array([g in geo_date_list for g in all_geo_dates])
+        used_bool_arr = np.array([g in slc_date_list for g in all_slc_dates])
 
     with h5py.File(mask_full_path) as f:
         # Maks a single mask image for any pixel that has a mask
         # Note: not using GEO_MASK_SUM_DSET since we may be sub selecting layers
-        geo_dset = f[GEO_MASK_DSET]
-        with geo_dset.astype(bool):
-            stack_mask = np.sum(geo_dset[used_bool_arr, :, :], axis=0) > 0
+        slc_dset = f[GEO_MASK_DSET]
+        with slc_dset.astype(bool):
+            stack_mask = np.sum(slc_dset[used_bool_arr, :, :], axis=0) > 0
         return stack_mask
 
 
@@ -1604,20 +1601,20 @@ def gdal_to_numpy_type(gdal_dtype=None, band=None):
 
 def find_looks_taken(
     igram_path,
-    geo_path=None,
+    slc_path=None,
     igram_dem_file="dem.rsc",
-    geo_dem_file="elevation.dem.rsc",
+    slc_dem_file="elevation.dem.rsc",
 ):
-    """Calculates how many looks from .geo files to .int files"""
-    if geo_path is None:
-        geo_path = os.path.dirname(os.path.abspath(igram_path))
+    """Calculates how many looks from slc files to .int files"""
+    if slc_path is None:
+        slc_path = os.path.dirname(os.path.abspath(igram_path))
 
-    geo_dem_rsc = load_dem_rsc(os.path.join(geo_path, geo_dem_file))
+    slc_dem_rsc = load_dem_rsc(os.path.join(slc_path, slc_dem_file))
 
     igram_dem_rsc = load_dem_rsc(os.path.join(igram_path, igram_dem_file))
 
-    row_looks = geo_dem_rsc["file_length"] // igram_dem_rsc["file_length"]
-    col_looks = geo_dem_rsc["width"] // igram_dem_rsc["width"]
+    row_looks = slc_dem_rsc["file_length"] // igram_dem_rsc["file_length"]
+    col_looks = slc_dem_rsc["width"] // igram_dem_rsc["width"]
     return row_looks, col_looks
 
 
@@ -1652,7 +1649,7 @@ def save_slc_amp_stack(
     import xarray as xr
 
     fnames = glob.glob("*" + ext)
-    date_list = find_geos(directory=directory, ext=ext, parse=True)
+    date_list = find_slcs(directory=directory, ext=ext, parse=True)
     date_list = np.array(date_list, dtype="datetime64[D]")
     with xr.open_rasterio(fnames[0]) as ds1:
         _, rows, cols = ds1.shape
