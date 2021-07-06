@@ -276,6 +276,7 @@ def load_file(
             ann_info=ann_info,
             rows=rows,
             cols=cols,
+            looks=looks,
             **kwargs,
         )
         return stacked[..., ::downsample, ::downsample]
@@ -533,6 +534,7 @@ def load_stacked_img(
     rsc_data=None,
     ann_info=None,
     return_amp=False,
+    looks=(1, 1),
     dtype=FLOAT_32_LE,
     **kwargs,
 ):
@@ -572,9 +574,9 @@ def load_stacked_img(
     first = data.reshape((rows, 2 * cols))[:, :cols]
     second = data.reshape((rows, 2 * cols))[:, cols:]
     if return_amp:
-        return np.stack((first, second), axis=0)
+        return np.stack((_take_looks(first, *looks), _take_looks(second, *looks)), axis=0)
     else:
-        return second
+        return _take_looks(second, *looks)
 
 
 def is_complex(filename=None, ext=None):
