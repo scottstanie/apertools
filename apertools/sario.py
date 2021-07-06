@@ -1336,6 +1336,7 @@ def save_vrt(
     gdal_dtype = numpy_to_gdal_type(dtype)
     # print("gdal dtype", gdal_dtype, dtype)
     out_raster.AddBand(gdal_dtype, options)
+
     if metadata_dict is not None:
         out_raster.SetMetadata(metadata_dict, metadata_domain)
         # To write to a specific band:
@@ -1346,7 +1347,7 @@ def save_vrt(
     # if geotrans is not None:
     # create_derived_band(outfile, rows, cols, geotrans, func="log10")
     # create_derived_band(outfile, rows, cols, geotrans, func="phase")
-    return
+    return outfile
 
 
 def create_derived_band(
