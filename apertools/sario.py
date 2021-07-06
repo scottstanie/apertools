@@ -1212,7 +1212,7 @@ def save_vrt(
     rsc_file=None,
     rsc_data=None,
     interleave=None,
-    band=None,
+    bands=[1],
     num_bands=None,
     relative=True,
     metadata_dict=None,
@@ -1282,14 +1282,15 @@ def save_vrt(
 
     if dtype is None:
         dtype = _get_file_dtype(filename)
+    gdal_dtype = numpy_to_gdal_type(dtype)
 
     bytes_per_pix = np.dtype(dtype).itemsize
     total_bytes = os.path.getsize(filename)
     if interleave is None or num_bands is None:
         interleave, num_bands = get_interleave(filename, num_bands=num_bands)
-    if band is None:
+    if bands is None:
         # This will offset the start- only making the vrt point to phase
-        band = 1 if apertools.utils.get_file_ext(filename) in STACKED_FILES else 0
+        bands = [0, 1] if apertools.utils.get_file_ext(filename) in STACKED_FILES else [0]
 
     assert rows == int(total_bytes / bytes_per_pix / cols / num_bands), (
         f"rows = total_bytes / bytes_per_pix / cols / num_bands : "
@@ -1308,32 +1309,32 @@ def save_vrt(
         print("Warning: No GeoTransform could be made/set")
 
     out_raster.SetProjection(srs.ExportToWkt())
-
-    image_offset, pixel_offset, line_offset = get_offsets(
-        dtype,
-        interleave,
-        band,
-        cols,
-        rows,
-        num_bands,
-    )
     if relative:
         rel = "1"
         source_filename = os.path.split(filename)[1]
     else:
         rel = "0"
         source_filename = os.path.abspath(filename)
-    options = [
-        "subClass=VRTRawRasterBand",
-        # split, since relative to file, so remove directory name
-        f"SourceFilename={source_filename}",
-        f"relativeToVRT={rel}",
-        f"ImageOffset={image_offset}",
-        f"PixelOffset={pixel_offset}",
-        f"LineOffset={line_offset}",
-        # 'ByteOrder=LSB'
-    ]
-    gdal_dtype = numpy_to_gdal_type(dtype)
+
+    for band in bands:
+        image_offset, pixel_offset, line_offset = get_offsets(
+            dtype,
+            interleave,
+            band,
+            cols,
+            rows,
+            num_bands,
+        )
+        options = [
+            "subClass=VRTRawRasterBand",
+            # split, since relative to file, so remove directory name
+            f"SourceFilename={source_filename}",
+            f"relativeToVRT={rel}",
+            f"ImageOffset={image_offset}",
+            f"PixelOffset={pixel_offset}",
+            f"LineOffset={line_offset}",
+            # 'ByteOrder=LSB'
+        ]
     # print("gdal dtype", gdal_dtype, dtype)
     out_raster.AddBand(gdal_dtype, options)
 
