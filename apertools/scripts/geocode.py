@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import os
-from osgeo import gdal
 import subprocess
+from osgeo import gdal
+gdal.UseExceptions()
 
 # import xml.etree.ElementTree as ET
 import apertools.log
@@ -12,25 +13,38 @@ logger = apertools.log.get_log()
 
 def geocode(args):
 
+    logger.info("Createing lat/lon VRT files.")
     lat_file, lon_file = prepare_lat_lon(args)
     if not args.bbox:
+        logger.info("Finding bbox from lat/lon file")
         bbox = _get_bbox(lat_file, lon_file)
     else:
         bbox = args.bbox
+    bbox_str = '%f %f %f %f' % tuple(bbox)
+    logger.info(f"Geocoding in {bbox = } with (lon, lat) step = ({args.lon_step, args.lat_step })")
 
     for infile in args.file_list:
         infile = os.path.abspath(infile)
         print("geocoding " + infile)
-        writeVRT(infile, lat_file, lon_file)
-        write_vrt(infile, lat_file, lon_file, args.rows, args.cols, args.dtype)
+        # writeVRT(infile, lat_file, lon_file)
+        vrt_in_file = write_vrt(
+            infile,
+            lat_file,
+            lon_file,
+            args.rows,
+            args.cols,
+            args.dtype,
+            row_looks=args.row_looks,
+            col_looks=args.col_looks,
+        )
 
         outfile = infile + ".geo"
         cmd = (
-            f"gdalwarp -of ENVI -geoloc -te {bbox} "
+            f"gdalwarp -of ENVI -geoloc -te {bbox_str} "
             f" -tr {args.lon_step} {args.lat_step}"
             " -srcnodata 0 -dstnodata 0 "
-            f" -r {args.resamplingMethod}"
-            f" {infile} {outfile}"
+            f" -r {args.resampling}"
+            f" {vrt_in_file} {outfile}"
         )
         _log_and_run(cmd)
 
@@ -109,31 +123,34 @@ def writeVRT(infile, lat_file, lon_file):
     tree.write(infile + ".vrt")
 
 
-def write_vrt(filename, lat_file, lon_file, rows, cols, dtype, row_looks=1, col_looks=1):
+# <metadata domain="GEOLOCATION">
+# <mdi key="Y_DATASET">/data7/jpl/sanAnd_23511/testint/tempLAT.vrt</mdi>
+# <mdi key="X_DATASET">/data7/jpl/sanAnd_23511/testint/tempLON.vrt</mdi>
+
+
+def write_vrt(
+    filename, lat_file, lon_file, rows, cols, dtype, row_looks=1, col_looks=1
+):
     import apertools.sario
 
-    apertools.sario.save_vrt(
+    outfile = apertools.sario.save_vrt(
         filename,
         rows=rows,
         cols=cols,
         dtype=dtype,
-        num_bands=1,
         metadata_domain="GEOLOCATION",
         metadata_dict={
             "Y_DATASET": lat_file,
             "X_DATASET": lon_file,
             "X_BAND": "1",
             "Y_BAND": "1",
-            # "PIXEL_OFFSET": "0",
-            # "LINE_OFFSET": "0",
+            "PIXEL_OFFSET": "0",
+            "LINE_OFFSET": "0",
             "LINE_STEP": str(row_looks),
             "PIXEL_STEP": str(col_looks),
         },
     )
-
-    # <metadata domain="GEOLOCATION">
-    # <mdi key="Y_DATASET">/data7/jpl/sanAnd_23511/testint/tempLAT.vrt</mdi>
-    # <mdi key="X_DATASET">/data7/jpl/sanAnd_23511/testint/tempLON.vrt</mdi>
+    return outfile
 
 
 def get_size(f):
@@ -167,6 +184,8 @@ def get_cli_args():
     )
     parser.add_argument("--rows", type=int, required=True)
     parser.add_argument("--cols", type=int, required=True)
+    parser.add_argument("--row-looks", default=1)
+    parser.add_argument("--col-looks", default=1)
     parser.add_argument(
         "--lat",
         required=True,
@@ -202,6 +221,13 @@ def get_cli_args():
         default="bilinear",
         choices=["bilinear", "nearest", "cubic"],
         help="Resampling method (choices = %(choices)s, default=%(default)s)",
+    )
+    parser.add_argument(
+        "--dtype",
+        default="float32",
+        choices=["float32", "complex32", "int16", "uint8"],
+        help="(numpy-style) data type of binary array "
+        "(choices = %(choices)s, default=%(default)s)",
     )
     return parser.parse_args()
 
