@@ -91,6 +91,11 @@ def view_stack(
     """Explore timeseries on stack of deformation images."""
     import apertools.sario, apertools.latlon, apertools.plotting
     import numpy as np
+
+    try:
+        import hdf5plugin
+    except ImportError:
+        pass
     import h5py
 
     ext = os.path.splitext(filename)[1]
