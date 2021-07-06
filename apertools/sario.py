@@ -819,7 +819,7 @@ def parse_slclist_strings(slc_str):
         return _parse(match.group())
     else:
         # If it's an iterable of strings, run on each one
-        return [parse_slclist_strings(s) for s in slc_str]
+        return [parse_slclist_strings(s) for s in slc_str if s]
 
 
 def parse_ifglist_strings(date_pairs, ext=".int"):
