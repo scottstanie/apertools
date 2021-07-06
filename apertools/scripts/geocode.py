@@ -109,7 +109,7 @@ def writeVRT(infile, lat_file, lon_file):
     tree.write(infile + ".vrt")
 
 
-def write_vrt(filename, lat_file, lon_file, rows, cols, dtype):
+def write_vrt(filename, lat_file, lon_file, rows, cols, dtype, row_looks=1, col_looks=1):
     import apertools.sario
 
     apertools.sario.save_vrt(
@@ -119,7 +119,16 @@ def write_vrt(filename, lat_file, lon_file, rows, cols, dtype):
         dtype=dtype,
         num_bands=1,
         metadata_domain="GEOLOCATION",
-        metadata_dict={"Y_DATASET": lat_file, "X_DATASET": lon_file},
+        metadata_dict={
+            "Y_DATASET": lat_file,
+            "X_DATASET": lon_file,
+            "X_BAND": "1",
+            "Y_BAND": "1",
+            # "PIXEL_OFFSET": "0",
+            # "LINE_OFFSET": "0",
+            "LINE_STEP": str(row_looks),
+            "PIXEL_STEP": str(col_looks),
+        },
     )
 
     # <metadata domain="GEOLOCATION">
