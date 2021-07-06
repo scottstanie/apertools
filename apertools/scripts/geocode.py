@@ -201,6 +201,10 @@ def get_cli_args():
     # <mdi key="X_DATASET">/data7/jpl/sanAnd_23511/testint/tempLON.vrt</mdi>
 
 
-if __name__ == "__main__":
+def main():
     args = get_cli_args()
     geocode(args)
+
+
+if __name__ == "__main__":
+    main()

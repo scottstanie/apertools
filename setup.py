@@ -40,8 +40,9 @@ setuptools.setup(
     entry_points={
         "console_scripts": [
             "aper=apertools.scripts.cli:cli",
-            "createdem=apertools.createdem:cli",
+            # "createdem=apertools.createdem:cli",
             "asfdownload=apertools.asfdownload:cli",
+            "geocode=apertools.scripts.geocode:main",
         ],
     },
     zip_safe=False,
