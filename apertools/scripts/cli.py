@@ -510,7 +510,7 @@ def save_vrt(
 
     for f in filenames:
         outfile = os.path.join(out_dir, os.path.split(f)[1]) + ".vrt"
-        apertools.sario.save_as_vrt(
+        apertools.sario.save_vrt(
             filename=f,
             rows=rows,
             cols=cols,
@@ -569,7 +569,7 @@ def smallslc(
             print(f"{dest_path} exists, overwrite={overwrite}: skipping.")
             continue
 
-        apertools.sario.save_as_vrt(
+        apertools.sario.save_vrt(
             filename=f,
             rsc_file=rsc_file,
         )

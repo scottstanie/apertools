@@ -1202,7 +1202,7 @@ def save_image_like(
             dest.write(arr, 1)
 
 
-def save_as_vrt(
+def save_vrt(
     filename=None,
     array=None,
     rows=None,

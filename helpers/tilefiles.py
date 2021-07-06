@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     # First, make sure we've save all the binarys as vrts
     [
-        apertools.sario.save_as_vrt(filename=f, rsc_file=args.rsc_file)
+        apertools.sario.save_vrt(filename=f, rsc_file=args.rsc_file)
         for f in glob.glob("*.geo")
     ]
     # Also, add .rsc files for them for after we've saved new ones with the gdal driver
