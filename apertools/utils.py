@@ -180,8 +180,9 @@ def filter_slclist_ifglist(
     valid_ifg_dates = copy.copy(ifg_date_list)
     if slclist_ignore_file is not None:
         _, valid_ifg_dates = ignore_slc_dates(
-            [], valid_ifg_dates, slclist_ignore_file=slclist_ignore_file, parse=True
+            ifg_date_list=valid_ifg_dates, slclist_ignore_file=slclist_ignore_file
         )
+        
     valid_ifg_dates = filter_min_max_date(
         valid_ifg_dates, min_date, max_date, verbose=verbose
     )
@@ -214,12 +215,17 @@ def filter_slclist_ifglist(
 
 
 def ignore_slc_dates(
-    slc_date_list, ifg_date_list, ignore_file="slclist_ignore.txt", parse=True
+    slc_date_list=[],
+    ifg_date_list=[],
+    slclist_ignore_file="slclist_ignore.txt",
+    parse=True,
 ):
     """Read extra file to ignore certain dates of interferograms"""
     import apertools.sario
 
-    ignore_slcs = set(apertools.sario.find_slcs(filename=ignore_file, parse=parse))
+    ignore_slcs = set(
+        apertools.sario.find_slcs(filename=slclist_ignore_file, parse=parse)
+    )
     logger.info("Ignoring the following slc dates:")
     logger.info(sorted(ignore_slcs))
     valid_slcs = [g for g in slc_date_list if g not in ignore_slcs]
@@ -227,7 +233,7 @@ def ignore_slc_dates(
         i for i in ifg_date_list if i[0] not in ignore_slcs and i[1] not in ignore_slcs
     ]
     logger.info(
-        f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in {ignore_file}"
+        f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in {slclist_ignore_file}"
     )
     return valid_slcs, valid_igrams
 
