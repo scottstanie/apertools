@@ -2,10 +2,6 @@
 import argparse
 import os
 import subprocess
-from osgeo import gdal
-gdal.UseExceptions()
-
-# import xml.etree.ElementTree as ET
 import apertools.log
 
 logger = apertools.log.get_log()
@@ -14,16 +10,25 @@ logger = apertools.log.get_log()
 def geocode(args):
 
     logger.info("Createing lat/lon VRT files.")
-    lat_file, lon_file = prepare_lat_lon(args)
+    lat_file, lon_file = prepare_lat_lon(args, row_looks=args.row_looks, col_looks=args.col_looks)
     if not args.bbox:
         logger.info("Finding bbox from lat/lon file")
-        bbox = _get_bbox(lat_file, lon_file)
+        bbox = _get_bbox_from_files(lat_file, lon_file)
     else:
         bbox = args.bbox
     bbox_str = '%f %f %f %f' % tuple(bbox)
     logger.info(f"Geocoding in {bbox = } with (lon, lat) step = ({args.lon_step, args.lat_step })")
 
     for infile in args.file_list:
+        try:
+            rows, cols = _get_size(infile)
+            dtype = _get_dtype(infile)
+        except RuntimeError:
+            rows, cols, dtype = args.rows, args.cols, args.dtype
+        if not rows or not cols or dtype:
+            raise ValueError("Could not get image size for {infile} from GDAL;"
+                             "must pass --rows, --cols, --dtype")
+
         infile = os.path.abspath(infile)
         print("geocoding " + infile)
         # writeVRT(infile, lat_file, lon_file)
@@ -34,8 +39,6 @@ def geocode(args):
             args.rows,
             args.cols,
             args.dtype,
-            row_looks=args.row_looks,
-            col_looks=args.col_looks,
         )
 
         outfile = infile + ".geo"
@@ -50,7 +53,11 @@ def geocode(args):
 
 
 #
-def _get_bbox(lat_file, lon_file):
+def _get_bbox_from_files(lat_file, lon_file):
+    # TODO: pick out cornrs...
+    rasterio.rio.insp.stats((src, 1))
+    from osgeo import gdal
+    gdal.UseExceptions()
     ds = gdal.Open(lat_file)
     # min, max, mean, stddev
     bot, top, _, _ = ds.GetRasterBand(1).GetStatistics(0, 1)
@@ -60,67 +67,35 @@ def _get_bbox(lat_file, lon_file):
     ds = None
     return left, bot, right, top
 
+def _get_size(f):
+    from osgeo import gdal
+    gdal.UseExceptions()
+    ds = gdal.Open(f)
+    band = ds.GetRasterBand(1)
+    rows = band.YSize
+    cols = band.XSize
+    ds = None
+    return rows, cols
 
-def prepare_lat_lon(args):
+def prepare_lat_lon(args, row_looks=1, col_looks=1):
     lat_file = os.path.abspath(args.lat)
     lon_file = os.path.abspath(args.lon)
-    # Need to save a vrt? or just translate?
-    # cmd = f"aper save-vrt {lat_file}"
-    # _log_and_run(cmd)
-    # cmd = f"aper save-vrt {lon_file}"
-    # _log_and_run(cmd)
 
-    tempLat = os.path.join(os.path.dirname(args.file_list[0]), "tempLAT.vrt")
-    tempLon = os.path.join(os.path.dirname(args.file_list[0]), "tempLON.vrt")
+    temp_lat = os.path.join(lat_file, ".geo_lat.vrt")
+    temp_lon = os.path.join(lon_file, ".geo_lon.vrt")
 
-    cmd = f"gdal_translate -of VRT {lat_file} {tempLat} -a_nodata 0 "
+    cmd = f"gdal_translate -of VRT -a_nodata 0 -tr {col_looks} {row_looks} {lat_file} {temp_lat} "
     _log_and_run(cmd)
-    cmd = f"gdal_translate -of VRT {lon_file} {tempLon} -a_nodata 0 "
+    cmd = f"gdal_translate -of VRT -a_nodata 0 -tr {col_looks} {row_looks} {lon_file} {temp_lon} "
     _log_and_run(cmd)
 
-    return tempLat, tempLon
+    return temp_lat, temp_lon
 
 
 def _log_and_run(cmd):
     logger.info(cmd)
     subprocess.run(cmd, shell=True, check=True)
 
-
-def writeVRT(infile, lat_file, lon_file):
-    # This function is modified from isce2gis.py
-    lat_file = os.path.abspath(lat_file)
-    lon_file = os.path.abspath(lon_file)
-    infile = os.path.abspath(infile)
-    cmd = "isce2gis.py vrt -i " + infile
-    os.system(cmd)
-
-    tree = ET.parse(infile + ".vrt")
-    root = tree.getroot()
-
-    meta = ET.SubElement(root, "metadata")
-    meta.attrib["domain"] = "GEOLOCATION"
-    meta.tail = "\n"
-    meta.text = "\n    "
-
-    rdict = {
-        "Y_DATASET": lat_file,
-        "X_DATASET": lon_file,
-        "X_BAND": "1",
-        "Y_BAND": "1",
-        "PIXEL_OFFSET": "0",
-        "LINE_OFFSET": "0",
-        "LINE_STEP": "1",
-        "PIXEL_STEP": "1",
-    }
-
-    for key, val in rdict.items():
-        data = ET.SubElement(meta, "mdi")
-        data.text = val
-        data.attrib["key"] = key
-        data.tail = "\n    "
-
-    data.tail = "\n"
-    tree.write(infile + ".vrt")
 
 
 # <metadata domain="GEOLOCATION">
@@ -153,22 +128,6 @@ def write_vrt(
     return outfile
 
 
-def get_size(f):
-    ds = gdal.Open(f, gdal.GA_ReadOnly)
-    b = ds.GetRasterBand(1)
-    width = b.XSize
-    length = b.YSize
-    ds = None
-    return width, length
-
-
-def get_bounds(filename):
-    import rasterio as rio
-
-    with rio.open(filename) as src:
-        return src.bounds
-
-
 def get_cli_args():
     """
     Create command line parser.
@@ -182,8 +141,8 @@ def get_cli_args():
         nargs="*",
         help="List of input files to be geocoded.",
     )
-    parser.add_argument("--rows", type=int, required=True)
-    parser.add_argument("--cols", type=int, required=True)
+    parser.add_argument("--rows", type=int, help="Number of rows of input files (if not GDAL readable)")
+    parser.add_argument("--cols", type=int, help="Number of cols of input files (if not GDAL readable)")
     parser.add_argument("--row-looks", default=1)
     parser.add_argument("--col-looks", default=1)
     parser.add_argument(
