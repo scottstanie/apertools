@@ -121,7 +121,7 @@ IGRAM_MASK_SUM_DSET = "igram_sum"
 
 DEM_RSC_DSET = "dem_rsc"
 
-slclist_DSET = "geo_dates"
+SLCLIST_DSET = "geo_dates"
 ifglist_DSET = "int_dates"
 
 # List of platforms where i've set up loading for their files
@@ -804,9 +804,9 @@ def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None
 def load_slclist_from_h5(h5file, dset=None, parse=True):
     with h5py.File(h5file, "r") as f:
         if dset is None:
-            slclist_str = f[slclist_DSET][()].astype(str)
+            slclist_str = f[SLCLIST_DSET][()].astype(str)
         else:
-            slclist_str = f[dset].attrs[slclist_DSET][()].astype(str)
+            slclist_str = f[dset].attrs[SLCLIST_DSET][()].astype(str)
 
     if parse:
         return parse_slclist_strings(slclist_str)
@@ -972,20 +972,20 @@ def save_slclist_to_h5(
         geo_date_list, _ = load_slclist_ifglist(igram_path, igram_ext=igram_ext)
 
     if dset_name is not None:
-        if not check_dset(out_file, dset_name, overwrite, attr_name=slclist_DSET):
+        if not check_dset(out_file, dset_name, overwrite, attr_name=SLCLIST_DSET):
             return geo_date_list
     else:
-        if not check_dset(out_file, slclist_DSET, overwrite):
+        if not check_dset(out_file, SLCLIST_DSET, overwrite):
             return geo_date_list
 
     geo_str_list = slclist_to_str(geo_date_list)
     with h5py.File(out_file, "a") as f:
         # JSON gets messed from doing from julia to h5py for now
-        # f[slclist_DSET] = json.dumps(slclist_to_str(geo_date_list))
+        # f[SLCLIST_DSET] = json.dumps(slclist_to_str(geo_date_list))
         if dset_name is not None:
-            f[dset_name].attrs[slclist_DSET] = geo_str_list
+            f[dset_name].attrs[SLCLIST_DSET] = geo_str_list
         else:
-            f[slclist_DSET] = geo_str_list
+            f[SLCLIST_DSET] = geo_str_list
     return geo_date_list
 
 
