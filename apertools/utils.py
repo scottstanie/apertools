@@ -174,15 +174,13 @@ def filter_slclist_ifglist(
     max_date=None,
     max_temporal_baseline=None,
     max_bandwidth=None,
-    ignore_file=None,
+    slclist_ignore_file=None,
     verbose=False,
 ):
     valid_ifg_dates = copy.copy(ifg_date_list)
-    if ignore_file is not None:
-        from . import sario
-
-        _, valid_ifg_dates = sario.ignore_geo_dates(
-            [], valid_ifg_dates, ignore_file=ignore_file, parse=True
+    if slclist_ignore_file is not None:
+        _, valid_ifg_dates = ignore_slc_dates(
+            [], valid_ifg_dates, slclist_ignore_file=slclist_ignore_file, parse=True
         )
     valid_ifg_dates = filter_min_max_date(
         valid_ifg_dates, min_date, max_date, verbose=verbose
@@ -214,6 +212,22 @@ def filter_slclist_ifglist(
     valid_ifg_idxs = [ifg_date_list.index(tup) for tup in valid_ifg_dates]
     return valid_sar_date, valid_ifg_dates, valid_ifg_idxs
 
+
+def ignore_slc_dates(
+    slc_date_list, ifg_date_list, ignore_file="slclist_ignore.txt", parse=True
+):
+    """Read extra file to ignore certain dates of interferograms"""
+    ignore_slcs = set(find_slcs(filename=ignore_file, parse=parse))
+    logger.info("Ignoring the following slc dates:")
+    logger.info(sorted(ignore_slcs))
+    valid_slcs = [g for g in slc_date_list if g not in ignore_slcs]
+    valid_igrams = [
+        i for i in ifg_date_list if i[0] not in ignore_slcs and i[1] not in ignore_slcs
+    ]
+    logger.info(
+        f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in {ignore_file}"
+    )
+    return valid_slcs, valid_igrams
 
 def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth):
     """Limit the total interferograms to just nearest `max_bandwidth` connections

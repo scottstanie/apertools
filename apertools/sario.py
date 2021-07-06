@@ -8,7 +8,7 @@ from __future__ import division, print_function
 from collections.abc import Iterable
 import datetime
 import fileinput
-import glob
+from glob import glob
 import math
 import json
 import os
@@ -335,28 +335,11 @@ def _get_full_grd_ext(filename):
         return ".grd"
 
 
-def find_files(directory, search_term):
-    """Searches for files in `directory` using globbing on search_term
-
-    Path to file is also included.
-    Returns in names sorted order.
-
-    Examples:
-    >>> import shutil, tempfile
-    >>> temp_dir = tempfile.mkdtemp()
-    >>> open(os.path.join(temp_dir, "afakefile.txt"), "w").close()
-    >>> print('afakefile.txt' in find_files(temp_dir, "*.txt")[0])
-    True
-    >>> shutil.rmtree(temp_dir)
-    """
-    return sorted(glob.glob(os.path.join(directory, search_term)))
-
-
 def find_rsc_file(filename=None, directory=None, verbose=False):
     if filename:
         directory = os.path.split(os.path.abspath(filename))[0]
     # Should be just elevation.dem.rsc (for slc folder) or dem.rsc (for igrams)
-    possible_rscs = find_files(directory, "*.rsc")
+    possible_rscs = sorted(glob(os.path.join(directory, "*.rsc")))
     if verbose:
         logger.info("Searching %s for rsc files", directory)
         logger.info("Possible rsc files:")
@@ -574,7 +557,9 @@ def load_stacked_img(
     first = data.reshape((rows, 2 * cols))[:, :cols]
     second = data.reshape((rows, 2 * cols))[:, cols:]
     if return_amp:
-        return np.stack((_take_looks(first, *looks), _take_looks(second, *looks)), axis=0)
+        return np.stack(
+            (_take_looks(first, *looks), _take_looks(second, *looks)), axis=0
+        )
     else:
         return _take_looks(second, *looks)
 
@@ -697,7 +682,7 @@ def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
         if file_ext is None:
             raise ValueError("need file_ext if using `directory`")
         else:
-            file_list = find_files(directory, "*" + file_ext)
+            file_list = sorted(glob(os.path.join(directory, file_ext)))
 
     # Test load to get shape
     test = load(file_list[0], **kwargs)
@@ -824,19 +809,17 @@ def load_ifglist_from_h5(h5file, dset=None, parse=True):
         return date_pair_strs
 
 
-def parse_slclist_strings(slclist_str):
+def parse_slclist_strings(slc_str):
+    """Parses a string, or list of strings, with YYYYmmdd as date"""
     # The re.search will find YYYYMMDD anywhere in string
-    if isinstance(slclist_str, str):
-        match = re.search(r"\d{4}\d{2}\d{2}", slclist_str)
+    if isinstance(slc_str, str):
+        match = re.search(r"\d{8}", slc_str)
         if not match:
-            raise ValueError(f"{slclist_str} does not contain date as YYYYMMDD")
+            raise ValueError(f"{slc_str} does not contain date as YYYYMMDD")
         return _parse(match.group())
     else:
-        matches = [re.search(r"\d{4}\d{2}\d{2}", f) for f in slclist_str]
-        try:
-            return [_parse(m.group()) for m in matches]
-        except AttributeError:
-            raise ValueError(f"{slclist_str} does not contain dates as YYYYMMDD")
+        # If it's an iterable of strings, run on each one
+        return [parse_slclist_strings(s) for s in slc_str]
 
 
 def parse_ifglist_strings(date_pairs, ext=".int"):
@@ -888,7 +871,7 @@ def find_slcs(directory=".", ext=".geo", parse=True, filename=None):
                 if not line.strip().startswith("#")
             ]
     else:
-        slc_file_list = find_files(directory, "*" + ext)
+        slc_file_list = sorted(glob(os.path.join(directory, "*" + ext)))
 
     if not parse:
         return slc_file_list
@@ -897,21 +880,7 @@ def find_slcs(directory=".", ext=".geo", parse=True, filename=None):
     slclist = [os.path.split(fname)[1] for fname in slc_file_list]
     if not slclist:
         return []
-    return parse_slclist(slclist, ext=ext)
-
-
-def parse_slclist(slclist, ext=".geo"):
-    pat = r"\w*S1[AB]_(?P<date>\d{8})" + ext
-    if re.match(pat, slclist[0]):  # S1A_YYYYmmdd.geo
-        # Note: will match even if file is S1A_YYYYmmdd.geo.vrt
-        dates = [re.match(pat, geo).groupdict()["date"] for geo in slclist]
-        return sorted([_parse(d) for d in dates])
-    elif re.match(r"\d{8}", slclist[0]):  # YYYYmmdd , just a date string
-        return sorted([_parse(geo) for geo in slclist if geo])
-    else:  # Full sentinel product name
-        return sorted(
-            [apertools.parsers.Sentinel(geo).start_time.date() for geo in slclist]
-        )
+    return parse_slclist_strings(slclist)
 
 
 def find_igrams(directory=".", ext=".int", parse=True, filename=None):
@@ -936,7 +905,7 @@ def find_igrams(directory=".", ext=".int", parse=True, filename=None):
                 if not line.strip().startswith("#")
             ]
     else:
-        igram_file_list = find_files(directory, "*" + ext)
+        igram_file_list = sorted(glob(os.path.join(directory, "*" + ext)))
 
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
@@ -1040,7 +1009,6 @@ def load_slclist_ifglist(
     igram_dir=None,
     slc_dir=None,
     h5file=None,
-    slclist_ignore_file=None,
     igram_ext=".int",
     parse=True,
 ):
@@ -1057,29 +1025,7 @@ def load_slclist_ifglist(
             slc_dir = apertools.utils.get_parent_dir(igram_dir)
         slc_date_list = find_slcs(directory=slc_dir, parse=parse)
 
-    if slclist_ignore_file is not None:
-        ignore_filepath = os.path.join(igram_dir or ".", slclist_ignore_file)
-        slc_date_list, ifg_date_list = ignore_slc_dates(
-            slc_date_list, ifg_date_list, ignore_file=ignore_filepath, parse=parse
-        )
     return slc_date_list, ifg_date_list
-
-
-def ignore_slc_dates(
-    slc_date_list, ifg_date_list, ignore_file="slclist_ignore.txt", parse=True
-):
-    """Read extra file to ignore certain dates of interferograms"""
-    ignore_slcs = set(find_slcs(filename=ignore_file, parse=parse))
-    logger.info("Ignoring the following slc dates:")
-    logger.info(sorted(ignore_slcs))
-    valid_slcs = [g for g in slc_date_list if g not in ignore_slcs]
-    valid_igrams = [
-        i for i in ifg_date_list if i[0] not in ignore_slcs and i[1] not in ignore_slcs
-    ]
-    logger.info(
-        f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in {ignore_file}"
-    )
-    return valid_slcs, valid_igrams
 
 
 def check_dset(h5file, dset_name, overwrite, attr_name=None):
@@ -1650,7 +1596,7 @@ def save_slc_amp_stack(
     """Save a bunch of SLCs into one NetCDF stack"""
     import xarray as xr
 
-    fnames = glob.glob("*" + ext)
+    fnames = glob("*" + ext)
     date_list = find_slcs(directory=directory, ext=ext, parse=True)
     date_list = np.array(date_list, dtype="datetime64[D]")
     with xr.open_rasterio(fnames[0]) as ds1:
@@ -1703,7 +1649,7 @@ def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=
     from osgeo import gdal
 
     if unw_filelist is None:
-        unw_filelist = glob.glob(os.path.join(directory, "*" + ext))
+        unw_filelist = glob(os.path.join(directory, "*" + ext))
 
     gdal.BuildVRT(output, unw_filelist, separate=True, srcNodata="nan 0.0")
     # But we want the 2nd band (not an option on build for some reason)

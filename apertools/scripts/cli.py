@@ -320,7 +320,7 @@ def animate(
 
     if file_ext:
         stack = apertools.sario.load_stack(directory=context["path"], file_ext=file_ext)
-        titles = sorted(apertools.sario.find_files(context["path"], "*" + file_ext))
+        titles = sorted(glob(os.path.join(context["path"], "*" + file_ext)))
     else:
         slclist, deformation = apertools.sario.load_deformation(context["path"])
         stack = deformation
