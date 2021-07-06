@@ -217,7 +217,9 @@ def ignore_slc_dates(
     slc_date_list, ifg_date_list, ignore_file="slclist_ignore.txt", parse=True
 ):
     """Read extra file to ignore certain dates of interferograms"""
-    ignore_slcs = set(find_slcs(filename=ignore_file, parse=parse))
+    import apertools.sario
+
+    ignore_slcs = set(apertools.sario.find_slcs(filename=ignore_file, parse=parse))
     logger.info("Ignoring the following slc dates:")
     logger.info(sorted(ignore_slcs))
     valid_slcs = [g for g in slc_date_list if g not in ignore_slcs]
@@ -228,6 +230,7 @@ def ignore_slc_dates(
         f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in {ignore_file}"
     )
     return valid_slcs, valid_igrams
+
 
 def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth):
     """Limit the total interferograms to just nearest `max_bandwidth` connections
