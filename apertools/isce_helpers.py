@@ -1,13 +1,16 @@
 # adapted from components/isceobj/StripmapProc/runInterferogram.py
+import os
+import numpy as np
+from osgeo import gdal
+from . import sario
+
 import isce
 import isceobj
 from components.stdproc.stdproc import crossmul
 from iscesys.ImageUtil.ImageUtil import ImageUtil as IU
 from mroipac.looks.Looks import Looks
-import os
+from mroipac.filter.Filter import Filter
 
-# from osgeo import gdal
-# import numpy as np
 
 from apertools.log import get_log
 
@@ -39,7 +42,17 @@ def multilook(infile, outname=None, alks=5, rlks=15):
     return outname
 
 
-def generateIgram(imageSlc1, imageSlc2, resampName, azLooks, rgLooks):
+def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
+    imageSlc1 = isceobj.createImage()
+    f1 = file1 + ".xml" if not file1.endswith(".xml") else file1
+    print(f"Loading {f1}")
+    imageSlc1.load(f1)
+
+    imageSlc2 = isceobj.createImage()
+    f2 = file2 + ".xml" if not file2.endswith(".xml") else file2
+    print(f"Loading {f2}")
+    imageSlc2.load(f2)
+
     objSlc1 = isceobj.createSlcImage()
     IU.copyAttributes(imageSlc1, objSlc1)
     objSlc1.setAccessMode("read")
@@ -92,4 +105,62 @@ def generateIgram(imageSlc1, imageSlc2, resampName, azLooks, rgLooks):
     for obj in [objInt, objAmp, objSlc1, objSlc2]:
         obj.finalizeImage()
 
+    if compute_cor:
+        # Compute the multilooked version of correlation (much quicker than isce's full size)
+        ds = gdal.Open(resampInt)
+        ifg = ds.ReadAsArray()
+        ds = None
+        ds = gdal.Open(resampAmp)
+        amp1, amp2 = ds.ReadAsArray()
+        ds = None
+
+        cor_filename = resampAmp.replace(".amp", ".cor")
+        # Make the isce headers
+        make_cor_image(ifg.shape[1], cor_filename)
+        # calulate and save (not sure how to just save an array in isce)
+        cor = np.abs(ifg) / np.sqrt(amp1 ** 2 * amp2 ** 2)
+        sario.save(cor_filename, np.stack((amp1 * amp2, cor)))
+
     return imageInt, imageAmp
+
+
+def make_cor_image(width, cor_filename="topophase.cor"):
+    cohImage = isceobj.createOffsetImage()
+    cohImage.setFilename(cor_filename)
+    cohImage.setWidth(width)
+    cohImage.setAccessMode("write")
+    cohImage.createImage()
+    cohImage.renderHdr()
+    cohImage.finalizeImage()
+
+
+def filter_ifg(ifgFilename, filterStrength=0.5):
+    ifgDirname = os.path.dirname(ifgFilename)
+    filename_only = os.path.split(ifgFilename)[1]
+
+    img1 = isceobj.createImage()
+    img1.load(ifgFilename + ".xml")
+    widthInt = img1.getWidth()
+
+    intImage = isceobj.createIntImage()
+    intImage.setFilename(ifgFilename)
+    intImage.setWidth(widthInt)
+    intImage.setAccessMode("read")
+    intImage.createImage()
+
+    # Create the filtered interferogram
+    filtIntFilename = os.path.join(ifgDirname, "filt_" + filename_only)
+    filtImage = isceobj.createIntImage()
+    filtImage.setFilename(filtIntFilename)
+    filtImage.setWidth(widthInt)
+    filtImage.setAccessMode("write")
+    filtImage.createImage()
+
+    objFilter = Filter()
+    objFilter.wireInputPort(name="interferogram", object=intImage)
+    objFilter.wireOutputPort(name="filtered interferogram", object=filtImage)
+
+    objFilter.goldsteinWerner(alpha=filterStrength)
+
+    intImage.finalizeImage()
+    filtImage.finalizeImage()
