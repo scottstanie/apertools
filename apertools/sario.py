@@ -1244,6 +1244,7 @@ def save_vrt(
     # TODO: need to shift half pixel from RSC file to use GDAL conventions of
     # top left edge
     from osgeo import gdal
+    gdal.UseExceptions()
 
     outfile = outfile or (filename + ".vrt")
     if outfile is None:
