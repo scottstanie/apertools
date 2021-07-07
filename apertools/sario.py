@@ -1244,6 +1244,7 @@ def save_vrt(
     # TODO: need to shift half pixel from RSC file to use GDAL conventions of
     # top left edge
     from osgeo import gdal
+
     gdal.UseExceptions()
 
     outfile = outfile or (filename + ".vrt")
@@ -1259,6 +1260,9 @@ def save_vrt(
                 ds = gdal.Open(filename)
                 geotrans = ds.GetGeoTransform()
                 srs = ds.GetSpatialRef()
+                band = ds.GetRasterBand(1)
+                rows, cols = band.YSize, band.XSize
+                band, ds = None, None
             except:
                 print(
                     f"Warning: Cant get geotransform from {filename}, no .rsc file or data given"
@@ -1281,6 +1285,11 @@ def save_vrt(
         if array is not None:
             assert (rows, cols) == array.shape[-2:]
 
+    if rows is None or cols is None:
+        raise ValueError(
+            f"Need to pass rows/col, rsc_file, or have {filename} be gdal-readable"
+        )
+
     if dtype is None:
         dtype = _get_file_dtype(filename)
     gdal_dtype = numpy_to_gdal_type(dtype)
@@ -1291,7 +1300,9 @@ def save_vrt(
         interleave, num_bands = get_interleave(filename, num_bands=num_bands)
     if bands is None:
         # This will offset the start- only making the vrt point to phase
-        bands = [0, 1] if apertools.utils.get_file_ext(filename) in STACKED_FILES else [0]
+        bands = (
+            [0, 1] if apertools.utils.get_file_ext(filename) in STACKED_FILES else [0]
+        )
 
     assert rows == int(total_bytes / bytes_per_pix / cols / num_bands), (
         f"rows = total_bytes / bytes_per_pix / cols / num_bands : "
