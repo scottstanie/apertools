@@ -7,68 +7,83 @@ import apertools.log
 logger = apertools.log.get_log()
 
 
-def geocode(args):
+def geocode(
+    infile=None,
+    outfile=None,
+    lat=None,
+    lon=None,
+    rows=None,
+    cols=None,
+    row_looks=1,
+    col_looks=1,
+    bbox=None,
+    lon_step=0.0005,
+    lat_step=0.0005,
+    resampling="nearest",
+    dtype="float32",
+):
     import rasterio.errors
+
+    if not infile or not lat or not lon:
+        raise ValueError("infile, lat, lon are required")
 
     logger.info("Createing lat/lon VRT files.")
     lat_file, lon_file = prepare_lat_lon(
-        args, row_looks=args.row_looks, col_looks=args.col_looks
+        lat, lon, row_looks=row_looks, col_looks=col_looks
     )
-    if not args.bbox:
+    if not bbox:
         logger.info("Finding bbox from lat/lon file")
         bbox = _get_bbox_from_files(lat_file, lon_file)
-    else:
-        bbox = args.bbox
     bbox_str = "%f %f %f %f" % tuple(bbox)
     logger.info(
-        f"Geocoding in {bbox = } with (lon, lat) step = ({args.lon_step, args.lat_step })"
+        f"Geocoding in {bbox = } with (lon, lat) step = ({lon_step, lat_step })"
     )
 
-    for infile in args.file_list:
-        try:
-            rows, cols = _get_size(infile)
-            dtype = _get_dtype(infile)
-        except rasterio.errors.RasterioIOError:
-            rows, cols, dtype = args.rows, args.cols, args.dtype
+    try:
+        rows, cols = _get_size(infile)
+        dtype = _get_dtype(infile)
+    except rasterio.errors.RasterioIOError:
+        rows, cols, dtype = rows, cols, dtype
 
-        if not rows or not cols or not dtype:
-            raise ValueError(
-                f"Could not get image size for {infile} from GDAL;"
-                "must pass --rows, --cols, --dtype"
-            )
-
-        infile = os.path.abspath(infile)
-        vrt_in_file = infile + ".geo.vrt"
-        logger.info("Saving VRT for %s to %s", infile, vrt_in_file)
-        # writeVRT(infile, lat_file, lon_file)
-        vrt_in_file = write_vrt(
-            infile,
-            vrt_in_file,
-            lat_file,
-            lon_file,
-            args.rows,
-            args.cols,
-            args.dtype,
+    if not rows or not cols or not dtype:
+        raise ValueError(
+            f"Could not get image size for {infile} from GDAL;"
+            "must pass --rows, --cols, --dtype"
         )
 
+    infile = os.path.abspath(infile)
+    vrt_in_file = infile + ".temp_geoloc.vrt"
+    logger.info("Saving VRT for %s to %s", infile, vrt_in_file)
+    # writeVRT(infile, lat_file, lon_file)
+    vrt_in_file = write_vrt(
+        infile,
+        vrt_in_file,
+        lat_file,
+        lon_file,
+        rows,
+        cols,
+        dtype,
+    )
+
+    if not outfile:
         outfile = infile + ".geo"
-        logger.info("Geocoding output to %s to %s", infile, outfile)
-        cmd = (
-            # use the geolocation array to geocode, set target extent w/ bbox
-            f"gdalwarp -geoloc -te {bbox_str} "
-            # use specified lat/lon step for target resolution
-            f" -tr {args.lon_step} {args.lat_step}"
-            # Specify resampling method
-            f" -r {args.resampling}"
-            # Add warp option: run on multiple threads. Give the output a latlon projection
-            ' -multi -wo GDAL_NUM_THREADS=ALL_CPUS -t_srs "+proj=longlat +datum=WGS84 +nodefs"'
-            # Add ENVI header suffix, not replace (.unw.geo.hdr, not .unw.hdr)
-            " -of ENVI -co SUFFIX=ADD"
-            # set nodata values on source and destination
-            " -srcnodata 0 -dstnodata 0 "
-            f" {vrt_in_file} {outfile}"
-        )
-        _log_and_run(cmd)
+    logger.info("Geocoding output to %s to %s", infile, outfile)
+    cmd = (
+        # use the geolocation array to geocode, set target extent w/ bbox
+        f"gdalwarp -geoloc -te {bbox_str} "
+        # use specified lat/lon step for target resolution
+        f" -tr {lon_step} {lat_step}"
+        # Specify resampling method
+        f" -r {resampling}"
+        # Add warp option: run on multiple threads. Give the output a latlon projection
+        ' -multi -wo GDAL_NUM_THREADS=ALL_CPUS -t_srs "+proj=longlat +datum=WGS84 +nodefs"'
+        # Add ENVI header suffix, not replace (.unw.geo.hdr, not .unw.hdr)
+        " -of ENVI -co SUFFIX=ADD"
+        # set nodata values on source and destination
+        " -srcnodata 0 -dstnodata 0 "
+        f" {vrt_in_file} {outfile}"
+    )
+    _log_and_run(cmd)
 
 
 def _read_4_corners(f, band=1):
@@ -111,12 +126,12 @@ def _get_size(f):
         return src.shape
 
 
-def prepare_lat_lon(args, row_looks=1, col_looks=1):
-    lat_file = os.path.abspath(args.lat)
-    lon_file = os.path.abspath(args.lon)
+def prepare_lat_lon(lat_file, lon_file, row_looks=1, col_looks=1):
+    lat_file = os.path.abspath(lat_file)
+    lon_file = os.path.abspath(lon_file)
 
-    temp_lat = lat_file + ".geo_lat.vrt"
-    temp_lon = lon_file + ".geo_lon.vrt"
+    temp_lat = lat_file + ".temp_geoloc.vrt"
+    temp_lon = lon_file + ".temp_geoloc.vrt"
 
     cmd = f"gdal_translate -of VRT -a_nodata 0 -tr {col_looks} {row_looks} {lat_file} {temp_lat} "
     _log_and_run(cmd)
@@ -171,9 +186,13 @@ def get_cli_args():
         description="Geocode an image in radar coordinates using lat/lon files"
     )
     parser.add_argument(
-        "file_list",
-        nargs="*",
-        help="List of input files to be geocoded.",
+        "infile",
+        help="Name of input file to be geocoded.",
+    )
+    parser.add_argument(
+        "--outfile",
+        "-o",
+        help="Name of input file to be geocoded (default = `infile`.geo).",
     )
     parser.add_argument(
         "--rows", type=int, help="Number of rows of input files (if not GDAL readable)"
@@ -235,7 +254,10 @@ def get_cli_args():
 
 def main():
     args = get_cli_args()
-    geocode(args)
+    arg_dict = vars(args)
+    logger.info("Input arguments:")
+    logger.info(arg_dict)
+    geocode(**arg_dict)
 
 
 if __name__ == "__main__":
