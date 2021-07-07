@@ -176,6 +176,16 @@ def write_vrt(
     )
     return outfile
 
+RESAMPLE_CHOICES = [
+    "near",
+    "bilinear",
+    "cubic",
+    "cubicspline",
+    "lanczos",
+    "average",
+    "med",
+]
+
 
 def get_cli_args():
     """
@@ -234,8 +244,8 @@ def get_cli_args():
     parser.add_argument(
         "-r",
         "--resampling",
-        default="bilinear",
-        choices=["bilinear", "nearest", "cubic"],
+        default=RESAMPLE_CHOICES[0],
+        choices=RESAMPLE_CHOICES,
         help="Resampling method (choices = %(choices)s, default=%(default)s)",
     )
     parser.add_argument(
