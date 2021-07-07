@@ -8,6 +8,7 @@ logger = apertools.log.get_log()
 
 
 def geocode(args):
+    import rasterio.errors
 
     logger.info("Createing lat/lon VRT files.")
     lat_file, lon_file = prepare_lat_lon(
@@ -27,18 +28,18 @@ def geocode(args):
         try:
             rows, cols = _get_size(infile)
             dtype = _get_dtype(infile)
-        except RuntimeError:
+        except rasterio.errors.RasterioIOError:
             rows, cols, dtype = args.rows, args.cols, args.dtype
 
-        if not rows or not cols or dtype:
+        if not rows or not cols or not dtype:
             raise ValueError(
-                "Could not get image size for {infile} from GDAL;"
+                f"Could not get image size for {infile} from GDAL;"
                 "must pass --rows, --cols, --dtype"
             )
 
         infile = os.path.abspath(infile)
         vrt_in_file = infile + ".geo.vrt"
-        logger.info(f"Saving VRT for {infile} to {vrt_in_file}")
+        logger.info("Saving VRT for %s to %s", infile, vrt_in_file)
         # writeVRT(infile, lat_file, lon_file)
         vrt_in_file = write_vrt(
             infile,
@@ -51,12 +52,14 @@ def geocode(args):
         )
 
         outfile = infile + ".geo"
-        logger.info(f"Geocoding output to {infile} to {outfile}")
+        logger.info("Geocoding output to %s to %s", infile, outfile)
         cmd = (
             f"gdalwarp -of ENVI -geoloc -te {bbox_str} "
             f" -tr {args.lon_step} {args.lat_step}"
-            " -srcnodata 0 -dstnodata 0 "
             f" -r {args.resampling}"
+            # Add options to run on multiple threads, give the output a latlon projection
+            ' -multi -wo GDAL_NUM_THREADS=ALL_CPUS -t_srs "+proj=longlat +datum=WGS84 +nodefs"'
+            " -srcnodata 0 -dstnodata 0 "
             f" {vrt_in_file} {outfile}"
         )
         _log_and_run(cmd)
@@ -66,11 +69,14 @@ def _read_4_corners(f, band=1):
     from rasterio.windows import Window
     import rasterio as rio
 
+    rows, cols = _get_size(f)
+
     pixels = []
     with rio.open(f) as src:
-        for offset in [(0, 0), (0, -1), (-1, 0), (-1, -1)]:
+        for offset in [(0, 0), (cols - 1, 0), (0, rows - 1), (cols - 1, rows - 1)]:
+            w = Window(*offset, 1, 1)
             pixel = src.read(band, window=Window(*offset, 1, 1))
-            pixels.append(pixel)
+            pixels.append(float(pixel))
     return pixels
 
 
@@ -87,7 +93,7 @@ def _get_bbox_from_files(lat_file, lon_file):
     left, right = min(lon_corners), max(lon_corners)
 
     lat_corners = _read_4_corners(lat_file)
-    top, bot = min(lat_corners), max(lat_corners)
+    bot, top = min(lat_corners), max(lat_corners)
 
     return left, bot, right, top
 
@@ -103,8 +109,8 @@ def prepare_lat_lon(args, row_looks=1, col_looks=1):
     lat_file = os.path.abspath(args.lat)
     lon_file = os.path.abspath(args.lon)
 
-    temp_lat = os.path.join(lat_file, ".geo_lat.vrt")
-    temp_lon = os.path.join(lon_file, ".geo_lon.vrt")
+    temp_lat = lat_file + ".geo_lat.vrt"
+    temp_lon = lon_file + ".geo_lon.vrt"
 
     cmd = f"gdal_translate -of VRT -a_nodata 0 -tr {col_looks} {row_looks} {lat_file} {temp_lat} "
     _log_and_run(cmd)
