@@ -54,11 +54,17 @@ def geocode(args):
         outfile = infile + ".geo"
         logger.info("Geocoding output to %s to %s", infile, outfile)
         cmd = (
-            f"gdalwarp -of ENVI -geoloc -te {bbox_str} "
+            # use the geolocation array to geocode, set target extent w/ bbox
+            f"gdalwarp -geoloc -te {bbox_str} "
+            # use specified lat/lon step for target resolution
             f" -tr {args.lon_step} {args.lat_step}"
+            # Specify resampling method
             f" -r {args.resampling}"
-            # Add options to run on multiple threads, give the output a latlon projection
+            # Add warp option: run on multiple threads. Give the output a latlon projection
             ' -multi -wo GDAL_NUM_THREADS=ALL_CPUS -t_srs "+proj=longlat +datum=WGS84 +nodefs"'
+            # Add ENVI header suffix, not replace (.unw.geo.hdr, not .unw.hdr)
+            " -of ENVI -co SUFFIX=ADD"
+            # set nodata values on source and destination
             " -srcnodata 0 -dstnodata 0 "
             f" {vrt_in_file} {outfile}"
         )
