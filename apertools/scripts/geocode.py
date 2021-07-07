@@ -10,14 +10,18 @@ logger = apertools.log.get_log()
 def geocode(args):
 
     logger.info("Createing lat/lon VRT files.")
-    lat_file, lon_file = prepare_lat_lon(args, row_looks=args.row_looks, col_looks=args.col_looks)
+    lat_file, lon_file = prepare_lat_lon(
+        args, row_looks=args.row_looks, col_looks=args.col_looks
+    )
     if not args.bbox:
         logger.info("Finding bbox from lat/lon file")
         bbox = _get_bbox_from_files(lat_file, lon_file)
     else:
         bbox = args.bbox
-    bbox_str = '%f %f %f %f' % tuple(bbox)
-    logger.info(f"Geocoding in {bbox = } with (lon, lat) step = ({args.lon_step, args.lat_step })")
+    bbox_str = "%f %f %f %f" % tuple(bbox)
+    logger.info(
+        f"Geocoding in {bbox = } with (lon, lat) step = ({args.lon_step, args.lat_step })"
+    )
 
     for infile in args.file_list:
         try:
@@ -25,15 +29,20 @@ def geocode(args):
             dtype = _get_dtype(infile)
         except RuntimeError:
             rows, cols, dtype = args.rows, args.cols, args.dtype
+
         if not rows or not cols or dtype:
-            raise ValueError("Could not get image size for {infile} from GDAL;"
-                             "must pass --rows, --cols, --dtype")
+            raise ValueError(
+                "Could not get image size for {infile} from GDAL;"
+                "must pass --rows, --cols, --dtype"
+            )
 
         infile = os.path.abspath(infile)
-        print("geocoding " + infile)
+        vrt_in_file = infile + ".geo.vrt"
+        logger.info(f"Saving VRT for {infile} to {vrt_in_file}")
         # writeVRT(infile, lat_file, lon_file)
         vrt_in_file = write_vrt(
             infile,
+            vrt_in_file,
             lat_file,
             lon_file,
             args.rows,
@@ -42,6 +51,7 @@ def geocode(args):
         )
 
         outfile = infile + ".geo"
+        logger.info(f"Geocoding output to {infile} to {outfile}")
         cmd = (
             f"gdalwarp -of ENVI -geoloc -te {bbox_str} "
             f" -tr {args.lon_step} {args.lat_step}"
@@ -52,30 +62,42 @@ def geocode(args):
         _log_and_run(cmd)
 
 
-#
+def _read_4_corners(f, band=1):
+    from rasterio.windows import Window
+    import rasterio as rio
+
+    pixels = []
+    with rio.open(f) as src:
+        for offset in [(0, 0), (0, -1), (-1, 0), (-1, -1)]:
+            pixel = src.read(band, window=Window(*offset, 1, 1))
+            pixels.append(pixel)
+    return pixels
+
+
+def _get_dtype(f):
+    import rasterio as rio
+
+    with rio.open(f) as src:
+        return src.meta["dtype"]
+
+
 def _get_bbox_from_files(lat_file, lon_file):
     # TODO: pick out cornrs...
-    rasterio.rio.insp.stats((src, 1))
-    from osgeo import gdal
-    gdal.UseExceptions()
-    ds = gdal.Open(lat_file)
-    # min, max, mean, stddev
-    bot, top, _, _ = ds.GetRasterBand(1).GetStatistics(0, 1)
-    ds = None
-    ds = gdal.Open(lon_file)
-    left, right, _, _ = ds.GetRasterBand(1).GetStatistics(0, 1)
-    ds = None
+    lon_corners = _read_4_corners(lon_file)
+    left, right = min(lon_corners), max(lon_corners)
+
+    lat_corners = _read_4_corners(lat_file)
+    top, bot = min(lat_corners), max(lat_corners)
+
     return left, bot, right, top
 
+
 def _get_size(f):
-    from osgeo import gdal
-    gdal.UseExceptions()
-    ds = gdal.Open(f)
-    band = ds.GetRasterBand(1)
-    rows = band.YSize
-    cols = band.XSize
-    ds = None
-    return rows, cols
+    import rasterio as rio
+
+    with rio.open(f) as src:
+        return src.shape
+
 
 def prepare_lat_lon(args, row_looks=1, col_looks=1):
     lat_file = os.path.abspath(args.lat)
@@ -97,19 +119,19 @@ def _log_and_run(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
 
-
 # <metadata domain="GEOLOCATION">
 # <mdi key="Y_DATASET">/data7/jpl/sanAnd_23511/testint/tempLAT.vrt</mdi>
 # <mdi key="X_DATASET">/data7/jpl/sanAnd_23511/testint/tempLON.vrt</mdi>
 
 
 def write_vrt(
-    filename, lat_file, lon_file, rows, cols, dtype, row_looks=1, col_looks=1
+    filename, outfile, lat_file, lon_file, rows, cols, dtype, row_looks=1, col_looks=1
 ):
     import apertools.sario
 
     outfile = apertools.sario.save_vrt(
         filename,
+        outfile=outfile,
         rows=rows,
         cols=cols,
         dtype=dtype,
@@ -141,8 +163,12 @@ def get_cli_args():
         nargs="*",
         help="List of input files to be geocoded.",
     )
-    parser.add_argument("--rows", type=int, help="Number of rows of input files (if not GDAL readable)")
-    parser.add_argument("--cols", type=int, help="Number of cols of input files (if not GDAL readable)")
+    parser.add_argument(
+        "--rows", type=int, help="Number of rows of input files (if not GDAL readable)"
+    )
+    parser.add_argument(
+        "--cols", type=int, help="Number of cols of input files (if not GDAL readable)"
+    )
     parser.add_argument("--row-looks", default=1)
     parser.add_argument("--col-looks", default=1)
     parser.add_argument(
