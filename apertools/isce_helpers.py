@@ -116,7 +116,7 @@ def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
 
         cor_filename = resampAmp.replace(".amp", ".cor")
         # Make the isce headers
-        make_cor_image(cor_filename, ifg.shape)
+        create_cor_image(cor_filename, ifg.shape)
         # calulate and save (not sure how to just save an array in isce)
         cor = np.abs(ifg) / np.sqrt(amp1 ** 2 * amp2 ** 2)
         sario.save(cor_filename, np.stack((amp1 * amp2, cor)))
@@ -124,7 +124,7 @@ def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
     return imageInt, imageAmp
 
 
-def make_cor_image(cor_filename, shape):
+def create_cor_image(cor_filename, shape):
     length, width = shape
     cohImage = isceobj.createOffsetImage()
     cohImage.setFilename(cor_filename)
@@ -167,11 +167,12 @@ def filter_ifg(ifgFilename, filterStrength=0.5):
     intImage.finalizeImage()
     filtImage.finalizeImage()
 
-def make_unw_image(filename, shape):
+
+def create_unw_image(filename, shape):
     length, width = shape
     outImage = isceobj.Image.createUnwImage()
     outImage.setFilename(filename)
     outImage.setWidth(width)
-    outImage.setAccessMode('read')
+    outImage.setAccessMode("read")
     outImage.renderHdr()
     outImage.renderVRT()
