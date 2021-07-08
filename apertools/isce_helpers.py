@@ -1,10 +1,12 @@
 # adapted from components/isceobj/StripmapProc/runInterferogram.py
 import os
+import datetime
 import numpy as np
 from osgeo import gdal
+import h5py
 from . import sario
 
-import isce
+import isce  # noqa
 import isceobj
 from components.stdproc.stdproc import crossmul
 from iscesys.ImageUtil.ImageUtil import ImageUtil as IU
@@ -245,52 +247,37 @@ def get_square_pixel_looks(frame, posting, azlooks=None, rglooks=None):
     return azFinal, rgFinal
 
 
-def extractDoppler(metadata, frame):
-    # Recast the Near, Mid, and Far Reskew Doppler values
-    # into three RDF records because they were not parsed
-    # correctly by the RDF parser; it was parsed as a string.
-    # Use the RDF parser on the individual Doppler values to
-    # do the unit conversion properly.
+# def get_uavsar_velocity():
+#     mdd = dict(metadata)
+#     elp.setSCH(mdd['Peg Latitude'], mdd['Peg Longitude'], mdd['Peg Heading'])
+#     scale = (elp.pegRadCur + mdd['Average Altitude']) / elp.pegRadCur
+#     scale * mdd['Azimuth Spacing'] / mdd['Average Pulse Repetition Interval']
 
-    from iscesys.Parsers.rdf import iRDF
 
-    # The units, and values parsed from the metadataFile
-    key = "Reskew Doppler Near Mid Far"
-    u = metadata.data[key].units.split(",")
-    v = map(float, metadata.data[key].value.split())
-    k = ["Reskew Doppler " + x for x in ("Near", "Mid", "Far")]
+def save_uavsar_hdf5_slc(hdf5_file, output, frequency="A", polarization="HH"):
+    with h5py.File(hdf5_file, "r") as hf:
+        ds = hf["/science/LSAR/SLC/swaths/frequency" + frequency + "/" + polarization]
+        with ds.astype(np.complex64):
+            with open(output, "wb") as fout:
+                ds[:].tofile(fout)
 
-    # Use the interactive RDF accumulator to create an RDF object
-    # for the near, mid, and far Doppler values
-    dop = iRDF.RDFAccumulator()
-    for z in zip(k, u, v):
-        dop("%s (%s) = %f" % z)
-    dopplerVals = {}
-    for r in dop.record_list:
-        dopplerVals[r.key.split()[-1]] = r.field.value
 
-    # Quadratic model using Near, Mid, Far range doppler values
-    # UAVSAR has a subroutine to compute doppler values at each pixel
-    # that should be used instead.
-    frame = frame
-    instrument = frame.getInstrument()
-    width = frame.getNumberOfSamples()
-    nearRangeBin = 0.0
-    midRangeBin = float(int((width - 1.0) / 2.0))
-    farRangeBin = width - 1.0
+def extract_uavsar_hdf5_orbit(hdf5_file, output, frequency="A", polarization="HH"):
+    with h5py.File(hdf5_file, "r") as hf:
+        referenceUTC = (
+            hf["/science/LSAR/SLC/swaths/zeroDopplerTime"]
+            .attrs["units"]
+            .decode("utf-8")
+        )
+        referenceUTC = referenceUTC.replace("seconds since ", "")
+        format_str = "%Y-%m-%d %H:%M:%S"
+        if "." in referenceUTC:
+            format_str += ".%f"
+        t0 = datetime.datetime.strptime(referenceUTC, format_str)
+        # given as seconds since some epoch, t0
+        t_offset_arr = hf["/science/LSAR/SLC/metadata/orbit/time"][:]
+        t_arr = [t0 + datetime.timedelta(seconds=t) for t in t_offset_arr]
 
-    A = np.matrix(
-        [
-            [1.0, nearRangeBin, nearRangeBin ** 2],
-            [1.0, midRangeBin, midRangeBin ** 2],
-            [1.0, farRangeBin, farRangeBin ** 2],
-        ]
-    )
-    d = np.matrix(
-        [dopplerVals["Near"], dopplerVals["Mid"], dopplerVals["Far"]]
-    ).transpose()
-    coefs = (np.linalg.inv(A) * d).transpose().tolist()[0]
-    prf = instrument.getPulseRepetitionFrequency()
-    coefs_norm = {"a": coefs[0] / prf, "b": coefs[1] / prf, "c": coefs[2] / prf}
-
-    return coefs_norm, coeffs
+        position = hf["/science/LSAR/SLC/metadata/orbit/position"][:]
+        velocity = hf["/science/LSAR/SLC/metadata/orbit/velocity"][:]
+        return t_arr, position, velocity
