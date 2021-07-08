@@ -176,3 +176,121 @@ def create_unw_image(filename, shape):
     outImage.setAccessMode("read")
     outImage.renderHdr()
     outImage.renderVRT()
+
+
+def get_square_pixel_looks(frame, posting, azlooks=None, rglooks=None):
+    """
+    Compute relevant number of looks.
+    """
+    from isceobj.Planet.Planet import Planet
+    from isceobj.Constants import SPEED_OF_LIGHT
+
+    azFinal = None
+    rgFinal = None
+
+    if azlooks is not None:
+        azFinal = azlooks
+
+    if rglooks is not None:
+        rgFinal = rglooks
+
+    if (azFinal is not None) and (rgFinal is not None):
+        return (azFinal, rgFinal)
+
+    if posting is None:
+        raise Exception(
+            "Input posting is none. Either specify (azlooks, rglooks) or posting in input file"
+        )
+
+    elp = Planet(pname="Earth").ellipsoid
+
+    ####First determine azimuth looks
+    tmid = frame.sensingMid
+    sv = frame.orbit.interpolateOrbit(tmid, method="hermite")  # .getPosition()
+    llh = elp.xyz_to_llh(sv.getPosition())
+
+    if azFinal is None:
+        hdg = frame.orbit.getENUHeading(tmid)
+        elp.setSCH(llh[0], llh[1], hdg)
+        sch, vsch = elp.xyzdot_to_schdot(sv.getPosition(), sv.getVelocity())
+        azFinal = max(int(np.round(posting * frame.PRF / vsch[0])), 1)
+
+    if rgFinal is None:
+        pulseLength = frame.instrument.pulseLength
+        chirpSlope = frame.instrument.chirpSlope
+
+        # Range Bandwidth
+        rBW = np.abs(chirpSlope) * pulseLength
+
+        # Slant Range resolution
+        rgres = abs(SPEED_OF_LIGHT / (2.0 * rBW))
+
+        r0 = frame.startingRange
+        rmax = frame.getFarRange()
+        rng = (r0 + rmax) / 2
+
+        Re = elp.pegRadCur
+        H = sch[2]
+        cos_beta_e = (Re ** 2 + (Re + H) ** 2 - rng ** 2) / (2 * Re * (Re + H))
+        sin_bet_e = np.sqrt(1 - cos_beta_e ** 2)
+        sin_theta_i = sin_bet_e * (Re + H) / rng
+        print(
+            "incidence angle at the middle of the swath: ",
+            np.arcsin(sin_theta_i) * 180.0 / np.pi,
+        )
+        groundRangeRes = rgres / sin_theta_i
+        print("Ground range resolution at the middle of the swath: ", groundRangeRes)
+        rgFinal = max(int(np.round(posting / groundRangeRes)), 1)
+
+    return azFinal, rgFinal
+
+
+def extractDoppler(metadata, frame):
+    # Recast the Near, Mid, and Far Reskew Doppler values
+    # into three RDF records because they were not parsed
+    # correctly by the RDF parser; it was parsed as a string.
+    # Use the RDF parser on the individual Doppler values to
+    # do the unit conversion properly.
+
+    from iscesys.Parsers.rdf import iRDF
+
+    # The units, and values parsed from the metadataFile
+    key = "Reskew Doppler Near Mid Far"
+    u = metadata.data[key].units.split(",")
+    v = map(float, metadata.data[key].value.split())
+    k = ["Reskew Doppler " + x for x in ("Near", "Mid", "Far")]
+
+    # Use the interactive RDF accumulator to create an RDF object
+    # for the near, mid, and far Doppler values
+    dop = iRDF.RDFAccumulator()
+    for z in zip(k, u, v):
+        dop("%s (%s) = %f" % z)
+    dopplerVals = {}
+    for r in dop.record_list:
+        dopplerVals[r.key.split()[-1]] = r.field.value
+
+    # Quadratic model using Near, Mid, Far range doppler values
+    # UAVSAR has a subroutine to compute doppler values at each pixel
+    # that should be used instead.
+    frame = frame
+    instrument = frame.getInstrument()
+    width = frame.getNumberOfSamples()
+    nearRangeBin = 0.0
+    midRangeBin = float(int((width - 1.0) / 2.0))
+    farRangeBin = width - 1.0
+
+    A = np.matrix(
+        [
+            [1.0, nearRangeBin, nearRangeBin ** 2],
+            [1.0, midRangeBin, midRangeBin ** 2],
+            [1.0, farRangeBin, farRangeBin ** 2],
+        ]
+    )
+    d = np.matrix(
+        [dopplerVals["Near"], dopplerVals["Mid"], dopplerVals["Far"]]
+    ).transpose()
+    coefs = (np.linalg.inv(A) * d).transpose().tolist()[0]
+    prf = instrument.getPulseRepetitionFrequency()
+    coefs_norm = {"a": coefs[0] / prf, "b": coefs[1] / prf, "c": coefs[2] / prf}
+
+    return coefs_norm, coeffs
