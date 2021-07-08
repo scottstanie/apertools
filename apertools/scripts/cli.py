@@ -476,7 +476,14 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
 @click.option("--cols", type=int, help="Number of columns (width) in file")
 @click.option("--rows", type=int, help="Number of rows (file_length) in file")
 @click.option("--dtype", help="Optional number dtype string")
-@click.option("--band", type=int, help="The band number to use for the VRT")
+@click.option(
+    "--bands",
+    "-b",
+    type=int,
+    multiple=True,
+    default=[1],
+    help="Specify which bands within file to include in VRT",
+)
 @click.option(
     "--interleave",
     type=click.Choice(["BIP", "BIL", "BSQ"]),
@@ -499,7 +506,7 @@ def save_vrt(
     cols,
     rows,
     dtype,
-    band,
+    bands,
     interleave,
     num_bands,
     out_dir,
@@ -522,7 +529,7 @@ def save_vrt(
             cols=cols,
             dtype=dtype,
             rsc_file=rsc_file,
-            band=band,
+            bands=bands,
             interleave=interleave,
             num_bands=num_bands,
             outfile=outfile,
@@ -531,10 +538,12 @@ def save_vrt(
             metadata_domain=metadata_domain,
         )
 
+
 def _args_to_dict(args):
     if len(args) % 2 != 0:
         raise ValueError("Must pass pairse of key/value pairs")
     return dict(zip(args[::2], args[1::2]))
+
 
 @cli.command("smallslc")
 @click.argument("filenames", nargs=-1)

@@ -1328,6 +1328,7 @@ def save_vrt(
         rel = "0"
         source_filename = os.path.abspath(filename)
 
+    print(f"{bands = }")
     for band in bands:
         image_offset, pixel_offset, line_offset = get_offsets(
             dtype,
@@ -1347,8 +1348,8 @@ def save_vrt(
             f"LineOffset={line_offset}",
             # 'ByteOrder=LSB'
         ]
-    # print("gdal dtype", gdal_dtype, dtype)
-    out_raster.AddBand(gdal_dtype, options)
+        # print("gdal dtype", gdal_dtype, dtype)
+        out_raster.AddBand(gdal_dtype, options)
 
     if metadata_dict is not None:
         out_raster.SetMetadata(metadata_dict, metadata_domain)
@@ -1469,24 +1470,31 @@ def get_offsets(dtype, interleave, band, width, length, num_bands):
         raise ValueError("Unknown interleave: %s" % interleave)
 
 
-def rsc_to_geotransform(rsc_data):
+def rsc_to_geotransform(rsc_data, half_shift=True):
+    """Convert the data in an .rsc file to a 6 element geotransform for GDAL
 
-    # See here for geotransform info
-    # https://gdal.org/user/raster_data_model.html#affine-geotransform
-    # NOTE: gdal standard is to reference pixel by top left corner,
-    # while the SAR .rsc stuff wants center of pixel
-    # Xgeo = GT(0) + Xpixel*GT(1) + Yline*GT(2)
-    # Ygeo = GT(3) + Xpixel*GT(4) + Yline*GT(5)
+    See here for geotransform info
+    https://gdal.org/user/raster_data_model.html#affine-geotransform
+    NOTE: `half_shift` argument is because gdal standard is to
+    reference a pixel by its top left corner,
+    while often the .rsc for SAR focusing is using the middle of a pixel.
 
-    # So for us, this means we have
-    # X0 = trans[0] + .5*trans[1] + (.5*trans[2])
-    # Y0 = trans[3] + (.5*trans[4]) + .5*trans[5]
-    # where trans[2], trans[4] are 0s for north-up rasters
+    Xgeo = GT(0) + Xpixel*GT(1) + Yline*GT(2)
+    Ygeo = GT(3) + Xpixel*GT(4) + Yline*GT(5)
+
+    So for us, this means we have
+    X0 = trans[0] + .5*trans[1] + (.5*trans[2])
+    Y0 = trans[3] + (.5*trans[4]) + .5*trans[5]
+    where trans[2], trans[4] are 0s for north-up rasters
+    """
 
     x_step = rsc_data["x_step"]
     y_step = rsc_data["y_step"]
     X0 = rsc_data["x_first"] - 0.5 * x_step
     Y0 = rsc_data["y_first"] - 0.5 * y_step
+    if half_shift:
+        X0 -= 0.5 * x_step
+        Y0 -= 0.5 * y_step
     return (X0, x_step, 0.0, Y0, 0.0, y_step)
 
 
