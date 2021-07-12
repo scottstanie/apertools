@@ -247,7 +247,6 @@ def get_square_pixel_looks(frame, posting, azlooks=None, rglooks=None):
     return azFinal, rgFinal
 
 
-<<<<<<< HEAD
 # def get_uavsar_velocity():
 #     mdd = dict(metadata)
 #     elp.setSCH(mdd['Peg Latitude'], mdd['Peg Longitude'], mdd['Peg Heading'])
@@ -282,3 +281,32 @@ def extract_uavsar_hdf5_orbit(hdf5_file, output, frequency="A", polarization="HH
         position = hf["/science/LSAR/SLC/metadata/orbit/position"][:]
         velocity = hf["/science/LSAR/SLC/metadata/orbit/velocity"][:]
         return t_arr, position, velocity
+
+
+def create_dem_header(dem_filename, rsc_file=None, datum="EGM96"):
+    from isceobj.Image import createDemImage
+
+    rsc_dict = sario.load(rsc_file)
+    width, length = rsc_dict["width"], rsc_dict["length"]
+
+    demImage = createDemImage()
+    demImage.initImage(dem_filename, "read", width)
+    demImage.dataType = "BYTE"
+
+    dictProp = {
+        "REFERENCE": datum,
+        "Coordinate1": {
+            "size": width,
+            "startingValue": rsc_dict["x_first"],
+            "delta": rsc_dict["x_step"],
+        },
+        "Coordinate2": {
+            "size": length,
+            "startingValue": rsc_dict["y_first"],
+            "delta": rsc_dict["y_step"],
+        },
+        "FILE_NAME": dem_filename,
+    }
+    # no need to pass the dictionaryOfFacilities since init will use the default one
+    demImage.init(dictProp)
+    demImage.renderHdr()
