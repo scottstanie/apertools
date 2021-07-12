@@ -283,14 +283,16 @@ def extract_uavsar_hdf5_orbit(hdf5_file, output, frequency="A", polarization="HH
         return t_arr, position, velocity
 
 
-def create_dem_header(dem_filename, rsc_file=None, datum="EGM96"):
+def create_dem_header(dem_file, rsc_file=None, datum="EGM96"):
     from isceobj.Image import createDemImage
+    if rsc_file is None:
+        rsc_file = dem_file + ".rsc"
 
     rsc_dict = sario.load(rsc_file)
     width, length = rsc_dict["width"], rsc_dict["length"]
 
     demImage = createDemImage()
-    demImage.initImage(dem_filename, "read", width)
+    demImage.initImage(dem_file, "read", width)
     demImage.dataType = "BYTE"
 
     dictProp = {
@@ -305,7 +307,7 @@ def create_dem_header(dem_filename, rsc_file=None, datum="EGM96"):
             "startingValue": rsc_dict["y_first"],
             "delta": rsc_dict["y_step"],
         },
-        "FILE_NAME": dem_filename,
+        "FILE_NAME": dem_file,
     }
     # no need to pass the dictionaryOfFacilities since init will use the default one
     demImage.init(dictProp)
