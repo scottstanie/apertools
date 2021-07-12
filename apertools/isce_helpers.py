@@ -289,7 +289,7 @@ def create_dem_header(dem_file, rsc_file=None, datum="EGM96"):
         rsc_file = dem_file + ".rsc"
 
     rsc_dict = sario.load(rsc_file)
-    width, length = rsc_dict["width"], rsc_dict["length"]
+    width, length = rsc_dict["width"], rsc_dict["file_length"]
 
     demImage = createDemImage()
     demImage.initImage(dem_file, "read", width)
