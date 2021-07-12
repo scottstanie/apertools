@@ -1498,8 +1498,8 @@ def rsc_to_geotransform(rsc_data, half_shift=True):
 
     x_step = rsc_data["x_step"]
     y_step = rsc_data["y_step"]
-    X0 = rsc_data["x_first"] - 0.5 * x_step
-    Y0 = rsc_data["y_first"] - 0.5 * y_step
+    X0 = rsc_data["x_first"]
+    Y0 = rsc_data["y_first"]
     if half_shift:
         X0 -= 0.5 * x_step
         Y0 -= 0.5 * y_step
