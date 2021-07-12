@@ -519,9 +519,18 @@ def station_xyz(station_name):
     return X, Y, Z
 
 
-def station_rowcol(station_name=None, rsc_data=None):
+def station_rowcol(station_name, rsc_data=None, filename=None):
+    """Find the row/columns of a station name within an image
+
+    Image coordinates can be defined with `rsc_data` from .rsc file,
+    or by a gdal-readable `filename`
+    """
+    if rsc_data is None and filename is None:
+        raise ValueError("Need either rsc_data or filename to locate station")
     lon, lat = station_lonlat(station_name)
-    return apertools.latlon.latlon_to_rowcol(lat, lon, rsc_data)
+    return apertools.latlon.latlon_to_rowcol(
+        lat, lon, rsc_data=rsc_data, filename=filename
+    )
 
 
 def station_distance(station_name1, station_name2):

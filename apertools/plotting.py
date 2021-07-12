@@ -663,3 +663,20 @@ def map_img(img, bbox, ax=None, crs=None, cmap="gray"):
     left, bot, right, top = bbox
     extent = [left, right, bot, top]
     ax.imshow(img, transform=crs, extent=extent, origin="upper", cmap=cmap)
+
+
+def set_style(size=15):
+    style_dict = {
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+        "font.family": "Helvetica",
+        "font.size": size,
+        "font.weight": "bold",
+        "legend.fontsize": "large",
+        "axes.labelsize": size,
+        "axes.titlesize": size,
+        "xtick.labelsize": size * 0.75,
+        "ytick.labelsize": size * 0.75,
+    }
+    plt.rcParams.update(style_dict)
+    plt.style.use("science")

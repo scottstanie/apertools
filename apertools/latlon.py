@@ -12,7 +12,7 @@ import apertools.sario
 import apertools.utils
 from apertools.log import get_log
 
-wgs84 = Geod(ellps="WGS84")
+WGS84 = Geod(ellps="WGS84")
 
 logger = get_log()
 
@@ -44,7 +44,7 @@ def load_deformation_img(
     return img
 
 
-def rowcol_to_latlon(row, col, rsc_data):
+def rowcol_to_latlon(row, col, rsc_data=None, filename=None):
     """Takes the row, col of a pixel and finds its lat/lon
 
     Can also pass numpy arrays of row, col.
@@ -54,6 +54,7 @@ def rowcol_to_latlon(row, col, rsc_data):
         row (int or ndarray): row number
         col (int or ndarray): col number
         rsc_data (dict): data output from load_dem_rsc
+        filename (str): gdal-readable file with geographic coordinates
 
     Returns:
         tuple[float, float]: lat, lon for the pixel
@@ -63,16 +64,22 @@ def rowcol_to_latlon(row, col, rsc_data):
         >>> rowcol_to_latlon(7, 3, rsc_data)
         (1.4, 1.4)
     """
-    start_lon = rsc_data["x_first"]
-    start_lat = rsc_data["y_first"]
-    lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
-    lat = start_lat + (row - 1) * lat_step
-    lon = start_lon + (col - 1) * lon_step
+    if rsc_data is not None:
+        start_lon = rsc_data["x_first"]
+        start_lat = rsc_data["y_first"]
+        lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
+        lat = start_lat + (row - 1) * lat_step
+        lon = start_lon + (col - 1) * lon_step
+    else:
+        import rasterio as rio
+
+        with rio.open(filename) as src:
+            lon, lat = src.xy(row, col)
 
     return lat, lon
 
 
-def latlon_to_rowcol(lat, lon, rsc_data):
+def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None):
     """Takes latitude, longitude and finds pixel location.
 
     Inverse of rowcol_to_latlon function
@@ -81,6 +88,7 @@ def latlon_to_rowcol(lat, lon, rsc_data):
         lat (float): latitude
         lon (float): longitude
         rsc_data (dict): data output from load_dem_rsc
+        filename (str): gdal-readable file with geographic coordinates
 
     Returns:
         tuple[int, int]: row, col for the pixel
@@ -92,12 +100,23 @@ def latlon_to_rowcol(lat, lon, rsc_data):
         >>> latlon_to_rowcol(2.0, 1.0, rsc_data)
         (0, 0)
     """
-    start_lon = rsc_data["x_first"]
-    start_lat = rsc_data["y_first"]
-    lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
-    row = (lat - start_lat) / lat_step
-    col = (lon - start_lon) / lon_step
-    return int(round(row)), int(round(col))
+    if rsc_data is None and filename is None:
+        raise ValueError("Need either rsc_data or filename to locate station")
+        
+    if rsc_data is not None:
+        start_lon = rsc_data["x_first"]
+        start_lat = rsc_data["y_first"]
+        lon_step, lat_step = rsc_data["x_step"], rsc_data["y_step"]
+        row = (lat - start_lat) / lat_step
+        col = (lon - start_lon) / lon_step
+
+        row, col = int(round(row)), int(round(col))
+    else:
+        import rasterio as rio
+
+        with rio.open(filename) as src:
+            row, col = src.index(lon, lat)
+    return row, col
 
 
 def latlon_to_dist(lat_lon_start, lat_lon_end):
@@ -119,7 +138,7 @@ def latlon_to_dist(lat_lon_start, lat_lon_end):
     """
     lat1, lon1 = lat_lon_start
     lat2, lon2 = lat_lon_end
-    return wgs84.line_length((lon1, lon2), (lat1, lat2))
+    return WGS84.line_length((lon1, lon2), (lat1, lat2))
 
 
 def pixel_spacing(y_step=None, x_step=None, y_first=None, x_first=None, **kwargs):
