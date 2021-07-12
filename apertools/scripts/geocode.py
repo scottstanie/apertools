@@ -251,7 +251,7 @@ def get_cli_args():
     parser.add_argument(
         "--dtype",
         default="float32",
-        choices=["float32", "complex32", "int16", "uint8"],
+        choices=["float32", "complex64", "int16", "uint8"],
         help="(numpy-style) data type of binary array "
         "(choices = %(choices)s, default=%(default)s)",
     )

@@ -529,6 +529,7 @@ def plot_img_diff(
     show_diff=True,
     vdiff=4,
     cmap="seismic_wide_y",
+    cbar_label="",
     show=True,
     figsize=None,
     **kwargs,
@@ -545,17 +546,24 @@ def plot_img_diff(
     # print(f"{vmin} {vmax}")
     fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True, figsize=figsize)
     for ii in range(n):
-        axim = axes[ii].imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
+        ax = axes[ii]
+        axim = ax.imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
         if titles:
-            axes[ii].set_title(titles[ii])
-    fig.colorbar(axim, ax=axes[n - 1])
+            ax.set_title(titles[ii])
+        cbar = fig.colorbar(axim, ax=ax)
+        cbar.set_label(cbar_label)
+        ax.set_axis_off()
+    # fig.colorbar(axim, ax=axes[n - 1])
     if show_diff:
         # Now different image at end
         diff_arr = arrays[0] - arrays[1]
         vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=twoway)
-        axim = axes[-1].imshow(diff_arr, cmap=cmap, vmax=vmin, vmin=vmax)
-        axes[-1].set_title("left - middle")
-        fig.colorbar(axim, ax=axes[-1])
+        ax = axes[-1]
+        axim = ax.imshow(diff_arr, cmap=cmap, vmax=vmin, vmin=vmax)
+        ax.set_title("left - middle")
+        ax.set_axis_off()
+        cbar = fig.colorbar(axim, ax=ax)
+        cbar.set_label(cbar_label)
     # [f.close() for f in files]
     if show:
         plt.show(block=False)
