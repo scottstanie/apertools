@@ -95,7 +95,7 @@ STACKED_FILES = [".cc", ".unw", ".unwflat"]
 UAVSAR_POL_DEPENDENT = [".grd", ".mlc"]
 
 BIL_FILES = STACKED_FILES  # Other name for storing binary interleaved by line
-BIP_FILES = COMPLEX_EXTS
+BIP_FILES = COMPLEX_EXTS + ELEVATION_EXTS # these are just single band ones
 
 DATE_FMT = "%Y%m%d"
 
@@ -1443,11 +1443,19 @@ def get_interleave(filename, num_bands=None):
     return interleave, num_bands
 
 
-def get_offsets(dtype, interleave, band, width, length, num_bands):
+def get_offsets(dtype, interleave, band, width, length, num_bands=1):
     """
     From ISCE Image.py
     """
     bytes_per_pix = np.dtype(dtype).itemsize
+    # In this single-band case, all choices are the same
+    if band == 0 and num_bands == 1:
+        return (
+            width * bytes_per_pix,  # ImageOffset
+            bytes_per_pix,  # PixelOffset
+            width * bytes_per_pix,  # LineOffset
+        )
+    # otherwise, get the specific interleave options
     if interleave == "BIL":
         return (
             band * width * bytes_per_pix,  # ImageOffset
