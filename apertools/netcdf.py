@@ -62,7 +62,7 @@ def hdf5_to_netcdf(
         # TODO: store the int dates as dims... somehow
 
         logger.info("Making dimensions and variables")
-        with nc.Dataset(outname, "w") as f:
+        with nc.Dataset(outname, "a") as f:
             f.history = "Created " + time.ctime(time.time())
 
             f.createDimension("lat", rows)
