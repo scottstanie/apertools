@@ -238,7 +238,7 @@ def ignore_slc_dates(
     return valid_slcs, valid_igrams
 
 
-def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth):
+def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth=np.inf, min_bandwidth=1):
     """Limit the total interferograms to just nearest `max_bandwidth` connections
     Alternative to a temportal baseline.
     """
@@ -251,7 +251,7 @@ def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth):
             cur_early = early
         else:
             cur_bw += 1
-        if cur_bw <= max_bandwidth:
+        if cur_bw <= max_bandwidth and cur_bw >= min_bandwidth:
             ifg_used.append((early, late))
     return ifg_used
 

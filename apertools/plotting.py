@@ -673,7 +673,7 @@ def map_img(img, bbox, ax=None, crs=None, cmap="gray"):
     ax.imshow(img, transform=crs, extent=extent, origin="upper", cmap=cmap)
 
 
-def set_style(size=15):
+def set_style(size=15, nolatex=False):
     style_dict = {
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
@@ -687,4 +687,5 @@ def set_style(size=15):
         "ytick.labelsize": size * 0.75,
     }
     plt.rcParams.update(style_dict)
-    plt.style.use("science")
+    style = ["science", "no-latex"] if nolatex else "science"
+    plt.style.use(style)
