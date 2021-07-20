@@ -84,6 +84,14 @@ def plot_corr_matrix(corrmatrix, slclist, vmax=None, vmin=0):
     return fig, ax
 
 
+# fig, ax = plt.subplots()
+# ax.imshow(plot_bandwidth(ifg_list), vmin=0, vmax=1)
+# ticks = np.arange(.5, len(slc_list) + .5)
+# ax.set_xticks(ticks)
+# ax.set_xticklabels([])
+# ax.set_yticks(ticks)
+# ax.set_yticklabels([])
+# ax.grid(which='major', markevery=.5, color='k')
 # In [93]: out = apertools.correlation.plot_bandwidth(utils.filter_slclist_ifglist(ifglist_full, max_temporal_baseline=300)[1])
 def plot_bandwidth(ifg_dates):
     all_sar_dates = list(sorted(set(itertools.chain.from_iterable(ifg_dates))))

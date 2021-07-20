@@ -173,6 +173,7 @@ def filter_slclist_ifglist(
     min_date=None,
     max_date=None,
     max_temporal_baseline=None,
+    min_bandwidth=None,
     max_bandwidth=None,
     slclist_ignore_file=None,
     verbose=False,
@@ -182,13 +183,14 @@ def filter_slclist_ifglist(
         _, valid_ifg_dates = ignore_slc_dates(
             ifg_date_list=valid_ifg_dates, slclist_ignore_file=slclist_ignore_file
         )
-        
+
     valid_ifg_dates = filter_min_max_date(
         valid_ifg_dates, min_date, max_date, verbose=verbose
     )
     if max_temporal_baseline is not None and max_bandwidth is not None:
         raise ValueError("Only can filter by one of bandwith or temp. baseline")
     if max_temporal_baseline is not None:
+        # TODO: handle min and max both
         ll = len(valid_ifg_dates)
         valid_ifg_dates = [
             ifg
@@ -199,8 +201,10 @@ def filter_slclist_ifglist(
             logger.info(
                 f"Ignoring {ll - len(valid_ifg_dates)} longer than {max_temporal_baseline}"
             )
-    elif max_bandwidth is not None:
-        valid_ifg_dates = limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth)
+    elif max_bandwidth is not None or min_bandwidth is not None:
+        valid_ifg_dates = limit_ifg_bandwidth(
+            valid_ifg_dates, max_bandwidth=max_bandwidth, min_bandwidth=min_bandwidth
+        )
 
     if verbose:
         logger.info(
@@ -238,10 +242,14 @@ def ignore_slc_dates(
     return valid_slcs, valid_igrams
 
 
-def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth=np.inf, min_bandwidth=1):
+def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth=None, min_bandwidth=None):
     """Limit the total interferograms to just nearest `max_bandwidth` connections
     Alternative to a temportal baseline.
     """
+    if not max_bandwidth:
+        max_bandwidth = np.inf
+    if not min_bandwidth:
+        min_bandwidth = 1
     cur_early = None
     cur_bw = 1
     ifg_used = []
