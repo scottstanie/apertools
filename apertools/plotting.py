@@ -532,6 +532,7 @@ def plot_img_diff(
     cbar_label="",
     show=True,
     figsize=None,
+    interpolation=None,
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
@@ -547,7 +548,7 @@ def plot_img_diff(
     fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True, figsize=figsize)
     for ii in range(n):
         ax = axes[ii]
-        axim = ax.imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin)
+        axim = ax.imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin, interpolation=interpolation)
         if titles:
             ax.set_title(titles[ii])
         cbar = fig.colorbar(axim, ax=ax)
