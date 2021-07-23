@@ -1,3 +1,4 @@
+import os
 import time
 import datetime
 import numpy as np
@@ -32,7 +33,7 @@ def hdf5_to_netcdf(
         raise ValueError(f"{outname} must be an .nc filename")
 
     with h5py.File(filename) as hf:
-        # Get data and references from HDF% file
+        # Get data and references from HDF5 file
 
         # Just get one example for shape
         if dset_name not in hf:
@@ -40,7 +41,10 @@ def hdf5_to_netcdf(
                 f"Requested dset: {dset_name}. "
                 f"Dset keys available in {filename}: {list(hf.keys())}"
             )
-        nstack, rows, cols = hf[dset_name].shape
+        dset = hf[dset_name]
+        nstack = dset.shape[0] if dset.ndim == 3 else 1
+        rows, cols = dset.shape[-2:]
+
         lon_arr, lat_arr = latlon.get_latlon_arrs(h5_filename=filename, bbox=bbox)
 
         (row_top, row_bot), (col_left, col_right) = latlon.window_rowcol(
@@ -62,36 +66,43 @@ def hdf5_to_netcdf(
         # TODO: store the int dates as dims... somehow
 
         logger.info("Making dimensions and variables")
-        with nc.Dataset(outname, "a") as f:
-            f.history = "Created " + time.ctime(time.time())
+        mode = "a" if os.path.exists(outname) else "w"
+        with nc.Dataset(outname, mode) as f:
+            # f.set_auto_mask(False)
+            # f.set_always_mask(False)
+            if dset_name in f.variables:
+                logger.info("%s already in %s: skipping.", dset_name, outname)
+                return
 
-            f.createDimension("lat", rows)
-            f.createDimension("lon", cols)
-            # Could make this unlimited to add to it later?
-            latitudes = f.createVariable("lat", "f4", ("lat",), zlib=True)
-            longitudes = f.createVariable("lon", "f4", ("lon",), zlib=True)
-            latitudes.units = "degrees north"
-            longitudes.units = "degrees east"
+            f.history = "Updated " + time.ctime(time.time())
+            if "lat" in f.variables:
+                latitudes = f['lat']
+            else:
+                f.createDimension("lat", rows)
+                latitudes = f.createVariable("lat", "f4", ("lat",), zlib=True)
+                latitudes.units = "degrees north"
+                latitudes[:] = lat_arr
+            if "lon" in f.variables:
+                longitudes = f['lon']
+            else:
+                f.createDimension("lon", cols)
+                longitudes = f.createVariable("lon", "f4", ("lon",), zlib=True)
+                longitudes.units = "degrees east"
+                longitudes[:] = lon_arr
 
-            dset = hf[dset_name]
-            nstack, _, _ = dset.shape
-            if stack_dim not in f.dimensions:
+            if nstack > 1 and stack_dim not in f.variables:
                 f.createDimension(stack_dim, nstack)
-            if stack_dim not in f.variables:
                 if stack_dim == "date":
                     idxs = f.createVariable(stack_dim, "f4", (stack_dim,), zlib=True)
                     idxs.units = f"days since {slclist[0]}"
                 else:
-                    idxs = f.createVariable(stack_dim, "i4", (stack_dim,))
+                    idxs = f.variables[stack_dim]
 
-            # Write data
-            latitudes[:] = lat_arr
-            longitudes[:] = lon_arr
-            if stack_dim == "date":
-                d2n = nc.date2num(stack_dim_arr, units=idxs.units)
-                idxs[:] = d2n
-            else:
-                idxs[:] = stack_dim_arr
+                if stack_dim == "date":
+                    d2n = nc.date2num(stack_dim_arr, units=idxs.units)
+                    idxs[:] = d2n
+                else:
+                    idxs[:] = stack_dim_arr
 
             # Finally, the actual stack
             # stackvar = rootgrp.createVariable("stack/1", "f4", ("date", "lat", "lon"))
@@ -102,21 +113,26 @@ def hdf5_to_netcdf(
                 #     np.uint8, "bool_t", {"FALSE": 0, "TRUE": 1}
                 # )
                 dt = bool_type
-                fill_value = 0
+                # fill_value = 0
             else:
                 dt = hf[dset_name].dtype
-                fill_value = 0
+                # fill_value = 0
+            # Note on fill: seems like when i set fill to 0, it masks it.. 
+            # and turns 0s into nans
 
-            stackvar = f.createVariable(
+            data_var = f.createVariable(
                 dset_name,
                 dt,
-                (stack_dim, "lat", "lon"),
-                fill_value=fill_value,
+                (stack_dim, "lat", "lon") if nstack > 1 else ("lat", "lon"),
+                # fill_value=fill_value,
                 zlib=True,
             )
-            d = dset[:, row_top:row_bot, col_left:col_right]
+            if nstack > 1:
+                d = dset[:, row_top:row_bot, col_left:col_right]
+            else:
+                d = dset[row_top:row_bot, col_left:col_right]
             logger.info(f"d shape: {d.shape}")
-            stackvar[:] = d
+            data_var[:] = d
 
 
 def to_datetimes(date_list):
