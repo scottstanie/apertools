@@ -224,7 +224,7 @@ def load_file(
         ext = _get_full_grd_ext(filename)
 
     # Double check the platform if there's only one option
-    if ext in UAVSAR_EXTS and ext not in SENTINEL_EXTS:
+    if ext in UAVSAR_EXTS and ext not in SENTINEL_EXTS and not rsc_file:
         platform = "uavsar"
 
     # If it hasn't been loaded by now, it's probably a radar file type
