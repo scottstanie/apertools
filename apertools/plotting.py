@@ -558,9 +558,10 @@ def plot_img_diff(
     if show_diff:
         # Now different image at end
         diff_arr = arrays[0] - arrays[1]
-        vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=twoway)
+        # the diff is always two way, even if arrays are positive only
+        vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=True)
         ax = axes[-1]
-        axim = ax.imshow(diff_arr, cmap=cmap, vmax=vmin, vmin=vmax)
+        axim = ax.imshow(diff_arr, cmap=cmap, vmax=vmin, vmin=vmax, interpolation=interpolation)
         ax.set_title("left - middle")
         ax.set_axis_off()
         cbar = fig.colorbar(axim, ax=ax)
