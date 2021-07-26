@@ -312,7 +312,7 @@ def view_stack(
 
     def update_slider(val):
         # The function to be called anytime a slider's value changes
-        val_dt = mdates.num2date(val).date
+        val_dt = mdates.num2date(val).date()
         closest_idx = np.argmin(np.abs(slclist - val_dt))
         axes_img.set_data(stack[closest_idx])
         imagefig.canvas.draw()
