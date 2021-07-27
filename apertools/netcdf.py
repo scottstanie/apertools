@@ -21,6 +21,7 @@ def hdf5_to_netcdf(
     stack_dim="idx",
     outname=None,
     data_units=None,
+    copy_data_attrs=True,
     bbox=None,
 ):
     """Convert the stack in HDF5 to NetCDF with appropriate metadata"""
@@ -130,6 +131,11 @@ def hdf5_to_netcdf(
             )
             if data_units:
                 data_var.units = data_units
+            if copy_data_attrs:
+                for k, v in dset.attrs.items():
+                    if "dates" in k:  # Manual skip for the slclist or ifglist
+                        continue
+                    setattr(data_var, k, v)
             if nstack > 1:
                 d = dset[:, row_top:row_bot, col_left:col_right]
             else:

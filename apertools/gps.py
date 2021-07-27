@@ -736,7 +736,7 @@ def moving_average(arr, window_size=7):
     return np.array(pd.Series(arr).rolling(window_size).mean())
 
 
-def find_insar_ts(defo_filename="deformation.h5", station_name_list=[], window_size=1):
+def find_insar_ts(defo_filename=apertools.sario.DEFO_FILENAME_NC, station_name_list=[], window_size=1):
     """Get the insar timeseries closest to a list of GPS stations
 
     Returns the timeseries, and the datetimes of points for plotting
@@ -763,7 +763,7 @@ def find_insar_ts(defo_filename="deformation.h5", station_name_list=[], window_s
         )
 
     slclist = apertools.sario.load_slclist_from_h5(
-        defo_filename, dset=apertools.sario.STACK_DSET
+        defo_filename, dset=apertools.sario.DEFO_ORIG_DSET
     )
     return slclist, insar_ts_list
 
@@ -772,7 +772,7 @@ def get_stack_timeseries(
     filename,
     row,
     col,
-    stack_dset_name=apertools.sario.STACK_DSET,
+    stack_dset_name=apertools.sario.DEFO_ORIG_DSET,
     station=None,
     window_size=1,
 ):
