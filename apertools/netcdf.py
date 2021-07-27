@@ -20,6 +20,7 @@ def hdf5_to_netcdf(
     dset_name="stack",
     stack_dim="idx",
     outname=None,
+    data_units=None,
     bbox=None,
 ):
     """Convert the stack in HDF5 to NetCDF with appropriate metadata"""
@@ -127,6 +128,8 @@ def hdf5_to_netcdf(
                 # fill_value=fill_value,
                 zlib=True,
             )
+            if data_units:
+                data_var.units = data_units
             if nstack > 1:
                 d = dset[:, row_top:row_bot, col_left:col_right]
             else:
