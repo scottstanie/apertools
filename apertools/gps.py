@@ -763,7 +763,7 @@ def find_insar_ts(defo_filename=apertools.sario.DEFO_FILENAME_NC, station_name_l
         )
 
     slclist = apertools.sario.load_slclist_from_h5(
-        defo_filename, dset=apertools.sario.DEFO_ORIG_DSET
+        defo_filename, dset=apertools.sario.DEFO_NOISY_DSET
     )
     return slclist, insar_ts_list
 
@@ -772,7 +772,7 @@ def get_stack_timeseries(
     filename,
     row,
     col,
-    stack_dset_name=apertools.sario.DEFO_ORIG_DSET,
+    stack_dset_name=apertools.sario.DEFO_NOISY_DSET,
     station=None,
     window_size=1,
 ):

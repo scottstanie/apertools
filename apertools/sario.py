@@ -114,7 +114,7 @@ STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
 # deformation output file + datasets
 DEFO_FILENAME = "deformation.h5"
 DEFO_FILENAME_NC = "deformation.nc"
-DEFO_ORIG_DSET = "defo_orig"
+DEFO_NOISY_DSET = "defo_noisy"
 
 # Mask file datasets
 GEO_MASK_DSET = "geo"
