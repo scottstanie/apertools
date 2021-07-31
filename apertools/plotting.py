@@ -80,10 +80,8 @@ def plot_ifg(
     if subplot_layout is None:
         # Decide to layout in rows or cols
         subplot_layout = (1, 3) if ifg.shape[0] > ifg.shape[1] else (3, 1)
-    figsize = (4 * subplot_layout[1], 4 * subplot_layout[0])
-
-    print(f"{kwargs = }")
-    print(figsize)
+    default_figsize = (4 * subplot_layout[1], 4 * subplot_layout[0])
+    figsize = kwargs.get("figsize", default_figsize)
     fig, axes = plt.subplots(*subplot_layout, sharex=True, sharey=True, figsize=figsize)
 
     # mag = scale_mag(ifg)
