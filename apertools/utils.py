@@ -872,3 +872,48 @@ def memmap_blocks(
             shape=(block_rows, total_cols),
         )
         yield cur_block
+
+
+def get_stack_block_shape(
+    h5_stack_file, dset, target_block_size=100e6, default_chunk_size=(None, 10, 10)
+):
+    """Find a shape of blocks to load from `h5_stack_file` with memory size < `target_block_size`
+
+    Args:
+        h5_stack_file (str): HDF5 file name containing 3D dataset
+        dset (str): name of 3D dataset within `h5_stack_file`
+        target_block_size (float, optional): target size of memory for blocks. Defaults to 100e6.
+        default_chunk_size (tuple/list, optional): If `dset` is not chunked, size to use as chunks.
+            Defaults to (None, 10, 10).
+
+    Returns:
+        [type]: [description]
+    """
+    import h5py
+
+    with h5py.File(h5_stack_file) as hf:
+        full_shape = hf[dset].shape
+        nstack = full_shape[0]
+        # Use the HDF5 chunk size, if the dataset is chunked.
+        chunk_size = list(hf[dset].chunks) or default_chunk_size
+        chunk_size[0] = nstack  # always load a full depth slice at once
+
+        nbytes = hf[dset].dtype.itemsize
+
+    # Figure out how much to load at 1 time, staying at ~`target_block_size` bytes of RAM
+    chunks_per_block = target_block_size / (np.prod(chunk_size) * nbytes)
+    row_chunks, col_chunks = 1, 1
+    cur_block_shape = list(copy.copy(chunk_size))
+    while chunks_per_block > 1:
+        # First keep incrementing the number of rows we grab at once time
+        if row_chunks * chunk_size[1] < full_shape[1]:
+            row_chunks += 1
+            cur_block_shape[1] = min(row_chunks * chunk_size[1], full_shape[1])
+        # Then increase the column size if still haven't hit `target_block_size`
+        elif col_chunks * chunk_size[2] < full_shape[2]:
+            col_chunks += 1
+            cur_block_shape[2] = min(col_chunks * chunk_size[2], full_shape[2])
+        else:
+            break
+        chunks_per_block = target_block_size / (np.prod(cur_block_shape) * nbytes)
+    return cur_block_shape

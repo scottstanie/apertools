@@ -40,7 +40,9 @@ def scale_mag(img, expval=0.3, max_pct=99.95):
 def phase_to_2pi(img):
     """Convert [-pi, pi] phase to [0, 2pi] by adding 2pi to negative vals"""
     phase = np.angle(img) if np.iscomplexobj(img) else img
-    assert np.min(phase) >= -3.142 and np.max(phase) <= 3.142
+    if np.nanmin(phase) >= 0 and np.nanmax(phase) <= 2 * np.pi:
+        return phase
+    assert np.nanmin(phase) >= -3.142 and np.nanmax(phase) <= 3.142
     return np.where(phase > 0, phase, phase + 2 * np.pi)
 
 
@@ -546,7 +548,9 @@ def plot_img_diff(
     fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True, figsize=figsize)
     for ii in range(n):
         ax = axes[ii]
-        axim = ax.imshow(arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin, interpolation=interpolation)
+        axim = ax.imshow(
+            arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin, interpolation=interpolation
+        )
         if titles:
             ax.set_title(titles[ii])
         cbar = fig.colorbar(axim, ax=ax)
@@ -559,7 +563,9 @@ def plot_img_diff(
         # the diff is always two way, even if arrays are positive only
         vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=True)
         ax = axes[-1]
-        axim = ax.imshow(diff_arr, cmap=cmap, vmax=vmin, vmin=vmax, interpolation=interpolation)
+        axim = ax.imshow(
+            diff_arr, cmap=cmap, vmax=vmin, vmin=vmax, interpolation=interpolation
+        )
         ax.set_title("left - middle")
         ax.set_axis_off()
         cbar = fig.colorbar(axim, ax=ax)

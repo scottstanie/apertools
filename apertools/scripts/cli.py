@@ -72,8 +72,8 @@ def cli(ctx, verbose, path):
     default=False,
     show_default=True,
 )
-@click.option("--vmax", type=int)
-@click.option("--vmin", type=int)
+@click.option("--vmax", type=float)
+@click.option("--vmin", type=float)
 def view_stack(
     filename,
     dset,
