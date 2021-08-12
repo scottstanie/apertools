@@ -107,7 +107,7 @@ def plot_ifg(
     if title:
         axes.set_title(title)
     fig.tight_layout()
-    return ax
+    return axes
 
 
 def get_fig_ax(fig, ax, **figkwargs):
