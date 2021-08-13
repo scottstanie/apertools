@@ -1352,3 +1352,32 @@ def get_mean_correlations(
             row, col = apertools.latlon.latlon_to_rowcol(lat, lon, dem_rsc)
             corrs[name] = f["mean_stack"][row, col]
     return corrs
+
+# moved from latlon
+# # TODO: get rid of references to this
+# def load_deformation_img(
+#     igram_path=".",
+#     n=1,
+#     filename="deformation.h5",
+#     dset=None,
+#     full_path=None,
+#     rsc_filename="dem.rsc",
+# ):
+#     """Loads mean of last n images of a deformation stack in LatlonImage
+#     Specify either a directory `igram_path` and `filename`, or `full_path` to file
+#     """
+#     igram_path, filename, full_path = apertools.sario.get_full_path(
+#         igram_path, filename, full_path
+#     )
+
+#     _, defo_stack = apertools.sario.load_deformation(
+#         igram_path=igram_path, filename=filename, full_path=full_path, dset=dset, n=n
+#     )
+#     if filename.endswith(".h5"):
+#         rsc_data = apertools.sario.load_dem_from_h5(h5file=full_path)
+#     else:
+#         rsc_data = apertools.sario.load(os.path.join(igram_path, rsc_filename))
+#     img = np.mean(defo_stack, axis=0) if n > 1 else defo_stack
+#     img = LatlonImage(data=img, rsc_data=rsc_data)
+#     return img
+

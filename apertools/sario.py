@@ -19,7 +19,6 @@ import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 import h5py
-import matplotlib.pyplot as plt
 
 import apertools.utils
 import apertools.parsers
@@ -95,7 +94,7 @@ STACKED_FILES = [".cc", ".unw", ".unwflat"]
 UAVSAR_POL_DEPENDENT = [".grd", ".mlc"]
 
 BIL_FILES = STACKED_FILES  # Other name for storing binary interleaved by line
-BIP_FILES = COMPLEX_EXTS + ELEVATION_EXTS # these are just single band ones
+BIP_FILES = COMPLEX_EXTS + ELEVATION_EXTS  # these are just single band ones
 
 DATE_FMT = "%Y%m%d"
 
@@ -117,15 +116,15 @@ DEFO_FILENAME_NC = "deformation.nc"
 DEFO_NOISY_DSET = "defo_noisy"
 
 # Mask file datasets
-GEO_MASK_DSET = "geo"
-GEO_MASK_SUM_DSET = "geo_sum"
+SLC_MASK_DSET = "slc"
+SLC_MASK_SUM_DSET = "slc_sum"
 IGRAM_MASK_DSET = "igram"
 IGRAM_MASK_SUM_DSET = "igram_sum"
 
 DEM_RSC_DSET = "dem_rsc"
 
-SLCLIST_DSET = "geo_dates"
-ifglist_DSET = "int_dates"
+SLCLIST_DSET = "slc_dates"
+ifglist_DSET = "ifg_dates"
 
 # List of platforms where i've set up loading for their files
 PLATFORMS = ("sentinel", "uavsar")
@@ -608,6 +607,7 @@ def save(
     Raises:
         NotImplementedError: if file extension of filename not a known ext
     """
+    import matplotlib.pyplot as plt
 
     def _is_little_endian():
         """All UAVSAR data products save in little endian byte order"""
@@ -925,12 +925,51 @@ def load_dem_from_h5(h5file=None, dset="dem_rsc"):
         return json.loads(f[dset][()])
 
 
-def save_dem_to_h5(h5file, dem_rsc, dset_name="dem_rsc", overwrite=True):
+def save_dem_to_h5(
+    h5file, rsc_data, dset_name="dem_rsc", overwrite=True, save_latlon=True
+):
     if not check_dset(h5file, dset_name, overwrite):
         return
 
     with h5py.File(h5file, "a") as f:
-        f[dset_name] = json.dumps(dem_rsc)
+        f[dset_name] = json.dumps(rsc_data)
+
+    if not save_latlon:
+        return
+    if check_dset(h5file, "lat", overwrite) and check_dset(h5file, "lon", overwrite):
+        save_lat_lon_dsets(h5file, rsc_data)
+
+
+def save_lat_lon_dsets(fname, rsc_data):
+    """Save the lat/lon information from a .rsc file as HDF5 scale datasets
+
+    Args:
+        fname (str): name of HDF5 file
+        rsc_data (dict): data from an rsc file
+    """
+    from apertools.latlon import grid
+
+    lon, lat = grid(**rsc_data, sparse=True)
+    with h5py.File(fname, "a") as hf:
+        hf["lon"] = lon.ravel()
+        hf["lon"].make_scale()
+        hf["lat"] = lat.ravel()
+        hf["lat"].make_scale()
+
+
+def link_lat_lon_dsets(fname, dsets_to_attach):
+    """Attach the lat/lon datasets (which are 'scales') to another dataset
+    dsets_to_attach (list[str], optional): Name of existing datasets in `fname`
+        to attach the lat/lon scales to. Defaults to [].
+    """
+    with h5py.File(fname, "a") as hf:
+        for dset in dsets_to_attach:
+            # Use ndim-2, ndim-1 in case it's 3D
+            ndim = hf[dset].ndim
+            hf[dset].dims[ndim - 1].label = "lon"
+            hf[dset].dims[ndim - 1].attach_scale(hf["lon"])
+            hf[dset].dims[ndim - 2].label = "lat"
+            hf[dset].dims[ndim - 2].attach_scale(hf["lat"])
 
 
 def save_slclist_to_h5(
@@ -990,16 +1029,46 @@ def slclist_to_str(slc_date_list):
     return np.array([d.strftime(DATE_FMT) for d in slc_date_list]).astype("S")
 
 
-# def slclist_to_filenames(slc_date_list, ext=".geo"):
-#     """Convert SAR date list to list of filename strings"""
-#     return ["{}{ext}".format(a.strftime(DATE_FMT), ext=ext) for a in slc_date_list]
-
-
 def ifglist_to_str(ifg_date_list):
-    """Date pairs to Nx2 numpy array or strings"""
+    """Date pairs to Nx2 numpy array of strings"""
     return np.array(
         [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in ifg_date_list]
     ).astype("S")
+
+
+def slclist_to_num(slc_date_list):
+    """Convert list of slc dates into floats for 'days since 1970'
+    Handles both strings and datetimes
+    """
+    return _date_list_to_num(slc_date_list)
+
+
+def ifglist_to_num(ifg_date_list):
+    """Convert list of ifg date pairs into floats for 'days since 1970'
+    Handles both strings and datetimes
+    """
+    return _date_list_to_num(ifg_date_list)
+
+
+def _date_list_to_num(ifg_date_list):
+    """Convert list of dates, or list of date pairs, numpy array of floats
+    for 'days since 1970'
+    Handles both strings and datetimes
+    """
+    from matplotlib import dates
+
+    arr = np.array(ifg_date_list)
+    if isinstance(arr.ravel()[0], str):
+        return dates.datestr2num(ifg_date_list)
+    else:
+        return dates.date2num(ifg_date_list)
+
+
+def date_num_metadata():
+    from matplotlib.dates import get_epoch
+
+    # default: 'date.epoch': '1970-01-01T00:00:00',
+    return "days since {}".format(get_epoch())
 
 
 def ifglist_to_filenames(ifg_date_list, ext=".int"):
@@ -1100,8 +1169,8 @@ def load_mask(
 
     with h5py.File(mask_full_path) as f:
         # Maks a single mask image for any pixel that has a mask
-        # Note: not using GEO_MASK_SUM_DSET since we may be sub selecting layers
-        slc_dset = f[GEO_MASK_DSET]
+        # Note: not using SLC_MASK_SUM_DSET since we may be sub selecting layers
+        slc_dset = f[SLC_MASK_DSET]
         with slc_dset.astype(bool):
             stack_mask = np.sum(slc_dset[used_bool_arr, :, :], axis=0) > 0
         return stack_mask
