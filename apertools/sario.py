@@ -100,9 +100,9 @@ DATE_FMT = "%Y%m%d"
 
 # Constants for dataset keys saved in .h5 files
 MASK_FILENAME = "masks.h5"
-INT_FILENAME = "int_stack.h5"
+# ifg_FILENAME = "ifg_stack.h5"
 UNW_FILENAME = "unw_stack.h5"
-CC_FILENAME = "cc_stack.h5"
+COR_FILENAME = "cc_stack.h5"
 
 # dataset names for general 3D stacks
 STACK_DSET = "stack"
@@ -110,21 +110,16 @@ STACK_MEAN_DSET = "mean_stack"
 STACK_FLAT_DSET = "deramped_stack"
 STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
 
-# deformation output file + datasets
-DEFO_FILENAME = "deformation.h5"
-DEFO_FILENAME_NC = "deformation.nc"
-DEFO_NOISY_DSET = "defo_noisy"
-
 # Mask file datasets
 SLC_MASK_DSET = "slc"
 SLC_MASK_SUM_DSET = "slc_sum"
-IGRAM_MASK_DSET = "igram"
-IGRAM_MASK_SUM_DSET = "igram_sum"
-
-DEM_RSC_DSET = "dem_rsc"
+IFG_MASK_DSET = "ifg"
+IFG_MASK_SUM_DSET = "ifg_sum"
 
 SLCLIST_DSET = "slc_dates"
-ifglist_DSET = "ifg_dates"
+IFGLIST_DSET = "ifg_dates"
+
+DEM_RSC_DSET = "dem_rsc"
 
 # List of platforms where i've set up loading for their files
 PLATFORMS = ("sentinel", "uavsar")
@@ -791,27 +786,27 @@ def _load_deformation_npy(igram_path=None, filename=None, full_path=None, n=None
     return slclist, deformation
 
 
-def load_slclist_from_h5(h5file, dset=None, parse=True):
+def load_datelist_from_h5(h5file, date_dset, dset=None, parse=True):
+    from matplotlib.dates import num2date
+
     with h5py.File(h5file, "r") as f:
         if dset is None:
-            slclist_str = f[SLCLIST_DSET][()].astype(str)
+            datenums = f[date_dset][()]
         else:
-            slclist_str = f[dset].attrs[SLCLIST_DSET][()].astype(str)
+            datenums = f[dset].attrs[date_dset][()]
 
     if parse:
-        return parse_slclist_strings(slclist_str)
+        return num2date(datenums)
     else:
-        return slclist_str
+        return datenums
+
+
+def load_slclist_from_h5(h5file, dset=None, parse=True):
+    return load_datelist_from_h5(h5file, SLCLIST_DSET, dset, parse)
 
 
 def load_ifglist_from_h5(h5file, dset=None, parse=True):
-    with h5py.File(h5file, "r") as f:
-        date_pair_strs = f[ifglist_DSET][:].astype(str)
-
-    if parse:
-        return parse_ifglist_strings(date_pair_strs)
-    else:
-        return date_pair_strs
+    return load_datelist_from_h5(h5file, IFGLIST_DSET, dset, parse)
 
 
 def parse_slclist_strings(slc_str):
@@ -920,6 +915,9 @@ def find_igrams(directory=".", ext=".int", parse=True, filename=None):
         return igram_file_list
 
 
+find_ifgs = find_igrams
+
+
 def load_dem_from_h5(h5file=None, dset="dem_rsc"):
     with h5py.File(h5file, "r") as f:
         return json.loads(f[dset][()])
@@ -951,25 +949,66 @@ def save_lat_lon_dsets(fname, rsc_data):
 
     lon, lat = grid(**rsc_data, sparse=True)
     with h5py.File(fname, "a") as hf:
-        hf["lon"] = lon.ravel()
-        hf["lon"].make_scale()
-        hf["lat"] = lat.ravel()
-        hf["lat"].make_scale()
+        ds = hf.create_dataset("lon", data=lon.ravel())
+        hf["lon"].make_scale("longitude")
+        ds.attrs["units"] = "degrees east"
+
+        ds = hf.create_dataset("lat", data=lat.ravel())
+        hf["lat"].make_scale("latitude")
+        ds.attrs["units"] = "degrees north"
 
 
-def link_lat_lon_dsets(fname, dsets_to_attach):
+def attach_latlon(fname, dset, depth_dim=None):
     """Attach the lat/lon datasets (which are 'scales') to another dataset
-    dsets_to_attach (list[str], optional): Name of existing datasets in `fname`
-        to attach the lat/lon scales to. Defaults to [].
+
+    Args:
+        fname (str): name of HDF5 file
+        dsets_to_attach (list[str], optional): Name of existing datasets in `fname`
+            to attach the lat/lon scales to. Defaults to [].
+        depth_dim (str, optional): For a 3D dataset, attach a scale to the 3rd dimension
+            If it doesn't exist, an index dimension, values 0,1,...len(dset), will be 
+            created with the name=`depth_dim`
     """
     with h5py.File(fname, "a") as hf:
-        for dset in dsets_to_attach:
-            # Use ndim-2, ndim-1 in case it's 3D
-            ndim = hf[dset].ndim
-            hf[dset].dims[ndim - 1].label = "lon"
-            hf[dset].dims[ndim - 1].attach_scale(hf["lon"])
-            hf[dset].dims[ndim - 2].label = "lat"
-            hf[dset].dims[ndim - 2].attach_scale(hf["lat"])
+        # Use ndim-2, ndim-1 in case it's 3D
+        ndim = hf[dset].ndim
+        # do i need these labels? eh, why not
+        hf[dset].dims[ndim - 1].label = "lon"
+        hf[dset].dims[ndim - 2].label = "lat"
+        hf[dset].dims[ndim - 1].attach_scale(hf["lon"])
+        hf[dset].dims[ndim - 2].attach_scale(hf["lat"])
+        if depth_dim:
+            if depth_dim not in hf:
+                hf.create_dataset(depth_dim, data=np.arange(hf[dset].shape[0]))
+                hf[depth_dim].make_scale(depth_dim)
+            hf[dset].dims[0].attach_scale(hf[depth_dim])
+            hf[dset].dims[0].label = depth_dim
+
+
+def save_datelist_to_h5(
+    date_dset,
+    out_file=None,
+    dset_name=None,
+    date_list=None,
+    overwrite=False,
+):
+
+    if dset_name is not None:
+        if not check_dset(out_file, dset_name, overwrite, attr_name=date_dset):
+            return date_list
+    else:
+        if not check_dset(out_file, date_dset, overwrite):
+            return date_list
+
+    with h5py.File(out_file, "a") as f:
+        slc_datenums = slclist_to_num(date_list)
+        if dset_name is not None:
+            f[dset_name].attrs[date_dset] = slc_datenums
+            f[dset_name].attrs[date_dset + "_units"] = get_datenum_units()
+        else:
+            f[date_dset] = slc_datenums
+            f[date_dset].attrs["units"] = get_datenum_units()
+    return date_list
 
 
 def save_slclist_to_h5(
@@ -982,23 +1021,9 @@ def save_slclist_to_h5(
 ):
     if slc_date_list is None:
         slc_date_list, _ = load_slclist_ifglist(igram_path, igram_ext=igram_ext)
-
-    if dset_name is not None:
-        if not check_dset(out_file, dset_name, overwrite, attr_name=SLCLIST_DSET):
-            return slc_date_list
-    else:
-        if not check_dset(out_file, SLCLIST_DSET, overwrite):
-            return slc_date_list
-
-    slc_str_list = slclist_to_str(slc_date_list)
-    with h5py.File(out_file, "a") as f:
-        # JSON gets messed from doing from julia to h5py for now
-        # f[SLCLIST_DSET] = json.dumps(slclist_to_str(slc_date_list))
-        if dset_name is not None:
-            f[dset_name].attrs[SLCLIST_DSET] = slc_str_list
-        else:
-            f[SLCLIST_DSET] = slc_str_list
-    return slc_date_list
+    return save_datelist_to_h5(
+        SLCLIST_DSET, out_file, dset_name, slc_date_list, overwrite
+    )
 
 
 def save_ifglist_to_h5(
@@ -1011,18 +1036,9 @@ def save_ifglist_to_h5(
 ):
     if ifg_date_list is None:
         _, ifg_date_list = load_slclist_ifglist(igram_path, igram_ext=igram_ext)
-
-    if not check_dset(out_file, ifglist_DSET, overwrite):
-        return ifg_date_list
-
-    igram_str_list = ifglist_to_str(ifg_date_list)
-    logger.info("Saving igram dates to %s / %s" % (out_file, ifglist_DSET))
-    with h5py.File(out_file, "a") as f:
-        if dset_name is not None:
-            f[dset_name].attrs[ifglist_DSET] = igram_str_list
-        else:
-            f[ifglist_DSET] = igram_str_list
-    return ifg_date_list
+    return save_datelist_to_h5(
+        IFGLIST_DSET, out_file, dset_name, ifg_date_list, overwrite
+    )
 
 
 def slclist_to_str(slc_date_list):
@@ -1064,7 +1080,7 @@ def _date_list_to_num(ifg_date_list):
         return dates.date2num(ifg_date_list)
 
 
-def date_num_metadata():
+def get_datenum_units():
     from matplotlib.dates import get_epoch
 
     # default: 'date.epoch': '1970-01-01T00:00:00',
@@ -1197,7 +1213,7 @@ def load_single_mask(
 
     with h5py.File(mask_filename, "r") as f:
         idx = ifg_date_list.index(date_pair)
-        dset = f[IGRAM_MASK_DSET]
+        dset = f[IFG_MASK_DSET]
         with dset.astype(bool):
             return dset[idx]
 
