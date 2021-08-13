@@ -7,9 +7,14 @@ from apertools.deramp import remove_ramp
 
 logger = get_log()
 
+
+# In [70]: with open("bbox.geojson") as f:
+#   bbox = json.load(f)['bbox']
+# ds = xr.open_dataset("../unw_stack.h5", engine='h5netcdf', phony_dims='sort')
+# ds_sub = ds.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
+# ds_sub.to_netcdf("masks.nc", engine='h5netcdf')
+
 # TODO: this is basically the same as copy_subset... def merge these
-
-
 def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True):
     """Create a VRT for (a subset of) a gdal-readable file
 
