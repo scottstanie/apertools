@@ -106,9 +106,7 @@ COR_FILENAME = "cc_stack.h5"
 
 # dataset names for general 3D stacks
 STACK_DSET = "stack"
-STACK_MEAN_DSET = "mean_stack"
-STACK_FLAT_DSET = "deramped_stack"
-STACK_FLAT_SHIFTED_DSET = "deramped_shifted_stack"
+STACK_FLAT_SHIFTED_DSET = "stack_flat_shifted"
 
 # Mask file datasets
 SLC_MASK_DSET = "slc"
@@ -120,6 +118,7 @@ SLCLIST_DSET = "slc_dates"
 IFGLIST_DSET = "ifg_dates"
 
 DEM_RSC_DSET = "dem_rsc"
+STACK_FLAT_DSET = "stack_flat"
 
 # List of platforms where i've set up loading for their files
 PLATFORMS = ("sentinel", "uavsar")
@@ -923,37 +922,35 @@ def load_dem_from_h5(h5file=None, dset="dem_rsc"):
         return json.loads(f[dset][()])
 
 
-def save_dem_to_h5(
-    h5file, rsc_data, dset_name="dem_rsc", overwrite=True, save_latlon=True
-):
+def save_dem_to_h5(h5file, rsc_data, dset_name="dem_rsc", overwrite=True):
     if not check_dset(h5file, dset_name, overwrite):
         return
 
     with h5py.File(h5file, "a") as f:
         f[dset_name] = json.dumps(rsc_data)
 
-    if not save_latlon:
-        return
-    if check_dset(h5file, "lat", overwrite) and check_dset(h5file, "lon", overwrite):
-        save_lat_lon_dsets(h5file, rsc_data)
 
-
-def save_lat_lon_dsets(fname, rsc_data):
+def save_latlon_to_h5(h5file, lat_arr=None, lon_arr=None, rsc_data=None, overwrite=True):
     """Save the lat/lon information from a .rsc file as HDF5 scale datasets
 
     Args:
         fname (str): name of HDF5 file
+        lat_arr (ndarray): array of latitude points
+        lon_arr (ndarray): array of longitude points
         rsc_data (dict): data from an rsc file
+            required if not passing lat_arr/lon_arr
     """
     from apertools.latlon import grid
+    if not check_dset(h5file, "lat", overwrite) or not check_dset(h5file, "lon", overwrite):
+        return
 
-    lon, lat = grid(**rsc_data, sparse=True)
-    with h5py.File(fname, "a") as hf:
-        ds = hf.create_dataset("lon", data=lon.ravel())
+    lon_arr, lat_arr = grid(**rsc_data, sparse=True)
+    with h5py.File(h5file, "a") as hf:
+        ds = hf.create_dataset("lon", data=lon_arr.ravel())
         hf["lon"].make_scale("longitude")
         ds.attrs["units"] = "degrees east"
 
-        ds = hf.create_dataset("lat", data=lat.ravel())
+        ds = hf.create_dataset("lat", data=lat_arr.ravel())
         hf["lat"].make_scale("latitude")
         ds.attrs["units"] = "degrees north"
 
@@ -966,7 +963,7 @@ def attach_latlon(fname, dset, depth_dim=None):
         dsets_to_attach (list[str], optional): Name of existing datasets in `fname`
             to attach the lat/lon scales to. Defaults to [].
         depth_dim (str, optional): For a 3D dataset, attach a scale to the 3rd dimension
-            If it doesn't exist, an index dimension, values 0,1,...len(dset), will be 
+            If it doesn't exist, an index dimension, values 0,1,...len(dset), will be
             created with the name=`depth_dim`
     """
     with h5py.File(fname, "a") as hf:

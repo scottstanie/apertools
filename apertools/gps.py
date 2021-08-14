@@ -736,7 +736,7 @@ def moving_average(arr, window_size=7):
     return np.array(pd.Series(arr).rolling(window_size).mean())
 
 
-def find_insar_ts(defo_filename=apertools.sario.DEFO_FILENAME_NC, station_name_list=[], window_size=1):
+def find_insar_ts(defo_filename, dset, station_name_list=[], window_size=1):
     """Get the insar timeseries closest to a list of GPS stations
 
     Returns the timeseries, and the datetimes of points for plotting
@@ -762,9 +762,7 @@ def find_insar_ts(defo_filename=apertools.sario.DEFO_FILENAME_NC, station_name_l
             )
         )
 
-    slclist = apertools.sario.load_slclist_from_h5(
-        defo_filename, dset=apertools.sario.DEFO_NOISY_DSET
-    )
+    slclist = apertools.sario.load_slclist_from_h5(defo_filename, dset=dset)
     return slclist, insar_ts_list
 
 
@@ -772,7 +770,7 @@ def get_stack_timeseries(
     filename,
     row,
     col,
-    stack_dset_name=apertools.sario.DEFO_NOISY_DSET,
+    stack_dset_name,
     station=None,
     window_size=1,
 ):
@@ -1353,6 +1351,7 @@ def get_mean_correlations(
             corrs[name] = f["mean_stack"][row, col]
     return corrs
 
+
 # moved from latlon
 # # TODO: get rid of references to this
 # def load_deformation_img(
@@ -1380,4 +1379,3 @@ def get_mean_correlations(
 #     img = np.mean(defo_stack, axis=0) if n > 1 else defo_stack
 #     img = LatlonImage(data=img, rsc_data=rsc_data)
 #     return img
-

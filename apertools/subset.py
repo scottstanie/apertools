@@ -1,3 +1,5 @@
+import os
+import json
 import numpy as np
 import shapely.geometry
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
@@ -8,11 +10,29 @@ from apertools.deramp import remove_ramp
 logger = get_log()
 
 
-# In [70]: with open("bbox.geojson") as f:
-#   bbox = json.load(f)['bbox']
-# ds = xr.open_dataset("../unw_stack.h5", engine='h5netcdf', phony_dims='sort')
-# ds_sub = ds.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
-# ds_sub.to_netcdf("masks.nc", engine='h5netcdf')
+def subset_h5(
+    full_path,
+    sub_path,
+    bbox=None,
+    bbox_file=None,
+    fname="unw_stack.h5",
+    dsets_to_compress=[],
+):
+    import xarray as xr
+
+    if bbox_file:
+        with open(bbox_file) as f:
+            bbox = json.load(f)["bbox"]
+    ds = xr.open_dataset(
+        os.path.join(full_path, fname), engine="h5netcdf", phony_dims="sort"
+    )
+    f_in = os.path.join(sub_path, fname)
+    ext = os.path.splitext(fname)[1]
+    f_out = f_in.replace(ext, ".nc")
+    compressions = {ds: {"zlib": True} for ds in dsets_to_compress}
+    ds_sub = ds.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
+    ds_sub.to_netcdf( f_out, engine="h5netcdf", encoding=compressions)
+
 
 # TODO: this is basically the same as copy_subset... def merge these
 def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True):

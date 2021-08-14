@@ -4,6 +4,7 @@ utils.py: Miscellaneous helper functions
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division, print_function
+import datetime
 import copy
 import errno
 import sys
@@ -16,7 +17,6 @@ from apertools.log import get_log
 
 logger = get_log()
 
-
 def get_file_ext(filename):
     """Extracts the file extension, including the '.' (e.g.: .slc)
 
@@ -28,6 +28,23 @@ def get_file_ext(filename):
 
     """
     return os.path.splitext(filename)[1]
+
+
+def to_datetime(dates, tzinfo=datetime.timezone.utc):
+    """Convert a single (or list of) `datetime.date` to `datetime.datetime`"""
+    if isinstance(dates, datetime.datetime):
+        return dates
+    try:
+        iter(dates)
+        try:  # Check if its a list of tuples (an ifglist)
+            iter(dates[0])
+            return [to_datetime(tup) for tup in dates]
+        except TypeError:
+            return [datetime.datetime(*d.timetuple()[:6], tzinfo=tzinfo) for d in dates]
+    # Or if it's just one sigle date
+    except TypeError:
+        return datetime.datetime(*dates.timetuple()[:6], tzinfo=tzinfo)
+
 
 
 def mkdir_p(path):
@@ -150,21 +167,23 @@ def full_igram_list(slclist):
 
 def filter_min_max_date(ifg_list, min_date=None, max_date=None, verbose=False):
     """Filters from an iterable of (date1, date1) ifg pairs by min/max date"""
+    # Coerce all dates to datetimes
     if min_date:
-        ll = len(ifg_list)
+        md = to_datetime(min_date)
+        len_before = len(ifg_list)
         ifg_list = [
-            ifg for ifg in ifg_list if (ifg[0] > min_date and ifg[1] > min_date)
+            ifg for ifg in ifg_list if (ifg[0] >= md and ifg[1] >= md)
         ]
-        ll = len(ifg_list)
         if verbose:
-            logger.info(f"Ignoring {ll - len(ifg_list)} igrams before {min_date}")
+            logger.info(f"Ignoring {len_before - len(ifg_list)} igrams before {min_date}")
     if max_date:
-        ll = len(ifg_list)
+        md = to_datetime(max_date)
+        len_before = len(ifg_list)
         ifg_list = [
-            ifg for ifg in ifg_list if (ifg[0] < max_date and ifg[1] < max_date)
+            ifg for ifg in ifg_list if (ifg[0] <= md and ifg[1] <= md)
         ]
         if verbose:
-            logger.info(f"Ignoring {ll - len(ifg_list)} igrams after {max_date}")
+            logger.info(f"Ignoring {len_before - len(ifg_list)} igrams after {max_date}")
     return ifg_list
 
 
@@ -228,7 +247,7 @@ def ignore_slc_dates(
     import apertools.sario
 
     ignore_slcs = set(
-        apertools.sario.find_slcs(filename=slclist_ignore_file, parse=parse)
+        to_datetime(apertools.sario.find_slcs(filename=slclist_ignore_file, parse=parse))
     )
     logger.info("Ignoring the following slc dates:")
     logger.info(sorted(ignore_slcs))

@@ -46,6 +46,7 @@ def hdf5_to_netcdf(
         dset = hf[dset_name]
         nstack = dset.shape[0] if dset.ndim == 3 else 1
         rows, cols = dset.shape[-2:]
+        print(nstack, rows, cols)
 
         lon_arr, lat_arr = latlon.get_latlon_arrs(h5_filename=filename, bbox=bbox)
 
@@ -108,7 +109,7 @@ def hdf5_to_netcdf(
 
             # Finally, the actual stack
             # stackvar = rootgrp.createVariable("stack/1", "f4", ("date", "lat", "lon"))
-            logger.info(f"Writing {dset_name} data")
+            logger.info(f"Writing data to {outname}:{dset_name}")
             if hf[dset_name].dtype == np.dtype("bool"):
                 bool_type = "i1"
                 # bool_type = f.createEnumType(
