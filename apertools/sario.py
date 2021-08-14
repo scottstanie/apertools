@@ -930,7 +930,9 @@ def save_dem_to_h5(h5file, rsc_data, dset_name="dem_rsc", overwrite=True):
         f[dset_name] = json.dumps(rsc_data)
 
 
-def save_latlon_to_h5(h5file, lat_arr=None, lon_arr=None, rsc_data=None, overwrite=True):
+def save_latlon_to_h5(
+    h5file, lat_arr=None, lon_arr=None, rsc_data=None, overwrite=True
+):
     """Save the lat/lon information from a .rsc file as HDF5 scale datasets
 
     Args:
@@ -941,10 +943,14 @@ def save_latlon_to_h5(h5file, lat_arr=None, lon_arr=None, rsc_data=None, overwri
             required if not passing lat_arr/lon_arr
     """
     from apertools.latlon import grid
-    if not check_dset(h5file, "lat", overwrite) or not check_dset(h5file, "lon", overwrite):
+
+    if not check_dset(h5file, "lat", overwrite) or not check_dset(
+        h5file, "lon", overwrite
+    ):
         return
 
-    lon_arr, lat_arr = grid(**rsc_data, sparse=True)
+    if lon_arr is None or lat_arr is None:
+        lon_arr, lat_arr = grid(**rsc_data, sparse=True)
     with h5py.File(h5file, "a") as hf:
         ds = hf.create_dataset("lon", data=lon_arr.ravel())
         hf["lon"].make_scale("longitude")

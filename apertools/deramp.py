@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def remove_ramp(z, deramp_order=1, mask=np.ma.nomask, copy=False):
+def remove_ramp(z, deramp_order=1, mask=np.ma.nomask, copy=True, dtype=np.float32):
     """Estimates a linear plane through data and subtracts to flatten
 
     Used to remove noise artifacts from unwrapped interferograms
@@ -14,13 +14,17 @@ def remove_ramp(z, deramp_order=1, mask=np.ma.nomask, copy=False):
     Returns:
         ndarray: flattened 2D array with estimated surface removed
     """
+    if z.ndim > 2:
+        return np.stack(
+            [remove_ramp(layer, deramp_order, mask, copy, dtype) for layer in z]
+        )
     z_masked = z.copy() if copy else z
     # Make a version of the image with nans in masked places
     z_masked[mask] = np.nan
     # Use this constrained version to find the plane fit
     z_fit = estimate_ramp(z_masked, deramp_order)
     # Then use the non-masked as return value
-    return z - z_fit
+    return (z - z_fit).astype(dtype)
 
 
 def estimate_ramp(z, deramp_order):

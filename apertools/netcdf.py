@@ -47,8 +47,11 @@ def hdf5_to_netcdf(
         nstack = dset.shape[0] if dset.ndim == 3 else 1
         rows, cols = dset.shape[-2:]
         print(nstack, rows, cols)
-
-        lon_arr, lat_arr = latlon.get_latlon_arrs(h5_filename=filename, bbox=bbox)
+        if "lat" in hf and "lon" in hf:
+            lat_arr = hf["lat"][()]
+            lon_arr = hf["lon"][()]
+        else:  # Try using the rsc_data
+            lon_arr, lat_arr = latlon.get_latlon_arrs(h5_filename=filename, bbox=bbox)
 
         (row_top, row_bot), (col_left, col_right) = latlon.window_rowcol(
             lon_arr, lat_arr, bbox=bbox
@@ -79,14 +82,14 @@ def hdf5_to_netcdf(
 
             f.history = "Updated " + time.ctime(time.time())
             if "lat" in f.variables:
-                latitudes = f['lat']
+                latitudes = f["lat"]
             else:
                 f.createDimension("lat", rows)
                 latitudes = f.createVariable("lat", "f4", ("lat",), zlib=True)
                 latitudes.units = "degrees north"
                 latitudes[:] = lat_arr
             if "lon" in f.variables:
-                longitudes = f['lon']
+                longitudes = f["lon"]
             else:
                 f.createDimension("lon", cols)
                 longitudes = f.createVariable("lon", "f4", ("lon",), zlib=True)
@@ -120,7 +123,7 @@ def hdf5_to_netcdf(
             else:
                 dt = hf[dset_name].dtype
                 # fill_value = 0
-            # Note on fill: seems like when i set fill to 0, it masks it.. 
+            # Note on fill: seems like when i set fill to 0, it masks it..
             # and turns 0s into nans
 
             data_var = f.createVariable(
