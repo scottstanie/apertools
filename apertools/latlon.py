@@ -105,7 +105,7 @@ def latlon_to_dist(lat_lon_start, lat_lon_end):
 
     Examples:
         >>> round(latlon_to_dist((38.8, -77.0), (38.9, -77.1)))
-        14.1
+        14092
     """
     lat1, lon1 = lat_lon_start
     lat2, lon2 = lat_lon_end

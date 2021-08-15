@@ -433,24 +433,11 @@ class Uavsar(Base):
         r"(?P<band_squint_pol>\w{0,8})_"
         r"(?P<xtalk>X|C)(?P<dither>[XGD])_"
         r"(?P<nmode>\w{3,4})?_?"
-        r"(?P<version>\d{2})\.?(?P<ext>\w{2,5})?"
+        r"(?P<version>\d{2})"
+        r"(_ML)?(?P<multilook>\dX\d)?"
+        r"\.?(?P<ext>\w{2,5})?"
     )
     TIME_FMT = "%y%m%d"
-    _FIELD_MEANINGS = (
-        "target site",
-        "heading",
-        "counter",
-        "flight year",
-        "flight number",
-        "flight line",
-        "date",
-        "frequency band",
-        "steering angle",
-        "polarization",
-        "cross talk",
-        "version number",
-        "downsampling",
-    )
     # Filetype of real or complex depends on the polarization for .grd, .mlc
     REAL_POLS = ("HHHH", "HVHV", "VVVV")
     COMPLEX_POLS = ("HHHV", "HHVV", "HVVV")
@@ -491,7 +478,8 @@ class Uavsar(Base):
             >>> Uavsar('brazos_14938_17087_004_170831_L090_CX_01_grd.zip').polarization
             ''
         """
-        return self._get_field("polarization")
+        bsq = self._get_field("band_squint_pol")
+        return None if not bsq else bsq[4:]
 
     @property
     def target_site(self):
@@ -499,18 +487,18 @@ class Uavsar(Base):
         return self._get_field("target_site")
 
     @property
-    def downsampling(self):
-        """Amount of downsampling of product, if any
+    def multilook(self):
+        """Number of looks taken in product, if any
 
         Examples:
-        >>> print(Uavsar('brazos_14938_17087_004_170831_L090_CX_01_grd.zip').downsampling)
+        >>> print(Uavsar('brazos_14938_17087_004_170831_L090_CX_01_grd.zip').multilook)
         None
-        >>> Uavsar('brazos_14938_17087_004_170831_L090_CX_01_ML5X5_grd.zip').downsampling
+        >>> Uavsar('brazos_14938_17087_004_170831_L090_CX_01_ML5X5_grd.zip').multilook
         '5X5'
-        >>> Uavsar('brazos_14938_17087_004_170831_L090HHHV_CX_01_ML3X3.grd').downsampling
+        >>> Uavsar('brazos_14938_17087_004_170831_L090HHHV_CX_01_ML3X3.grd').multilook
         '3X3'
         """
-        sample_str = self._get_field("downsampling")
+        sample_str = self._get_field("multilook")
         return sample_str.replace("_ML", "") if sample_str else None
 
     def _make_ann_filename(self):

@@ -17,19 +17,19 @@ class TestSentinel(unittest.TestCase):
         self.assertRaises(ValueError, Sentinel, "A_b_c_d_e_f_g_h_i_j_k_l")
 
     def test_full_parse(self):
-        expected_output = (
-            "S1A",
-            "IW",
-            "SLC",
-            "_",
-            "1",
-            "DV",
-            "20180408T043025",
-            "20180408T043053",
-            "021371",
-            "024C9B",
-            "1B70",
-        )
+        expected_output = {
+            "mission": "S1A",
+            "beam": "IW",
+            "product_type": "SLC",
+            "resolution_class": "_",
+            "product_level": "1",
+            "polarization": "DV",
+            "start_datetime": "20180408T043025",
+            "stop_datetime": "20180408T043053",
+            "orbit_number": "021371",
+            "datetake_identifier": "024C9B",
+            "unique_id": "1B70",
+        }
 
         self.assertEqual(self.parser.full_parse(), expected_output)
 
