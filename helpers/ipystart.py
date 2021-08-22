@@ -28,6 +28,7 @@ import apertools.sario as sario
 import apertools.plotting as plotting
 import apertools.utils as utils
 import apertools.parsers as parsers
+
 # import apertools.gps as gps
 # import apertools.latlon as latlon
 
@@ -43,3 +44,5 @@ import hdf5plugin
 import h5py
 import rasterio as rio
 import xarray as xr
+import itertools
+import subprocess
