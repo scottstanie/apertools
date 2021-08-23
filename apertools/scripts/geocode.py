@@ -176,6 +176,7 @@ def write_vrt(
     )
     return outfile
 
+
 RESAMPLE_CHOICES = [
     "near",
     "bilinear",
@@ -260,6 +261,28 @@ def get_cli_args():
     # <metadata domain="GEOLOCATION">
     # <mdi key="Y_DATASET">/data7/jpl/sanAnd_23511/testint/tempLAT.vrt</mdi>
     # <mdi key="X_DATASET">/data7/jpl/sanAnd_23511/testint/tempLON.vrt</mdi>
+
+
+def crop_by_bbox(img, lat, lon, bbox):
+    import numpy as np
+
+    left, bot, right, top = bbox
+    mlon = np.logical_and(lon < right, lon > left)
+    mlat = np.logical_and(lat < top, lat > bot)
+    mask = mlon & mlat
+    rows, cols = np.where(mask)
+    rmin, rmax = np.min(rows), np.max(rows)
+    cmin, cmax = np.min(cols), np.max(cols)
+    img_crop = img.copy()
+    img_crop[~mask] = np.nan
+    img_crop = img_crop[rmin:rmax, cmin:cmax]
+    lat_crop = lat.copy()
+    lat_crop[~mask] = np.nan
+    lat_crop = lat_crop[rmin:rmax, cmin:cmax]
+    lon_crop = lon.copy()
+    lon_crop[~mask] = np.nan
+    lon_crop = lon_crop[rmin:rmax, cmin:cmax]
+    return img_crop, lat_crop, lon_crop
 
 
 def main():

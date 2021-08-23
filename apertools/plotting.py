@@ -46,7 +46,7 @@ def phase_to_2pi(img):
     return np.where(phase > 0, phase, phase + 2 * np.pi)
 
 
-def make_mph_image(ifg, expval=0.3, max_pct=99.95, scalemag=True):
+def make_mph_image(ifg, expval=0.4, max_pct=99, scalemag=True):
     """Convert an ifg array into a PIL.Image with same colors as `dismph`"""
     from PIL import Image
 
@@ -60,11 +60,14 @@ def make_mph_image(ifg, expval=0.3, max_pct=99.95, scalemag=True):
     # Now darken RGB values according to image magnitude
     if scalemag:
         mag = scale_mag(ifg, expval=expval, max_pct=max_pct)
-        mag_scaling = (mag / np.max(mag))[:, :, np.newaxis]  # Match rgb shape
+        # mag /= np.max(mag)
+        mag /= np.percentile(mag, max_pct)
+        mag_scaling = mag[:, :, np.newaxis]  # Match rgb shape
     else:
         # Otherwise, just the phase Image
         mag_scaling = 1
 
+    # breakpoint()
     img = Image.fromarray((mag_scaling * rgb).astype("uint8"))
     return img
 
@@ -75,15 +78,19 @@ def plot_ifg(
     mag_cmap="gray",
     title="",
     expval=0.3,
-    max_pct=99.95,
+    max_pct=99,
     subplot_layout=None,
+    figsize=None,
     **kwargs,
 ):
+    ifg = np.nan_to_num(ifg, copy=True, nan=0)
     if subplot_layout is None:
         # Decide to layout in rows or cols
-        subplot_layout = (1, 3) if ifg.shape[0] > ifg.shape[1] else (3, 1)
-    default_figsize = (4 * subplot_layout[1], 4 * subplot_layout[0])
-    figsize = kwargs.get("figsize", default_figsize)
+        rowsize, colsize = figsize[::-1] if figsize is not None else ifg.shape
+        subplot_layout = (1, 3) if colsize > rowsize else (3, 1)
+
+    if figsize is None:
+        figsize = (4 * subplot_layout[1], 4 * subplot_layout[0])
     fig, axes = plt.subplots(*subplot_layout, sharex=True, sharey=True, figsize=figsize)
 
     # mag = scale_mag(ifg)
@@ -101,7 +108,7 @@ def plot_ifg(
     fig.colorbar(axim, ax=ax)
 
     ax = axes[2]
-    dismph_img = make_mph_image(ifg)
+    dismph_img = make_mph_image(ifg, expval=expval, max_pct=max_pct)
     axim = ax.imshow(dismph_img)
 
     if title:
@@ -109,6 +116,22 @@ def plot_ifg(
     fig.tight_layout()
     return axes
 
+
+def plot_rewrapped(unw, ax=None, cmap="dismph", show_cbar=True):
+    # Rewrap the unwrapped for easiest visual of differences
+    if ax is None:
+        fig, ax = plt.subplots()
+    vmax, vmin = 3 * np.pi, 0
+    axim = ax.imshow(
+        np.mod(unw, 3 * np.pi),
+        cmap=cmap,
+        vmax=vmax,
+        vmin=vmin,
+        interpolation="nearest",
+    )
+    if show_cbar:
+        fig = ax.get_figure()
+        fig.colorbar(axim, ax=ax)
 
 def get_fig_ax(fig, ax, **figkwargs):
     """Handle passing None to either fig or ax by creating new, returns both"""
@@ -533,6 +556,7 @@ def plot_img_diff(
     show=True,
     figsize=None,
     interpolation=None,
+    aspect=None,
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
@@ -545,7 +569,8 @@ def plot_img_diff(
     ncols = n + 1 if show_diff else n
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True, figsize=figsize)
+    fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True, figsize=figsize, squeeze=False)
+    axes = axes.ravel()
     for ii in range(n):
         ax = axes[ii]
         axim = ax.imshow(
@@ -556,6 +581,8 @@ def plot_img_diff(
         cbar = fig.colorbar(axim, ax=ax)
         cbar.set_label(cbar_label)
         ax.set_axis_off()
+        if aspect:
+            ax.set_aspect(aspect)
     # fig.colorbar(axim, ax=axes[n - 1])
     if show_diff:
         # Now different image at end
@@ -568,6 +595,8 @@ def plot_img_diff(
         )
         ax.set_title("left - middle")
         ax.set_axis_off()
+        if aspect:
+            ax.set_aspect(aspect)
         cbar = fig.colorbar(axim, ax=ax)
         cbar.set_label(cbar_label)
     # [f.close() for f in files]
@@ -679,7 +708,7 @@ def map_img(img, bbox, ax=None, crs=None, cmap="gray"):
     ax.imshow(img, transform=crs, extent=extent, origin="upper", cmap=cmap)
 
 
-def set_style(size=15, nolatex=False):
+def set_style(size=15, nolatex=True):
     style_dict = {
         "pdf.fonttype": 42,
         "ps.fonttype": 42,

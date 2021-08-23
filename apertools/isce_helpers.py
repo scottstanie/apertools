@@ -118,7 +118,7 @@ def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
 
         cor_filename = resampAmp.replace(".amp", ".cor")
         # Make the isce headers
-        create_cor_image(cor_filename, ifg.shape)
+        create_cor_image(cor_filename, ifg.shape, access_mode="write")
         # calulate and save (not sure how to just save an array in isce)
         cor = np.abs(ifg) / np.sqrt(amp1 ** 2 * amp2 ** 2)
         sario.save(cor_filename, np.stack((amp1 * amp2, cor)))
@@ -126,21 +126,47 @@ def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
     return imageInt, imageAmp
 
 
-def create_cor_image(cor_filename, shape):
+def _create_isce_image(filename, shape, image_class, access_mode="write"):
+
     length, width = shape
-    cohImage = isceobj.createOffsetImage()
-    cohImage.setFilename(cor_filename)
-    cohImage.setWidth(width)
-    cohImage.setLength(length)
-    cohImage.setAccessMode("write")
-    cohImage.createImage()
-    cohImage.renderHdr()
-    cohImage.finalizeImage()
+
+    # demImage.initImage(dem_file, "read", width)
+    # demImage.dataType = "BYTE"
+
+    imgFunc = getattr(isceobj, "create" + image_class)
+    image = imgFunc()
+    image.setFilename(filename)
+    image.setWidth(width)
+    image.setLength(length)
+    image.setAccessMode(access_mode)
+    if not os.path.exists(filename):
+        image.createImage()
+
+    image.renderHdr()
+    # image.renderVRT()
+    image.finalizeImage()
+    return image
 
 
-def filter_ifg(ifgFilename, filterStrength=0.5):
+def create_cor_image(cor_filename, shape, access_mode="read"):
+    return _create_isce_image(
+        cor_filename, shape, "OffsetImage", access_mode=access_mode
+    )
+
+
+def create_unw_image(filename, shape, access_mode="read"):
+    return _create_isce_image(filename, shape, "UnwImage", access_mode=access_mode)
+
+
+def create_int_image(filename, shape, access_mode="read"):
+    return _create_isce_image(filename, shape, "IntImage", access_mode=access_mode)
+
+
+def filter_ifg(ifgFilename, outname=None, filterStrength=0.5):
     ifgDirname = os.path.dirname(ifgFilename)
     filename_only = os.path.split(ifgFilename)[1]
+    if outname is None:
+        outname = os.path.join(ifgDirname, "filt_" + filename_only)
 
     img1 = isceobj.createImage()
     img1.load(ifgFilename + ".xml")
@@ -153,9 +179,8 @@ def filter_ifg(ifgFilename, filterStrength=0.5):
     intImage.createImage()
 
     # Create the filtered interferogram
-    filtIntFilename = os.path.join(ifgDirname, "filt_" + filename_only)
     filtImage = isceobj.createIntImage()
-    filtImage.setFilename(filtIntFilename)
+    filtImage.setFilename(outname)
     filtImage.setWidth(widthInt)
     filtImage.setAccessMode("write")
     filtImage.createImage()
@@ -168,16 +193,6 @@ def filter_ifg(ifgFilename, filterStrength=0.5):
 
     intImage.finalizeImage()
     filtImage.finalizeImage()
-
-
-def create_unw_image(filename, shape):
-    length, width = shape
-    outImage = isceobj.Image.createUnwImage()
-    outImage.setFilename(filename)
-    outImage.setWidth(width)
-    outImage.setAccessMode("read")
-    outImage.renderHdr()
-    outImage.renderVRT()
 
 
 def get_square_pixel_looks(frame, posting, azlooks=None, rglooks=None):
@@ -285,6 +300,7 @@ def extract_uavsar_hdf5_orbit(hdf5_file, output, frequency="A", polarization="HH
 
 def create_dem_header(dem_file, rsc_file=None, datum="EGM96"):
     from isceobj.Image import createDemImage
+
     if rsc_file is None:
         rsc_file = dem_file + ".rsc"
 

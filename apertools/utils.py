@@ -17,6 +17,7 @@ from apertools.log import get_log
 
 logger = get_log()
 
+
 def get_file_ext(filename):
     """Extracts the file extension, including the '.' (e.g.: .slc)
 
@@ -44,7 +45,6 @@ def to_datetime(dates, tzinfo=datetime.timezone.utc):
     # Or if it's just one sigle date
     except TypeError:
         return datetime.datetime(*dates.timetuple()[:6], tzinfo=tzinfo)
-
 
 
 def mkdir_p(path):
@@ -81,6 +81,12 @@ def which(program):
     return None
 
 
+# NOTE: now possible in numpy 1.20:
+# def take_looks(x, rl, cl, func=np.mean):
+#    from numpy.lib.stride_tricks import sliding_window_view
+#    views = sliding_window_view(x, (rl, cl))
+#    return func(views[::rl, ::cl], axis=(2, 3))
+
 def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
     """Downsample a numpy matrix by summing blocks of (row_looks, col_looks)
 
@@ -108,26 +114,22 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
         phase_looked = take_looks(np.angle(arr), row_looks, col_looks)
         return mag_looked * np.exp(1j * phase_looked)
 
-    new_rows, new_cols = _find_look_outsize(arr.shape, row_looks, col_looks)
+    rows, cols = arr.shape
+    new_rows = rows // row_looks
+    new_cols = cols // col_looks
 
-    nrows, ncols = arr.shape
-    row_cutoff = nrows % row_looks
-    col_cutoff = ncols % col_looks
+    row_cutoff = rows % row_looks
+    col_cutoff = cols % col_looks
 
     if row_cutoff != 0:
         arr = arr[:-row_cutoff, :]
     if col_cutoff != 0:
         arr = arr[:, :-col_cutoff]
+    # For taking the mean, treat integers as floats
     if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype("float")
 
     return np.mean(arr.reshape(new_rows, row_looks, new_cols, col_looks), axis=(3, 1))
-
-
-def _find_look_outsize(shape, row_looks, col_looks):
-    nrows, ncols = shape
-    new_rows, new_cols = shape[0] // row_looks, shape[1] // col_looks
-    return new_rows, new_cols
 
 
 def take_looks_rsc(rsc_data, row_looks, col_looks):
@@ -171,19 +173,19 @@ def filter_min_max_date(ifg_list, min_date=None, max_date=None, verbose=False):
     if min_date:
         md = to_datetime(min_date)
         len_before = len(ifg_list)
-        ifg_list = [
-            ifg for ifg in ifg_list if (ifg[0] >= md and ifg[1] >= md)
-        ]
+        ifg_list = [ifg for ifg in ifg_list if (ifg[0] >= md and ifg[1] >= md)]
         if verbose:
-            logger.info(f"Ignoring {len_before - len(ifg_list)} igrams before {min_date}")
+            logger.info(
+                f"Ignoring {len_before - len(ifg_list)} igrams before {min_date}"
+            )
     if max_date:
         md = to_datetime(max_date)
         len_before = len(ifg_list)
-        ifg_list = [
-            ifg for ifg in ifg_list if (ifg[0] <= md and ifg[1] <= md)
-        ]
+        ifg_list = [ifg for ifg in ifg_list if (ifg[0] <= md and ifg[1] <= md)]
         if verbose:
-            logger.info(f"Ignoring {len_before - len(ifg_list)} igrams after {max_date}")
+            logger.info(
+                f"Ignoring {len_before - len(ifg_list)} igrams after {max_date}"
+            )
     return ifg_list
 
 
@@ -247,7 +249,9 @@ def ignore_slc_dates(
     import apertools.sario
 
     ignore_slcs = set(
-        to_datetime(apertools.sario.find_slcs(filename=slclist_ignore_file, parse=parse))
+        to_datetime(
+            apertools.sario.find_slcs(filename=slclist_ignore_file, parse=parse)
+        )
     )
     logger.info("Ignoring the following slc dates:")
     logger.info(sorted(ignore_slcs))
@@ -311,7 +315,7 @@ def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC
         raise ValueError("Must take looks for file on disk")
     in_ds = gdal.Open(src_filename)
     shape = (in_ds.RasterYSize, in_ds.RasterXSize)  # (rows, cols)
-    new_rows, new_cols = _find_look_outsize(shape, row_looks, col_looks)
+    new_rows, new_cols = shape[0] // row_looks, shape[1] // col_looks
     return gdal.Translate(
         outname,
         in_ds,
