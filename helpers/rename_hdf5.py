@@ -40,7 +40,7 @@ def fix_datasets(h5file):
 
     if redo_latlon:
         rsc_data = sario.load_dem_from_h5(h5file)
-        sario.save_lat_lon_dsets(h5file, rsc_data)
+        sario.save_latlon_to_h5(h5file, rsc_data)
     if redo_ifgs:
         dl = load_ifgstr(h5file, parse=True)
         sario.save_ifglist_to_h5(out_file=h5file, ifg_date_list=dl, overwrite=True)
