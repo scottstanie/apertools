@@ -230,45 +230,12 @@ def plot_insar_gps_df(
 
 
 def load_station_enu(
-    station,
-    start_date=START_DATE,
-    end_date=None,
-    to_cm=True,
-    zero_mean=True,
-    zero_start=False,
-    force_download=False,
-):
-    """Loads one gps station's ENU data since start_date until end_date
-    as separate Series items
-
-    Will scale to cm by default, and center the first data point
-    to 0
-    """
-    station_df = load_station_data(
-        station,
-        to_cm=to_cm,
-        start_date=start_date,
-        end_date=end_date,
-        force_download=force_download,
-    )
-
-    if zero_start:
-        start_val = station_df[["east", "north", "up"]].iloc[:10].mean()
-        enu_zeroed = station_df[["east", "north", "up"]] - start_val
-    elif zero_mean:
-        mean_val = station_df[["east", "north", "up"]].mean()
-        enu_zeroed = station_df[["east", "north", "up"]] - mean_val
-
-    dts = station_df["dt"]
-    return dts, enu_zeroed
-
-
-def load_station_data(
     station_name,
     start_date=START_DATE,
     end_date=None,
     download_if_missing=True,
     force_download=False,
+    zero_by="mean",
     to_cm=True,
 ):
     """Loads one gps station's ENU data since start_date until end_date as a dataframe
@@ -281,6 +248,8 @@ def load_station_data(
         download_if_missing (bool): default True
         force_download (bool): default False
     """
+    if zero_by not in ("start", "mean"):
+        raise ValueError("'zero_by' must be either 'start' or 'mean'")
     station_name = station_name.upper()
     gps_data_file = os.path.join(GPS_DIR, GPS_FILE.format(station=station_name))
     if force_download:
@@ -303,17 +272,26 @@ def load_station_data(
     if to_cm:
         # logger.info("Converting %s GPS to cm" % station_name)
         clean_df[["east", "north", "up"]] = 100 * clean_df[["east", "north", "up"]]
+
+    if zero_by.lower() == "mean":
+        mean_val = clean_df[["east", "north", "up"]].mean()
+        # enu_zeroed = clean_df[["east", "north", "up"]] - mean_val
+        clean_df[["east", "north", "up"]] -= mean_val
+    elif zero_by.lower() == "start":
+        start_val = clean_df[["east", "north", "up"]].iloc[:10].mean()
+        # enu_zeroed = clean_df[["east", "north", "up"]] - start_val
+        clean_df[["east", "north", "up"]] -= start_val
     return clean_df
 
 
 def _clean_gps_df(df, start_date=None, end_date=None):
-    df["dt"] = pd.to_datetime(df["YYMMMDD"], format="%y%b%d")
+    df["date"] = pd.to_datetime(df["YYMMMDD"], format="%y%b%d")
 
     if start_date:
-        df_ranged = df[df["dt"] >= pd.to_datetime(start_date)]
+        df_ranged = df[df["date"] >= pd.to_datetime(start_date)]
     if end_date:
-        df_ranged = df_ranged[df_ranged["dt"] <= pd.to_datetime(end_date)]
-    df_enu = df_ranged[["dt", "__east(m)", "_north(m)", "____up(m)"]]
+        df_ranged = df_ranged[df_ranged["date"] <= pd.to_datetime(end_date)]
+    df_enu = df_ranged[["date", "__east(m)", "_north(m)", "____up(m)"]]
     df_enu = df_enu.rename(
         mapper=lambda s: s.replace("_", "").replace("(m)", ""), axis="columns"
     )
@@ -330,6 +308,8 @@ def stations_within_image(da, bad_vals=[0], mask_invalid=True):
         filename (str): filename to load
         mask_invalid (bool): Default true. if true, don't return stations
             where the image value is NaN or exactly 0
+        bad_vals (list[float]): values (beside nan) indicating no data
+            (default: [0])
 
     Returns:
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
@@ -556,7 +536,7 @@ def get_station_plate(station_name):
 
 def station_std(station, to_cm=True, start_date=START_DATE, end_date=None):
     """Calculates the sum of east, north, and vertical stds of gps"""
-    dts, enu_df = load_station_enu(
+    enu_df = load_station_enu(
         station, start_date=start_date, end_date=end_date, to_cm=to_cm
     )
     if enu_df.empty:
@@ -583,13 +563,14 @@ def plot_gps_enu(
             labelbottom=False,
         )
 
-    dts, enu_df = load_station_enu(
+    enu_df = load_station_enu(
         station,
         start_date=start_date,
         end_date=end_date,
         to_cm=True,
         force_download=force_download,
     )
+    dts = enu_df['dt']
     (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
 
     fig, axes = plt.subplots(3, 1)
@@ -648,7 +629,7 @@ def load_gps_los_data(
             los_map_file=los_map_file,
         )
 
-    df = load_station_data(
+    df = load_station_enu(
         station_name,
         to_cm=to_cm,
         start_date=start_date,
@@ -682,24 +663,24 @@ def load_gps_los_data(
             force_download=force_download,
             days_smooth=days_smooth,
         )
-        return _merge_los(df["dt"], los_gps_data, dt_ref, losref)
+        return _merge_los(df["date"], los_gps_data, dt_ref, losref)
 
-    return df["dt"], los_gps_data
+    return df["date"], los_gps_data
 
 
 def _merge_los(dt1, los1, dt_ref, los_ref):
-    df1 = pd.DataFrame(data={"g1": los1, "dt": dt1})
-    df_ref = pd.DataFrame(data={"gref": los_ref, "dt": dt_ref})
+    df1 = pd.DataFrame(data={"g1": los1, "date": dt1})
+    df_ref = pd.DataFrame(data={"gref": los_ref, "date": dt_ref})
 
     start = np.min(pd.concat([dt1, dt_ref]))
     end = np.max(pd.concat([dt1, dt1]))
     dt_merged = pd.date_range(start=start, end=end)
 
-    df = pd.DataFrame(data={"dt": dt_merged})
-    df = pd.merge(df, df1, on="dt", how="left")
-    df = pd.merge(df, df_ref, on="dt", how="left")
+    df = pd.DataFrame(data={"date": dt_merged})
+    df = pd.merge(df, df1, on="date", how="left")
+    df = pd.merge(df, df_ref, on="date", how="left")
     df.dropna(inplace=True)
-    return df["dt"], (df["g1"] - df["gref"]).values
+    return df["date"], (df["g1"] - df["gref"]).values
 
 
 def moving_average(arr, window_size=7):
@@ -859,7 +840,7 @@ def create_insar_df(
         station_name_list=station_name_list,
         window_size=window_size,
     )
-    insar_df = pd.DataFrame({"dts": _series_to_date(pd.Series(slclist))})
+    insar_df = pd.DataFrame({"date": _series_to_date(pd.Series(slclist))})
     for stat, ts in zip(station_name_list, insar_ts_list):
         insar_df[stat + "_insar"] = moving_average(ts, days_smooth)
         # insar_df[stat + "_smooth_insar"] = moving_average(ts, days_smooth)
@@ -873,18 +854,18 @@ def create_gps_los_df(los_map_file="los_map.h5", station_name_list=[], days_smoo
             los_map_file=los_map_file, station_name=stat
         )
 
-        df = pd.DataFrame({"dts": _series_to_date(gps_dts)})
+        df = pd.DataFrame({"date": _series_to_date(gps_dts)})
         df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
         # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
         df_list.append(df)
 
-    min_date = np.min(pd.concat([df["dts"] for df in df_list]))
-    max_date = np.max(pd.concat([df["dts"] for df in df_list]))
+    min_date = np.min(pd.concat([df["date"] for df in df_list]))
+    max_date = np.max(pd.concat([df["date"] for df in df_list]))
 
     # Now merge together based on uneven time data
-    gps_df = pd.DataFrame({"dts": pd.date_range(start=min_date, end=max_date).date})
+    gps_df = pd.DataFrame({"date": pd.date_range(start=min_date, end=max_date).date})
     for df in df_list:
-        gps_df = pd.merge(gps_df, df, on="dts", how="left")
+        gps_df = pd.merge(gps_df, df, on="date", how="left")
 
     return gps_df
 
@@ -893,15 +874,15 @@ def combine_insar_gps_dfs(insar_df, gps_df):
     # First constrain the date range to just the InSAR min/max dates
     df = pd.DataFrame(
         {
-            "dts": pd.date_range(
-                start=np.min(insar_df["dts"]), end=np.max(insar_df["dts"])
+            "date": pd.date_range(
+                start=np.min(insar_df["date"]), end=np.max(insar_df["date"])
             ).date
         }
     )
-    df = pd.merge(df, insar_df, on="dts", how="left")
-    df = pd.merge(df, gps_df, on="dts", how="left", suffixes=("", "_gps"))
+    df = pd.merge(df, insar_df, on="date", how="left")
+    df = pd.merge(df, gps_df, on="date", how="left", suffixes=("", "_gps"))
     # Now final df has datetime as index
-    return df.set_index("dts")
+    return df.set_index("date")
 
 
 def create_gps_enu_df(
@@ -922,11 +903,11 @@ def create_gps_enu_df(
 
     df_list = []
     for station in station_name_list:
-        dts, enu_df = load_station_enu(
+        enu_df = load_station_enu(
             station, start_date=start_date, end_date=end_date, to_cm=to_cm
         )
 
-        enu_df["dts"] = _series_to_date(dts)
+        # enu_df["date"] = _series_to_date(dts)
         # Add station name to columns for post-merge identification
         mapper = {
             direction: "{}_{}".format(station, direction)
@@ -935,15 +916,15 @@ def create_gps_enu_df(
         enu_df.rename(mapper, inplace=True, axis=1)
         df_list.append(enu_df)
 
-    min_date = np.min(pd.concat([df["dts"] for df in df_list]))
-    max_date = np.max(pd.concat([df["dts"] for df in df_list]))
+    min_date = np.min(pd.concat([df["date"] for df in df_list]))
+    max_date = np.max(pd.concat([df["date"] for df in df_list]))
 
     # Now merge together based on uneven time data
-    enu_df = pd.DataFrame({"dts": pd.date_range(start=min_date, end=max_date).date})
+    enu_df = pd.DataFrame({"date": pd.date_range(start=min_date, end=max_date).date})
     for df in df_list:
-        enu_df = pd.merge(enu_df, df, on="dts", how="left")
+        enu_df = pd.merge(enu_df, df, on="date", how="left")
 
-    enu_df = enu_df.set_index("dts")
+    enu_df = enu_df.set_index("date")
     nan_thresh = 0.8
     # Drop empty columns or no data for last 14 days
     bad_cols = _find_bad_cols(enu_df, nan_thresh)
@@ -1196,7 +1177,7 @@ def plot_residuals_by_loc(
 ):
     """Takes a timeseries df and plots the final values at their lat/lons
 
-    df should be the timeseries df with "dts" as index created by create_insar_gps_df
+    df should be the timeseries df with "date" as index created by create_insar_gps_df
     `which` argument is "diff","gps","insar", where 'diff' takes (gps - insar)
     """
 
