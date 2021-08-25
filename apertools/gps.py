@@ -23,7 +23,6 @@ import requests
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.cm
 import matplotlib.dates as mdates
 
 # from scipy.ndimage.filters import uniform_filter1d
@@ -281,7 +280,8 @@ def load_station_enu(
         start_val = clean_df[["east", "north", "up"]].iloc[:10].mean()
         # enu_zeroed = clean_df[["east", "north", "up"]] - start_val
         clean_df[["east", "north", "up"]] -= start_val
-    return clean_df
+    # Finally, make the 'date' column a DateIndex
+    return clean_df.set_index("date")
 
 
 def _clean_gps_df(df, start_date=None, end_date=None):
@@ -570,7 +570,7 @@ def plot_gps_enu(
         to_cm=True,
         force_download=force_download,
     )
-    dts = enu_df['dt']
+    dts = enu_df["dt"]
     (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
 
     fig, axes = plt.subplots(3, 1)
@@ -636,7 +636,7 @@ def load_gps_los_data(
         end_date=end_date,
         force_download=force_download,
     )
-    enu_data = df[["east", "north", "up"]].T
+    enu_data = df[["east", "north", "up"]].values.T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
     los_gps_data = los_gps_data.reshape(-1)
 
@@ -650,8 +650,9 @@ def load_gps_los_data(
     if days_smooth:
         los_gps_data = moving_average(los_gps_data, days_smooth)
 
+    df_los = pd.DataFrame(data=los_gps_data, index=df.index, columns=["los"])
     if reference_station is not None:
-        dt_ref, losref = load_gps_los_data(
+        df_ref = load_gps_los_data(
             los_map_file,
             reference_station,
             to_cm,
@@ -663,9 +664,21 @@ def load_gps_los_data(
             force_download=force_download,
             days_smooth=days_smooth,
         )
-        return _merge_los(df["date"], los_gps_data, dt_ref, losref)
+        dfm = pd.merge(
+            df_los,
+            df_ref,
+            how="inner",
+            left_index=True,
+            right_index=True,
+            suffixes=("_target", "_ref"),
+        )
+        dfm.dropna(inplace=True)
+        # Make a new columns with the reference subtracted off
+        dfm["los"] = dfm["los_target"] - dfm["los_ref"]
+        # Then drop the old original columns
+        return dfm.drop(columns=["los_target", "los_ref"])
 
-    return df["date"], los_gps_data
+    return df_los
 
 
 def _merge_los(dt1, los1, dt_ref, los_ref):
@@ -679,7 +692,6 @@ def _merge_los(dt1, los1, dt_ref, los_ref):
     df = pd.DataFrame(data={"date": dt_merged})
     df = pd.merge(df, df1, on="date", how="left")
     df = pd.merge(df, df_ref, on="date", how="left")
-    df.dropna(inplace=True)
     return df["date"], (df["g1"] - df["gref"]).values
 
 
