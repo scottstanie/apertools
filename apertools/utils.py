@@ -87,6 +87,7 @@ def which(program):
 #    views = sliding_window_view(x, (rl, cl))
 #    return func(views[::rl, ::cl], axis=(2, 3))
 
+
 def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
     """Downsample a numpy matrix by summing blocks of (row_looks, col_looks)
 
@@ -940,3 +941,35 @@ def get_stack_block_shape(
             break
         chunks_per_block = target_block_size / (np.prod(cur_block_shape) * nbytes)
     return cur_block_shape
+
+
+def ifg_to_mag_phase(filename, outname=None, driver=None):
+    """Convert a complex float interferogram into a 2-band raster of magnitude/phase"""
+    import rasterio as rio
+    from copy import deepcopy
+
+    if not outname:
+        _, ext = os.path.splitext(filename)
+        outname = filename.replace(ext, ext + ".mph")
+        driver = "ENVI"
+        print("saving to", outname, "with driver", driver)
+
+    with rio.open(filename) as src:
+        arr = src.read(1)
+        out_meta = deepcopy(src.meta)
+        out_meta["count"] = 2
+        out_meta["dtype"] = "float32"
+        allowed_drivers = ("isce", "envi", "gtiff")
+        if driver:
+            if driver.lower() not in allowed_drivers:
+                raise ValueError("Driver must be in {}".format(allowed_drivers))
+            out_meta["driver"] = driver
+        if out_meta["driver"].lower() == "envi":
+            # make sure the .hdr is appended after everything
+            #  -of ENVI -co SUFFIX=ADD
+            out_meta["SUFFIX"] = "ADD"
+        print(out_meta)
+        with rio.open(outname, "w", **out_meta) as dst:
+            pass
+            # dst.write(np.abs(arr), 1)
+            # dst.write(np.angle(arr), 2)

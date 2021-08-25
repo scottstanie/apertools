@@ -13,7 +13,7 @@ OLD_TO_NEW = {
 
 
 def fix_prep(filepath):
-    for fname in ["unw_stack.h5","masks.h5"]:
+    for fname in ["unw_stack.h5", "masks.h5"]:
         f = os.path.join(filepath, fname)
         print("running rename on ", f)
         rename_dsets(f)

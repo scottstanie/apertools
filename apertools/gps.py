@@ -321,16 +321,13 @@ def _clean_gps_df(df, start_date=None, end_date=None):
     return df_enu
 
 
-def stations_within_image(
-    filename=None, mask_invalid=True, gps_filename=None, bad_vals=[0], band=1
-):
+def stations_within_image(filename=None, mask_invalid=True, bad_vals=[0], band=1):
     """Given an image, find gps stations contained in area
 
-    Must have an associated .rsc file, either from being a LatlonImage (passed
-    by image_ll), or have the file in same directory as `filename`
+    Should be GDAL- or xarray-readable with lat/lon coordinates
 
     Args:
-        filename (str): filename to load into a LatlonImage
+        filename (str): filename to load
         mask_invalid (bool): Default true. if true, don't return stations
             where the image value is NaN or exactly 0
 
@@ -347,7 +344,7 @@ def stations_within_image(
     # if image_ll is None:
     # image_ll = apertools.latlon.LatlonImage(filename=filename)
 
-    df = read_station_llas(filename=gps_filename)
+    df = read_station_llas()
     station_lon_lat_arr = df[["lon", "lat"]].values
     # contains_bools = image_ll.contains(station_lon_lat_arr)
     contains_bools = np.array(
@@ -1351,31 +1348,3 @@ def get_mean_correlations(
             corrs[name] = f["mean_stack"][row, col]
     return corrs
 
-
-# moved from latlon
-# # TODO: get rid of references to this
-# def load_deformation_img(
-#     igram_path=".",
-#     n=1,
-#     filename="deformation.h5",
-#     dset=None,
-#     full_path=None,
-#     rsc_filename="dem.rsc",
-# ):
-#     """Loads mean of last n images of a deformation stack in LatlonImage
-#     Specify either a directory `igram_path` and `filename`, or `full_path` to file
-#     """
-#     igram_path, filename, full_path = apertools.sario.get_full_path(
-#         igram_path, filename, full_path
-#     )
-
-#     _, defo_stack = apertools.sario.load_deformation(
-#         igram_path=igram_path, filename=filename, full_path=full_path, dset=dset, n=n
-#     )
-#     if filename.endswith(".h5"):
-#         rsc_data = apertools.sario.load_dem_from_h5(h5file=full_path)
-#     else:
-#         rsc_data = apertools.sario.load(os.path.join(igram_path, rsc_filename))
-#     img = np.mean(defo_stack, axis=0) if n > 1 else defo_stack
-#     img = LatlonImage(data=img, rsc_data=rsc_data)
-#     return img
