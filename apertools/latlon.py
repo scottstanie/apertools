@@ -634,3 +634,21 @@ def nearest_col(rsc_data, lon):
     """Find the nearest col to a given lon within rsc_data (no OOB checking)"""
     x_first, x_step = rsc_data["x_first"], rsc_data["x_step"]
     return ((np.array(lon) - x_first) / x_step).round().astype(int)
+
+
+def bbox_xr(dataset):
+    """Get the lon/lat bounding box (minx, miny, maxx, maxy) from an xarray dataset"""
+    if "lat" in dataset.coords:
+        y = dataset["lat"]
+    elif "y" in dataset.coords:
+        y = dataset["y"]
+    else:
+        raise ValueError("dataset {} must contain 'lat' or 'y'".format(dataset))
+    if "lon" in dataset.coords:
+        x = dataset["lon"]
+    elif "x" in dataset.coords:
+        x = dataset["lon"]
+    else:
+        raise ValueError("dataset {} must contain 'lon' or 'x'".format(dataset))
+    return x.min(), y.min(), x.max(), y.max()
+    

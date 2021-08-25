@@ -321,7 +321,7 @@ def _clean_gps_df(df, start_date=None, end_date=None):
     return df_enu
 
 
-def stations_within_image(filename=None, mask_invalid=True, bad_vals=[0], band=1):
+def stations_within_image(da, bad_vals=[0], mask_invalid=True):
     """Given an image, find gps stations contained in area
 
     Should be GDAL- or xarray-readable with lat/lon coordinates
@@ -334,6 +334,30 @@ def stations_within_image(filename=None, mask_invalid=True, bad_vals=[0], band=1
     Returns:
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
     """
+    from shapely import geometry
+    from apertools import latlon
+
+    gdf = read_station_llas(to_geodataframe=True)
+    image_bbox = geometry.box(*latlon.bbox_xr(da))
+    gdf_within = gdf[gdf.geometry.within(image_bbox)]
+    if not mask_invalid:
+        return gdf_within
+    # good_stations = []
+    good_idxs = []
+    for row in gdf_within.itertuples():
+        val = da.sel(lat=row.lat, lon=row.lon, method="nearest")
+        if np.isnan(val) or any(val == v for v in bad_vals):
+            continue
+        else:
+            # good_stations.append([row.name, row.lon, row.lat])
+            good_idxs.append(row.Index)
+    # to keep 'name' as column, but reset the former index to start at 0
+    return gdf_within.loc[good_idxs].reset_index(drop=True)
+    # # to have 'name' as index
+    # return gdf_within.loc[good_idxs].set_index('name')
+
+
+def stations_within_image_rio(filename=None, mask_invalid=True, bad_vals=[0], band=1):
     import rasterio as rio
     from shapely import geometry
 
@@ -368,58 +392,6 @@ def stations_within_image(filename=None, mask_invalid=True, bad_vals=[0], band=1
     return good_stations
 
 
-def plot_stations(
-    image_ll=None,
-    filename=None,
-    directory=None,
-    full_path=None,
-    mask_invalid=True,
-    station_name_list=None,
-):
-    """Plot an GPS station points contained within an image
-
-    To only plot subset of stations, pass an iterable of strings to station_name_list
-    """
-    directory, filename, full_path = apertools.sario.get_full_path(
-        directory, filename, full_path
-    )
-
-    if image_ll is None:
-        try:
-            # First check if we want to load the 3D stack "deformation.npy"
-            image_ll = apertools.latlon.load_deformation_img(
-                filename=filename, full_path=full_path
-            )
-        except ValueError:
-            image_ll = apertools.latlon.LatlonImage(filename=filename)
-
-    if mask_invalid:
-        try:
-            stack_mask = apertools.sario.load_mask(
-                directory=directory, deformation_filename=full_path
-            )
-            image_ll[stack_mask] = np.nan
-        except Exception:
-            logger.warning("error in load_mask", exc_info=True)
-
-    stations = stations_within_image(image_ll, mask_invalid=mask_invalid)
-    if station_name_list:
-        stations = [s for s in stations if s[0] in station_name_list]
-
-    # TODO: maybe just plot_image_shifted
-    fig, ax = plt.subplots()
-    axim = ax.imshow(image_ll, extent=image_ll.extent)
-    fig.colorbar(axim)
-    colors = matplotlib.cm.rainbow(np.linspace(0, 1, len(stations)))
-    # names, lons, lats = stations.T
-    # ax.scatter(lons.astype(float), lats.astype(float), marker='X', label=names, c=color)
-    size = 25
-    for idx, (name, lon, lat) in enumerate(stations):
-        # ax.plot(lon, lat, 'X', markersize=15, label=name)
-        ax.scatter(lon, lat, marker="X", label=name, color=colors[idx], s=size)
-    plt.legend()
-
-
 def save_station_points_kml(station_iter):
     for name, lat, lon, alt in station_iter:
         apertools.kml.create_kml(
@@ -432,7 +404,7 @@ def save_station_points_kml(station_iter):
 
 
 @lru_cache()
-def read_station_llas(filename=None):
+def read_station_llas(filename=None, to_geodataframe=False):
     """Read in the name, lat, lon, alt list of gps stations
 
     Assumes file is a space-separated with "name,lat,lon,alt" as columns
@@ -447,7 +419,12 @@ def read_station_llas(filename=None):
         df = pd.read_csv(filename, sep=r"\s+", engine="python", header=None)
 
     df.columns = ["name", "lat", "lon", "alt"]
-    return df
+    if to_geodataframe:
+        import geopandas as gpd
+
+        return gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.lon, df.lat))
+    else:
+        return df
 
 
 @lru_cache()
@@ -1347,4 +1324,3 @@ def get_mean_correlations(
             row, col = apertools.latlon.latlon_to_rowcol(lat, lon, dem_rsc)
             corrs[name] = f["mean_stack"][row, col]
     return corrs
-
