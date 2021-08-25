@@ -233,23 +233,38 @@ def cmap_to_qgis(cmap_rgba_arr):
     rows = []
     for s, rgb in zip(stops, cmap_rgba_arr):
         ss = "%.6f" % s
-        rows.append(ss + ";" + ",".join(rgb.astype(int)))
+        rows.append(ss + ";" + ",".join(map(str, rgb.astype(int))))
     return ":".join(rows)
 
 
-# <!DOCTYPE qgis_style>
-# <qgis_style version="1">
-#   <symbols/>
-#   <colorramps>
-#     <colorramp type="gradient" name="seismic_wide_y" favorite="1">
-#       <prop k="color1" v="0,0,178,255"/>
-#       <prop k="color2" v="178,0,0,255"/>
-#       <prop k="discrete" v="0"/>
-#       <prop k="rampType" v="gradient"/>
-#       <prop k="stops" v="0.003891;0,0,178,255:0.074764;0,..."/>
-#     </colorramp>
-#   </colorramps>
-# </qgis_style>
+def make_qgis_cmap(cmap_rgba_arr, outfile, cmap_name):
+    # EXAMPLE:
+    # make_qgis_cmap(make_dismph_colors().T[::3], "dismph_colors.xml", "dismph")
+    c1 = ",".join(map(str, cmap_rgba_arr[0].astype(int)))
+    c2 = ",".join(map(str, cmap_rgba_arr[-1].astype(int)))
+    stops = cmap_to_qgis(cmap_rgba_arr)
+    template = """
+<!DOCTYPE qgis_style>
+<qgis_style version="1">
+  <symbols/>
+  <colorramps>
+    <colorramp type="gradient" name="{name}" favorite="1">
+      <prop k="color1" v="{c1}"/>
+      <prop k="color2" v="{c2}"/>
+      <prop k="discrete" v="0"/>
+      <prop k="rampType" v="gradient"/>
+      <prop k="stops" v="{stops}"/>
+    </colorramp>
+  </colorramps>
+</qgis_style>
+"""
+    with open(outfile, "w") as f:
+        f.write(template.format(
+            name=cmap_name,
+            c1=c1,
+            c2=c2,
+            stops=stops
+        ))
 
 
 def make_dismph_colors():
