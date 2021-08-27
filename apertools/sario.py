@@ -102,10 +102,11 @@ DATE_FMT = "%Y%m%d"
 MASK_FILENAME = "masks.h5"
 # ifg_FILENAME = "ifg_stack.h5"
 UNW_FILENAME = "unw_stack.h5"
-COR_FILENAME = "cc_stack.h5"
+COR_FILENAME = "cor_stack.h5"
 
 # dataset names for general 3D stacks
 STACK_DSET = "stack"
+STACK_MEAN_DSET = "stack_mean"
 STACK_FLAT_SHIFTED_DSET = "stack_flat_shifted"
 
 # Mask file datasets

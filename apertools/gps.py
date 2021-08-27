@@ -1310,12 +1310,12 @@ def plot_gps_east_by_loc(
 
 
 def get_mean_correlations(
-    igrams_dir=None, defo_filename=None, defo_full_path=None, cc_filename="cc_stack.h5"
+    igrams_dir=None, defo_filename=None, defo_full_path=None, cor_filename="cor_stack.h5"
 ):
     existing_station_tuples = _load_stations(igrams_dir, defo_filename, defo_full_path)
     corrs = {}
     dem_rsc = apertools.sario.load_dem_from_h5(defo_filename)
-    with h5py.File(cc_filename) as f:
+    with h5py.File(cor_filename) as f:
         for name, lon, lat in existing_station_tuples:
             row, col = apertools.latlon.latlon_to_rowcol(lat, lon, dem_rsc)
             corrs[name] = f["mean_stack"][row, col]
