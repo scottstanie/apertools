@@ -800,12 +800,12 @@ def load_datelist_from_h5(h5file, date_dset, dset=None, parse=True):
         return datenums
 
 
-def load_slclist_from_h5(h5file, dset=None, parse=True):
-    return load_datelist_from_h5(h5file, SLCLIST_DSET, dset, parse)
+def load_slclist_from_h5(h5file, dset=None, parse=True, date_dset_name=SLCLIST_DSET):
+    return load_datelist_from_h5(h5file, date_dset_name, dset, parse)
 
 
-def load_ifglist_from_h5(h5file, dset=None, parse=True):
-    return load_datelist_from_h5(h5file, IFGLIST_DSET, dset, parse)
+def load_ifglist_from_h5(h5file, dset=None, parse=True, date_dset_name=IFGLIST_DSET):
+    return load_datelist_from_h5(h5file, date_dset_name, dset, parse)
 
 
 def parse_slclist_strings(slc_str):
@@ -821,15 +821,15 @@ def parse_slclist_strings(slc_str):
         return [parse_slclist_strings(s) for s in slc_str if s]
 
 
-def parse_ifglist_strings(date_pairs, ext=".int"):
+def parse_ifglist_strings(date_pairs):
     # If we passed filename YYYYmmdd_YYYYmmdd.int
     if isinstance(date_pairs, str):
-        # TODO: isn't this better than stripping 'ext'?
-        date_pairs = [date_pairs.split(".")[0].split("_")[:2]]
-    elif isinstance(date_pairs, Iterable) and isinstance(date_pairs[0], str):
-        date_pairs = [f.split(".")[0].split("_")[:2] for f in date_pairs]
-
-    return [(_parse(early), _parse(late)) for early, late in date_pairs]
+        dates = re.findall(r"\d{8}", date_pairs)
+        if len(dates) != 2:
+            raise ValueError("{} must contain 2 YYYYmmdd dates".format(date_pairs))
+        return (_parse(dates[0]), _parse(dates[1]))
+    else:
+        return [parse_ifglist_strings(d) for d in date_pairs]
 
 
 def load_slclist_from_nc(ncfile, dim="date", parse=True):
@@ -882,7 +882,7 @@ def find_slcs(directory=".", ext=".geo", parse=True, filename=None):
     return parse_slclist_strings(slclist)
 
 
-def find_igrams(directory=".", ext=".int", parse=True, filename=None):
+def find_igrams(directory=".", ext=".int", parse=True, filename=None, search_term=None):
     """Reads the list of igrams to return dates of images as a tuple
 
     Args:
@@ -903,13 +903,15 @@ def find_igrams(directory=".", ext=".int", parse=True, filename=None):
                 for line in f.read().splitlines()
                 if not line.strip().startswith("#")
             ]
+    elif search_term is not None:
+        print("Searching for ifgs in:", os.path.join(directory, search_term))
+        igram_file_list = sorted(glob(os.path.join(directory, search_term)))
     else:
         igram_file_list = sorted(glob(os.path.join(directory, "*" + ext)))
 
     if parse:
         igram_fnames = [os.path.split(f)[1] for f in igram_file_list]
-        date_pairs = [intname.strip(ext).split("_")[:2] for intname in igram_fnames]
-        return parse_ifglist_strings(date_pairs, ext=ext)
+        return parse_ifglist_strings(igram_fnames)
     else:
         return igram_file_list
 
@@ -966,8 +968,7 @@ def attach_latlon(fname, dset, depth_dim=None):
 
     Args:
         fname (str): name of HDF5 file
-        dsets_to_attach (list[str], optional): Name of existing datasets in `fname`
-            to attach the lat/lon scales to. Defaults to [].
+        dset (str): Name of existing datasets in `fname` to attach the lat/lon scales to.
         depth_dim (str, optional): For a 3D dataset, attach a scale to the 3rd dimension
             If it doesn't exist, an index dimension, values 0,1,...len(dset), will be
             created with the name=`depth_dim`

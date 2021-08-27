@@ -510,6 +510,7 @@ def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_filename=None):
 def download_station_data(station_name):
     station_name = station_name.upper()
     plate = get_station_plate(station_name)
+    # plate = "PA"
     url = GPS_BASE_URL.format(station=station_name, plate=plate)
     response = requests.get(url)
     response.raise_for_status()
@@ -528,6 +529,8 @@ def get_station_plate(station_name):
     response = requests.get(url)
     response.raise_for_status()
 
+    # NOTE: This is not necessarily the only one!
+    # CA GPS stations have PA and NA plate fixed... do i ever care about both?
     match = re.search(r"(?P<plate>[A-Z]{2}) Plate Fixed", response.text)
     if not match:
         raise ValueError("Could not find plate name on %s" % url)
@@ -629,14 +632,14 @@ def load_gps_los_data(
             los_map_file=los_map_file,
         )
 
-    df = load_station_enu(
+    df_enu = load_station_enu(
         station_name,
         to_cm=to_cm,
         start_date=start_date,
         end_date=end_date,
         force_download=force_download,
     )
-    enu_data = df[["east", "north", "up"]].values.T
+    enu_data = df_enu[["east", "north", "up"]].values.T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
     los_gps_data = los_gps_data.reshape(-1)
 
@@ -650,7 +653,7 @@ def load_gps_los_data(
     if days_smooth:
         los_gps_data = moving_average(los_gps_data, days_smooth)
 
-    df_los = pd.DataFrame(data=los_gps_data, index=df.index, columns=["los"])
+    df_los = pd.DataFrame(data=los_gps_data, index=df_enu.index, columns=["los"])
     if reference_station is not None:
         df_ref = load_gps_los_data(
             los_map_file,
