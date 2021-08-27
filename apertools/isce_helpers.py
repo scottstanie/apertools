@@ -141,10 +141,10 @@ def _create_isce_image(filename, shape, image_class, access_mode="write"):
     image.setAccessMode(access_mode)
     if not os.path.exists(filename):
         image.createImage()
-
-    image.renderHdr()
-    # image.renderVRT()
-    image.finalizeImage()
+        image.renderHdr()
+        image.finalizeImage()
+    else:
+        image.renderHdr()
     return image
 
 
@@ -328,3 +328,30 @@ def create_dem_header(dem_file, rsc_file=None, datum="EGM96"):
     # no need to pass the dictionaryOfFacilities since init will use the default one
     demImage.init(dictProp)
     demImage.renderHdr()
+
+
+def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int"):
+    from copy import deepcopy
+    import rasterio as rio
+    from tqdm import tqdm
+
+    ifglist = sario.find_ifgs(directory=project_dir, search_term=search_term, parse=False)
+
+    for f1 in tqdm(ifglist):
+        a1 = f1.replace(".int", ".amp")
+
+        with rio.open(f1) as src1, rio.open(a1) as src2:
+            ifg = src1.read(1)
+            amp1, amp2 = src2.read()
+
+            # For output: copy all metadata, but change band count
+            meta = deepcopy(src2.meta)
+            meta["count"] = 1
+
+        cor = np.abs(ifg) / (amp1 * amp2 + 1e-7)
+        cor_filename = a1.replace(".amp", ".cor")
+        # print("Saving cor for", cor_filename)
+        # calulate and save (not sure how to just save an array in isce)
+        with rio.open(cor_filename, "w", **meta) as dst:
+            dst.write(cor, 1)
+        create_cor_image(cor_filename, ifg.shape, access_mode="write")
