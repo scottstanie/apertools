@@ -197,47 +197,61 @@ def filter_slclist_ifglist(
     max_temporal_baseline=None,
     min_bandwidth=None,
     max_bandwidth=None,
+    include_annual=False,
     slclist_ignore_file=None,
     verbose=False,
 ):
-    valid_ifg_dates = copy.copy(ifg_date_list)
+    # Make sure it's a list of tuples
+    ifg_date_list = [tuple(ifg) for ifg in ifg_date_list]
+    # Dont alter the original so we can find the indices at the end
+    valid_ifg_pairs = copy.copy(ifg_date_list)
     if slclist_ignore_file is not None:
-        _, valid_ifg_dates = ignore_slc_dates(
-            ifg_date_list=valid_ifg_dates, slclist_ignore_file=slclist_ignore_file
+        _, valid_ifg_pairs = ignore_slc_dates(
+            ifg_date_list=valid_ifg_pairs, slclist_ignore_file=slclist_ignore_file
         )
 
-    valid_ifg_dates = filter_min_max_date(
-        valid_ifg_dates, min_date, max_date, verbose=verbose
+    valid_ifg_pairs = filter_min_max_date(
+        valid_ifg_pairs, min_date, max_date, verbose=verbose
     )
+    # Check for 1 year interferograms before cutting down
+    if include_annual:
+        annual_ifgs = find_annual_ifgs(valid_ifg_pairs)
+    else:
+        annual_ifgs = []
+
+    # Now filter the rest by temp baseline or by "bandwidth" aka index distance
     if max_temporal_baseline is not None and max_bandwidth is not None:
         raise ValueError("Only can filter by one of bandwith or temp. baseline")
     if max_temporal_baseline is not None:
         # TODO: handle min and max both
-        ll = len(valid_ifg_dates)
-        valid_ifg_dates = [
+        ll = len(valid_ifg_pairs)
+        valid_ifg_pairs = [
             ifg
-            for ifg in valid_ifg_dates
+            for ifg in valid_ifg_pairs
             if abs((ifg[1] - ifg[0]).days) <= max_temporal_baseline
         ]
         if verbose:
             logger.info(
-                f"Ignoring {ll - len(valid_ifg_dates)} longer than {max_temporal_baseline}"
+                f"Ignoring {ll - len(valid_ifg_pairs)} longer than {max_temporal_baseline}"
             )
     elif max_bandwidth is not None or min_bandwidth is not None:
-        valid_ifg_dates = limit_ifg_bandwidth(
-            valid_ifg_dates, max_bandwidth=max_bandwidth, min_bandwidth=min_bandwidth
+        valid_ifg_pairs = limit_ifg_bandwidth(
+            valid_ifg_pairs, max_bandwidth=max_bandwidth, min_bandwidth=min_bandwidth
         )
+    valid_ifg_pairs = list(sorted(valid_ifg_pairs + annual_ifgs))
+
 
     if verbose:
         logger.info(
-            f"Ignoring {len(ifg_date_list) - len(valid_ifg_dates)} igrams total"
+            f"Ignoring {len(ifg_date_list) - len(valid_ifg_pairs)} igrams total"
         )
 
     # Now just use the ones remaining to reform the unique SAR dates
-    valid_sar_date = list(sorted(set(itertools.chain.from_iterable(valid_ifg_dates))))
+    valid_sar_date = list(sorted(set(itertools.chain.from_iterable(valid_ifg_pairs))))
+    # breakpoint()    
     # Does the same as np.searchsorted, but works on a list[tuple]
-    valid_ifg_idxs = [ifg_date_list.index(tup) for tup in valid_ifg_dates]
-    return valid_sar_date, valid_ifg_dates, valid_ifg_idxs
+    valid_ifg_idxs = [ifg_date_list.index(tup) for tup in valid_ifg_pairs]
+    return valid_sar_date, valid_ifg_pairs, valid_ifg_idxs
 
 
 def ignore_slc_dates(
@@ -286,6 +300,29 @@ def limit_ifg_bandwidth(valid_ifg_dates, max_bandwidth=None, min_bandwidth=None)
         if cur_bw <= max_bandwidth and cur_bw >= min_bandwidth:
             ifg_used.append((early, late))
     return ifg_used
+
+
+def _temp_baseline(ifg_pair):
+    return (ifg_pair[1] - ifg_pair[0]).days
+
+
+def find_annual_ifgs(ifg_pairs, buffer_days=30, num_years=1):
+    """Pick out interferograms which are closest to 1 year in span """
+    # We only want to pick 1 ifg per date, closest to a year, but skip a date if it
+    # doesn't have an ifg of baseline 365 +/- `buffer_days`
+    # sar_dates = list(sorted(set(itertools.chain.from_iterable(ifg_pairs))))
+    date_to_ifg = {}
+    # Used to keep track how far into ifg_list the last sar date was (avoid iterations)
+    for ifg in ifg_pairs:
+        early = ifg[0]
+        tb = _temp_baseline(ifg)
+        if abs(tb - 365) > buffer_days:
+            continue
+        cur_ifg = date_to_ifg.get(early)
+        # Use this ifg as the annual if none exist, or if it's closer to 365
+        if cur_ifg is None or abs(tb - 365) < _temp_baseline(cur_ifg):
+            date_to_ifg[early] = ifg
+    return list(sorted(date_to_ifg.values()))
 
 
 def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC"):
@@ -970,6 +1007,5 @@ def ifg_to_mag_phase(filename, outname=None, driver=None):
             out_meta["SUFFIX"] = "ADD"
         print(out_meta)
         with rio.open(outname, "w", **out_meta) as dst:
-            pass
-            # dst.write(np.abs(arr), 1)
-            # dst.write(np.angle(arr), 2)
+            dst.write(np.abs(arr), 1)
+            dst.write(np.angle(arr), 2)
