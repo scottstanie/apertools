@@ -1,37 +1,13 @@
 import os
 import json
 import numpy as np
-import shapely.geometry
+from shapely import geometry, wkt
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
 from apertools.log import get_log
 from apertools.latlon import km_to_deg
 from apertools.deramp import remove_ramp
 
 logger = get_log()
-
-
-def subset_h5(
-    full_path,
-    sub_path,
-    bbox=None,
-    bbox_file=None,
-    fname="unw_stack.h5",
-    dsets_to_compress=[],
-):
-    import xarray as xr
-
-    if bbox_file:
-        with open(bbox_file) as f:
-            bbox = json.load(f)["bbox"]
-    ds = xr.open_dataset(
-        os.path.join(full_path, fname), engine="h5netcdf", phony_dims="sort"
-    )
-    f_in = os.path.join(sub_path, fname)
-    ext = os.path.splitext(fname)[1]
-    f_out = f_in.replace(ext, ".nc")
-    compressions = {ds: {"zlib": True} for ds in dsets_to_compress}
-    ds_sub = ds.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
-    ds_sub.to_netcdf(f_out, engine="h5netcdf", encoding=compressions)
 
 
 # TODO: this is basically the same as copy_subset... def merge these
@@ -151,8 +127,8 @@ def _get_img_bounds(fname1, fname2):
             raise ValueError(
                 f"{fname1} has crs {src1.crs}, but {fname2} has csr {src2.crs}"
             )
-        b1 = shapely.geometry.box(*src1.bounds)
-        b2 = shapely.geometry.box(*src2.bounds)
+        b1 = geometry.box(*src1.bounds)
+        b2 = geometry.box(*src2.bounds)
         return b1, b2
 
 
@@ -265,11 +241,95 @@ GEOCODED_PROJECT_FILES = [
     "los_enu.tif",
 ]
 
+COMP_DSETS = {
+    "unw_stack.h5": ["stack_flat_shifted"],
+    "cor_stack.h5": ["stack"],
+    "masks.h5": ["ifg", "slc"],
+}
+
 
 def crop_geocoded_project(
-    bbox,
+    bbox=None,
+    bbox_file=None,
     project_dir=".",
     files_to_crop=GEOCODED_PROJECT_FILES,
     output_dir="cropped",
 ):
-    pass
+    """Subset all important data stacks for geocoded project by bounding box
+
+    Args:
+        bbox (Iterable[float]): (left, bot, right, top) bounding box.
+        bbox_file (str, optional): file containing bounding box, either wkt or geojson.
+        project_dir (str): path to the original, full HDF5 dataset
+        fname (str, optional): filename of the HDF5 file at `full_path`. Defaults to "unw_stack.h5".
+        output_dir (str): path to save the output subsetted dataset
+    """
+    import rioxarray
+    from apertools import geojson, utils
+
+    if bbox_file:
+        with open(bbox_file) as f:
+            bbox = json.load(f)["bbox"]
+
+    utils.mkdir_p(output_dir)
+    with open(os.path.join(output_dir, "bbox.geojson"), "w") as f:
+        f.write(geojson.bbox_to_geojson(bbox) + "\n")
+    with open(os.path.join(output_dir, "bbox.wkt"), "w") as f:
+        f.write(geojson.bbox_to_wkt(bbox) + "\n")
+
+    for fname in files_to_crop:
+        logger.info("Subsetting %s", fname)
+
+        if fname.endswith(".h5"):
+            dsets = COMP_DSETS[fname]
+            subset_h5(
+                project_dir,
+                output_dir,
+                fname=fname,
+                bbox=bbox,
+                dsets_to_compress=dsets,
+            )
+        else:
+            f = os.path.split(fname)[1]
+            outname = os.path.join(output_dir, f)
+            if os.path.exists(outname):
+                logger.info("%s exists, skipping", outname)
+
+            ds = rioxarray.open_rasterio(fname)
+            # rioxarray uses x/y instead of lat/lon
+            ds_sub = ds.sel(x=slice(bbox[0], bbox[2]), y=slice(bbox[3], bbox[1]))
+            ds_sub.rio.to_raster(outname)
+
+
+def subset_h5(
+    full_path,
+    output_dir,
+    bbox,
+    fname="unw_stack.h5",
+    dsets_to_compress=[],
+):
+    """Save a subset of a HDF5 lat/lon dataset by bounding box
+
+    Args:
+        full_path (str): path to the original, full HDF5 dataset
+        output_dir (str): path to save the output subsetted dataset
+        bbox (Iterable[float]): (left, bot, right, top) bounding box.
+        fname (str, optional): filename of the HDF5 file at `full_path`. Defaults to "unw_stack.h5".
+        dsets_to_compress (list[str], optional): within `fname`, names of datasets to transfer.
+    """
+
+    import xarray as xr
+    ext = os.path.splitext(fname)[1]
+    f_in = os.path.join(output_dir, fname)
+    f_out = f_in.replace(ext, ".nc")
+    if os.path.exists(f_out):
+        logger.info("%s exists, skipping", f_out)
+        return
+
+    ds = xr.open_dataset(
+        os.path.join(full_path, fname), engine="h5netcdf", phony_dims="sort"
+    )
+    compressions = {ds: {"zlib": True} for ds in dsets_to_compress}
+    ds_sub = ds.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
+    logger.info("Writing to %s, compressing with: %s", f_out, compressions)
+    ds_sub.to_netcdf(f_out, engine="h5netcdf", encoding=compressions, mode="a")

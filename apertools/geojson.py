@@ -8,12 +8,20 @@ Coordinates are (lon, lat) to match (x, y)
 Bounding box order is  (left, bottom, right, top) (floats)
 """
 from __future__ import division, print_function
+import json
 import itertools
-import shapely.geometry
+from shapely import geometry
 
 
 def geojson_to_wkt(gj):
-    return shapely.geometry.shape(gj).wkt
+    try:
+        return geometry.shape(gj).wkt
+    except ValueError:
+        return geometry.shape(gj["geometry"]).wkt
+
+
+def bbox_to_wkt(bbox):
+    return geometry.box(*bbox).wkt
 
 
 def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None, filename=None):
@@ -48,7 +56,15 @@ def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None, filename=N
     else:
         coordinates = coords(geojson)
     # https://stackoverflow.com/a/20100700/4174466
-    return shapely.geometry.MultiPoint(coordinates).bounds
+    return geometry.MultiPoint(coordinates).bounds
+
+
+bbox = bounding_box
+
+
+def bbox_to_geojson(bbox):
+    """Convert a (left, bot, right, top) bounding box to geojson string"""
+    return json.dumps(geometry.mapping(geometry.box(*bbox)))
 
 
 def corner_coords(top_corner=None, dlon=None, dlat=None, bot_corner=None):
