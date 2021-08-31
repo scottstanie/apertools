@@ -1,4 +1,5 @@
 import os
+from pprint import pprint
 from glob import glob
 import subprocess
 from tqdm import tqdm
@@ -9,6 +10,7 @@ from apertools.log import get_log
 from apertools.latlon import km_to_deg
 from apertools.deramp import remove_ramp
 from apertools.utils import mkdir_p
+from apertools import geojson
 
 logger = get_log()
 
@@ -238,7 +240,12 @@ ISCE_STRIPMAP_PROJECT_FILES = [
 
 
 def crop_isce_project(
-    bbox_rdr=None, bbox_latlon=None, project_dir=".", output_dir="cropped", verbose=True,
+    bbox_rdr=None,
+    bbox_latlon=None,
+    project_dir=".",
+    output_dir="cropped",
+    verbose=True,
+    overwrite=False,
 ):
     if bbox_rdr is None and bbox_latlon is None:
         raise ValueError("need either bbox_rdr or bbox_latlon")
@@ -251,10 +258,13 @@ def crop_isce_project(
         aztop, rgmax = latlon.latlon_to_rowcol_rdr(lat1, lon1, geom_dir=geom_dir)
         bbox_rdr = rgmin, azbot, rgmax, aztop
     # else:
-        # rgmin, azbot, rgmax, aztop = bbox_rdr
-
+    # rgmin, azbot, rgmax, aztop = bbox_rdr
     mkdir_p(output_dir)
+    with open(os.path.join(output_dir, "bbox_rdr.wkt"), "w") as f:
+        f.write(geojson.bbox_to_wkt(bbox_rdr) + "\n")
+
     cmd_base = "gdal_translate -projwin {ulx} {uly} {lrx} {lry} -of ISCE {inp} {out}"
+    failures = []
     for dirname, fileglob in tqdm(ISCE_STRIPMAP_PROJECT_FILES, position=0):
         filelist = glob(os.path.join(project_dir, dirname, fileglob))
         tqdm.write(
@@ -263,6 +273,11 @@ def crop_isce_project(
         mkdir_p(os.path.join(output_dir, dirname))
         for f in tqdm(filelist, position=1):
             outname = os.path.join(output_dir, dirname, os.path.split(f)[1])
+            if os.path.exists(outname) and not overwrite:
+                if verbose:
+                    tqdm.write("%s exists, skipping" % outname)
+                continue
+
             if verbose:
                 tqdm.write("Subsetting %s to %s" % (f, outname))
 
@@ -278,7 +293,17 @@ def crop_isce_project(
             if verbose:
                 tqdm.write(cmd)
 
-            subprocess.check_output(cmd, shell=True)
+            try:
+                subprocess.check_output(cmd, shell=True)
+            except subprocess.CalledProcessError:
+                tqdm.write("Command dailed on %s:" % f)
+                tqdm.write(cmd)
+                failures.append((f, outname, cmd))
+                continue
+
+    logger.info("Failed on the following:")
+    pprint(failures)
+    return failures
 
 
 def _get_bounds(fname, bbox_rdr):
@@ -325,7 +350,6 @@ def crop_geocoded_project(
         output_dir (str): path to save the output subsetted dataset
     """
     import rioxarray
-    from apertools import geojson
 
     if bbox_file:
         bbox = geojson.load_bbox(bbox_file)
