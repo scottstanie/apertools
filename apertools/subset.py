@@ -307,6 +307,7 @@ def subset_h5(
     bbox,
     fname="unw_stack.h5",
     dsets_to_compress=[],
+    save_as_nc=False,
 ):
     """Save a subset of a HDF5 lat/lon dataset by bounding box
 
@@ -316,12 +317,17 @@ def subset_h5(
         bbox (Iterable[float]): (left, bot, right, top) bounding box.
         fname (str, optional): filename of the HDF5 file at `full_path`. Defaults to "unw_stack.h5".
         dsets_to_compress (list[str], optional): within `fname`, names of datasets to transfer.
+        save_as_nc (bool): Save output with ".nc" netcdf extensions. If False, saves as .h5
     """
 
     import xarray as xr
-    ext = os.path.splitext(fname)[1]
-    f_in = os.path.join(output_dir, fname)
-    f_out = f_in.replace(ext, ".nc")
+    if save_as_nc:
+        ext = os.path.splitext(fname)[1]
+        f_in = os.path.join(output_dir, fname)
+        f_out = f_in.replace(ext, ".nc")
+    else:
+        f_out = os.path.join(output_dir, fname)
+
     if os.path.exists(f_out):
         logger.info("%s exists, skipping", f_out)
         return
@@ -331,5 +337,7 @@ def subset_h5(
     )
     compressions = {ds: {"zlib": True} for ds in dsets_to_compress}
     ds_sub = ds.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
+    logger.info("Input dimensions: %s", ds.dims)
+    logger.info("Output dimensions: %s", ds_sub.dims)
     logger.info("Writing to %s, compressing with: %s", f_out, compressions)
     ds_sub.to_netcdf(f_out, engine="h5netcdf", encoding=compressions, mode="a")
