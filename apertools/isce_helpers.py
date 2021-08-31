@@ -2,7 +2,11 @@
 import os
 import datetime
 import numpy as np
-from osgeo import gdal
+
+# from osgeo import gdal
+import rasterio as rio
+from tqdm import tqdm
+from copy import deepcopy
 import h5py
 from . import sario
 
@@ -109,12 +113,10 @@ def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
 
     if compute_cor:
         # Compute the multilooked version of correlation (much quicker than isce's full size)
-        ds = gdal.Open(resampInt)
-        ifg = ds.ReadAsArray()
-        ds = None
-        ds = gdal.Open(resampAmp)
-        amp1, amp2 = ds.ReadAsArray()
-        ds = None
+        with rio.open(resampInt) as src:
+            ifg = src.read(1)
+        with rio.open(resampAmp) as src:
+            amp1, amp2 = src.read()
 
         cor_filename = resampAmp.replace(".amp", ".cor")
         # Make the isce headers
@@ -331,11 +333,10 @@ def create_dem_header(dem_file, rsc_file=None, datum="EGM96"):
 
 
 def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int"):
-    from copy import deepcopy
-    import rasterio as rio
-    from tqdm import tqdm
 
-    ifglist = sario.find_ifgs(directory=project_dir, search_term=search_term, parse=False)
+    ifglist = sario.find_ifgs(
+        directory=project_dir, search_term=search_term, parse=False
+    )
 
     for f1 in tqdm(ifglist):
         a1 = f1.replace(".int", ".amp")
@@ -355,3 +356,5 @@ def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int"):
         with rio.open(cor_filename, "w", **meta) as dst:
             dst.write(cor, 1)
         create_cor_image(cor_filename, ifg.shape, access_mode="write")
+
+
