@@ -10,10 +10,11 @@ Bounding box order is  (left, bottom, right, top) (floats)
 from __future__ import division, print_function
 import json
 import itertools
-from shapely import geometry
+from shapely import geometry, wkt
 
 
 def geojson_to_wkt(gj):
+    """Convert a geojson dict to a WKT string"""
     try:
         return geometry.shape(gj).wkt
     except ValueError:
@@ -21,7 +22,29 @@ def geojson_to_wkt(gj):
 
 
 def bbox_to_wkt(bbox):
+    """Convert (left, bot, right, top) bbox to a WKT string"""
     return geometry.box(*bbox).wkt
+
+
+def load_bbox(bbox_file):
+    """Return a bounding box rectangle from .wkt or .geojson files"""
+    if bbox_file:
+        with open(bbox_file) as f:
+            if bbox_file.endswith(".wkt"):
+                return tuple(wkt.load(f).bounds)
+            elif bbox_file.endswith("json"):
+                gj = json.load(f)
+                try:
+                    return tuple(gj["bbox"])
+                except KeyError:
+                    return tuple(geometry.shape(gj['geometry']).bounds)
+
+            else:
+                raise ValueError(
+                    "Unknown file format for bbox (need .wkt or .geojson): {}".format(
+                        bbox_file
+                    )
+                )
 
 
 def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None, filename=None):

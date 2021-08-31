@@ -1,7 +1,8 @@
 import os
-import json
+from glob import glob
+import subprocess
 import numpy as np
-from shapely import geometry, wkt
+from shapely import geometry
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
 from apertools.log import get_log
 from apertools.latlon import km_to_deg
@@ -225,12 +226,44 @@ def merge_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
 
 
 # ######## Project Wide subset functions (ISCE) ##############
+ISCE_STRIPMAP_PROJECT_FILES = [
+    # (directory name, search string for glob())
+    ("geom_reference/", "*.rdr"),
+    ("merged/SLC/", "**/*.slc"),
+    ("Igrams/", "**/*.int"),
+    ("Igrams/", "**/*.cor"),
+]
 
 
-def crop_isce_project(project_dir=".", output_dir="cropped"):
-    from . import isce_helpers
-
+def crop_isce_project(
+    bbox_rdr=None, bbox_latlon=None, project_dir=".", output_dir="cropped"
+):
     geom_dir = os.path.join(project_dir, "geom_reference")
+    if bbox_rdr is None and bbox_latlon is None:
+        raise ValueError("need either bbox_rdr or bbox_latlon")
+    elif bbox_latlon:
+        from apertools import latlon
+
+        lon0, lat0, lon1, lat1 = bbox_latlon
+        azbot, rgmin = latlon.latlon_to_rowcol_rdr(lat0, lon0, geom_dir=geom_dir)
+        aztop, rgmax = latlon.latlon_to_rowcol_rdr(lat1, lon1, geom_dir=geom_dir)
+    else:
+        rgmin, azbot, rgmax, aztop = bbox_rdr
+
+    cmd_base = "gdal_translate -projwin {ulx} {uly} {lrx} {lry} -of ISCE {inp} {out}"
+    for dirname, fileglob in ISCE_STRIPMAP_PROJECT_FILES:
+        filelist = glob(os.path.join(dirname, fileglob))
+        logger.info("Found %s files to subset for %s/%s", len(filelist), dirname, fileglob)
+        for f in filelist:
+            outname = os.path.join(output_dir, f)
+            logger.info("Subsetting %s to %s", f, outname)
+
+        cmd = cmd_base.format(
+            inp=f, outp=outname, ulx=rgmin, uly=aztop, lrx=rgmax, lry=azbot
+        )
+        logger.info(cmd)
+
+        subprocess.check_call(cmd, shell=True)
 
 
 GEOCODED_PROJECT_FILES = [
@@ -268,8 +301,7 @@ def crop_geocoded_project(
     from apertools import geojson, utils
 
     if bbox_file:
-        with open(bbox_file) as f:
-            bbox = json.load(f)["bbox"]
+        bbox = geojson.load_bbox(bbox_file)
 
     utils.mkdir_p(output_dir)
     with open(os.path.join(output_dir, "bbox.geojson"), "w") as f:
@@ -321,6 +353,7 @@ def subset_h5(
     """
 
     import xarray as xr
+
     if save_as_nc:
         ext = os.path.splitext(fname)[1]
         f_in = os.path.join(output_dir, fname)
