@@ -47,13 +47,8 @@ def bounding_box(geojson=None, top_corner=None, dlon=None, dlat=None, filename=N
         coordinates = corner_coords(top_corner=top_corner, dlon=dlon, dlat=dlat)
     else:
         coordinates = coords(geojson)
-
-    left = min(float(lon) for (lon, lat) in coordinates)
-    right = max(float(lon) for (lon, lat) in coordinates)
-
-    top = max(float(lat) for (lon, lat) in coordinates)
-    bottom = min(float(lat) for (lon, lat) in coordinates)
-    return left, bottom, right, top
+    # https://stackoverflow.com/a/20100700/4174466
+    return shapely.geometry.MultiPoint(coordinates).bounds
 
 
 def corner_coords(top_corner=None, dlon=None, dlat=None, bot_corner=None):
