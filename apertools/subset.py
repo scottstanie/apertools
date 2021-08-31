@@ -7,6 +7,7 @@ import rasterio as rio  # TODO: figure out if i want rio or gdal...
 from apertools.log import get_log
 from apertools.latlon import km_to_deg
 from apertools.deramp import remove_ramp
+from apertools.utils import mkdir_p
 
 logger = get_log()
 
@@ -238,32 +239,58 @@ ISCE_STRIPMAP_PROJECT_FILES = [
 def crop_isce_project(
     bbox_rdr=None, bbox_latlon=None, project_dir=".", output_dir="cropped"
 ):
-    geom_dir = os.path.join(project_dir, "geom_reference")
     if bbox_rdr is None and bbox_latlon is None:
         raise ValueError("need either bbox_rdr or bbox_latlon")
     elif bbox_latlon:
         from apertools import latlon
 
         lon0, lat0, lon1, lat1 = bbox_latlon
+        geom_dir = os.path.join(project_dir, "geom_reference")
         azbot, rgmin = latlon.latlon_to_rowcol_rdr(lat0, lon0, geom_dir=geom_dir)
         aztop, rgmax = latlon.latlon_to_rowcol_rdr(lat1, lon1, geom_dir=geom_dir)
-    else:
-        rgmin, azbot, rgmax, aztop = bbox_rdr
+        bbox_rdr = rgmin, azbot, rgmax, aztop
+    # else:
+        # rgmin, azbot, rgmax, aztop = bbox_rdr
 
+    mkdir_p(output_dir)
     cmd_base = "gdal_translate -projwin {ulx} {uly} {lrx} {lry} -of ISCE {inp} {out}"
     for dirname, fileglob in ISCE_STRIPMAP_PROJECT_FILES:
-        filelist = glob(os.path.join(dirname, fileglob))
-        logger.info("Found %s files to subset for %s/%s", len(filelist), dirname, fileglob)
+        filelist = glob(os.path.join(project_dir, dirname, fileglob))
+        logger.info(
+            "Found %s files to subset for %s/%s", len(filelist), dirname, fileglob
+        )
+        mkdir_p(os.path.join(output_dir, dirname))
         for f in filelist:
-            outname = os.path.join(output_dir, f)
+            outname = os.path.join(output_dir, dirname, os.path.split(f)[1])
             logger.info("Subsetting %s to %s", f, outname)
 
-        cmd = cmd_base.format(
-            inp=f, outp=outname, ulx=rgmin, uly=aztop, lrx=rgmax, lry=azbot
-        )
-        logger.info(cmd)
+            # ulx, uly, lrx, lry = _get_bounds(rgmin, azbot, rgmax, aztop)
+            ulx, uly, lrx, lry = _get_bounds(f, bbox_rdr)
+            cmd = cmd_base.format(
+                # inp=f, outp=outname, ulx=rgmin, uly=aztop, lrx=rgmax, lry=azbot
+                inp=f,
+                out=outname,
+                ulx=ulx,
+                uly=uly,
+                lrx=lrx,
+                lry=lry,
+            )
+            logger.info(cmd)
+            # breakpoint()
 
-        subprocess.check_call(cmd, shell=True)
+            subprocess.check_call(cmd, shell=True)
+
+
+def _get_bounds(fname, bbox_rdr):
+    """Convert the multilooked radar coords, using the Affine transform, to full sized coords
+
+    https://github.com/sgillies/affine
+    """
+    left, bot, right, top = bbox_rdr
+    with rio.open(fname) as src:
+        ulx, uly = src.transform * (left, top)
+        lrx, lry = src.transform * (right, bot)
+    return ulx, uly, lrx, lry
 
 
 GEOCODED_PROJECT_FILES = [
@@ -298,12 +325,12 @@ def crop_geocoded_project(
         output_dir (str): path to save the output subsetted dataset
     """
     import rioxarray
-    from apertools import geojson, utils
+    from apertools import geojson
 
     if bbox_file:
         bbox = geojson.load_bbox(bbox_file)
 
-    utils.mkdir_p(output_dir)
+    mkdir_p(output_dir)
     with open(os.path.join(output_dir, "bbox.geojson"), "w") as f:
         f.write(geojson.bbox_to_geojson(bbox) + "\n")
     with open(os.path.join(output_dir, "bbox.wkt"), "w") as f:

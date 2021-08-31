@@ -706,8 +706,8 @@ def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None):
     # Take the centroid of the matching area (two strips make some quad shape)
     rows, cols = np.where(found_area)
 
-    if not rows.size or cols.size:
+    if not rows.size or not cols.size:
         print(f"{lat = }, {lon = } is outside latitude array bounds")
         return None, None
 
-    return np.mean(rows), np.mean(cols)
+    return round(np.mean(rows)), round(np.mean(cols))
