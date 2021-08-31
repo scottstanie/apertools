@@ -652,3 +652,62 @@ def bbox_xr(dataset):
         raise ValueError("dataset {} must contain 'lon' or 'x'".format(dataset))
     return x.min(), y.min(), x.max(), y.max()
     
+
+# ###### ISCE/ Radar coordinate functions #######
+
+def load_isce_latlon(project_dir=".", geom_dir=None):
+    import rasterio as rio
+    if geom_dir is None:
+        geom_dir = os.path.join(project_dir, "geom_reference")
+    imgs = []
+    files = ["lat.rdr", "lon.rdr"]
+    for f in files:
+        with rio.open(os.path.join(geom_dir, f)) as src:
+            imgs.append(src.read(1))
+    return imgs
+
+
+def bbox_from_latlon_arrs(lon_arr, lat_arr):
+    """Generate the (left, bot, right, top) latitudes/longitudes from radar geometry images"""
+    left, right = lon_arr.min(), lon_arr.max()
+    bot, top = lat_arr.min(), lat_arr.max()
+    return left, bot, right, top
+
+
+def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None):
+    """Find the row/col in radar coordinates (azimuth/range index) for a lat/lon point
+
+    Args:
+        lat (float): latitude of point of interest
+        lon (float): longitude of point of interest
+        lat_arr (ndarray, optional): lat geometry array for radar coordinates.
+        lon_arr (ndarray, optional): lon geometry array for radar coordinates.
+        geom_dir (str, optional): directory containing the lat/lon arrays to load.
+
+    Raises:
+        ValueError: If none of lat_arr/lon_arr/geom_dir are provided
+
+    Returns:
+        (row, col) for the (az, range) position of point closest to lat/lon
+    """
+    if lat_arr is None or lon_arr is None:
+        if geom_dir is None:
+            raise ValueError("need either lat/lon geomaetry arrays or geom_dir")
+        lat_arr, lon_arr = load_isce_latlon(geom_dir=geom_dir)
+    # Find the minimum distance location (and convert from linear index to row/col)
+    dlat = np.abs(lat_arr - lat)
+    dlon = np.abs(lon_arr - lon)
+    # Get the strip from `lat_arr`/`lon_arr` within `buf` of the desired lat/lon
+    min_diff = np.min(np.abs(np.diff(lat_arr.ravel())))
+    buf = max(1e-3, 1.5 * min_diff)
+    matching_lat = dlat < buf
+    matching_lon = dlon < buf
+    found_area = np.logical_and(matching_lat, matching_lon)
+    # Take the centroid of the matching area (two strips make some quad shape)
+    rows, cols = np.where(found_area)
+
+    if not rows.size or cols.size:
+        print(f"{lat = }, {lon = } is outside latitude array bounds")
+        return None, None
+
+    return np.mean(rows), np.mean(cols)

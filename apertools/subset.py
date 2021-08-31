@@ -31,7 +31,7 @@ def subset_h5(
     f_out = f_in.replace(ext, ".nc")
     compressions = {ds: {"zlib": True} for ds in dsets_to_compress}
     ds_sub = ds.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
-    ds_sub.to_netcdf( f_out, engine="h5netcdf", encoding=compressions)
+    ds_sub.to_netcdf(f_out, engine="h5netcdf", encoding=compressions)
 
 
 # TODO: this is basically the same as copy_subset... def merge these
@@ -246,3 +246,30 @@ def merge_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
     valid2 = (img2 != 0).astype(int)
     valid_count = valid1 + valid2
     return (img1 + img2) / valid_count
+
+
+# ######## Project Wide subset functions (ISCE) ##############
+
+
+def crop_isce_project(project_dir=".", output_dir="cropped"):
+    from . import isce_helpers
+
+    geom_dir = os.path.join(project_dir, "geom_reference")
+
+
+GEOCODED_PROJECT_FILES = [
+    "unw_stack.h5",
+    "cor_stack.h5",
+    "masks.h5",
+    "elevation_looked.dem",
+    "los_enu.tif",
+]
+
+
+def crop_geocoded_project(
+    bbox,
+    project_dir=".",
+    files_to_crop=GEOCODED_PROJECT_FILES,
+    output_dir="cropped",
+):
+    pass
