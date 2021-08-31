@@ -1,6 +1,7 @@
 import os
 from glob import glob
 import subprocess
+from tqdm import tqdm
 import numpy as np
 from shapely import geometry
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
@@ -237,7 +238,7 @@ ISCE_STRIPMAP_PROJECT_FILES = [
 
 
 def crop_isce_project(
-    bbox_rdr=None, bbox_latlon=None, project_dir=".", output_dir="cropped"
+    bbox_rdr=None, bbox_latlon=None, project_dir=".", output_dir="cropped", verbose=True,
 ):
     if bbox_rdr is None and bbox_latlon is None:
         raise ValueError("need either bbox_rdr or bbox_latlon")
@@ -254,20 +255,19 @@ def crop_isce_project(
 
     mkdir_p(output_dir)
     cmd_base = "gdal_translate -projwin {ulx} {uly} {lrx} {lry} -of ISCE {inp} {out}"
-    for dirname, fileglob in ISCE_STRIPMAP_PROJECT_FILES:
+    for dirname, fileglob in tqdm(ISCE_STRIPMAP_PROJECT_FILES, position=0):
         filelist = glob(os.path.join(project_dir, dirname, fileglob))
-        logger.info(
-            "Found %s files to subset for %s/%s", len(filelist), dirname, fileglob
+        tqdm.write(
+            "Found %s files to subset for %s/%s" % (len(filelist), dirname, fileglob)
         )
         mkdir_p(os.path.join(output_dir, dirname))
-        for f in filelist:
+        for f in tqdm(filelist, position=1):
             outname = os.path.join(output_dir, dirname, os.path.split(f)[1])
-            logger.info("Subsetting %s to %s", f, outname)
+            if verbose:
+                tqdm.write("Subsetting %s to %s" % (f, outname))
 
-            # ulx, uly, lrx, lry = _get_bounds(rgmin, azbot, rgmax, aztop)
             ulx, uly, lrx, lry = _get_bounds(f, bbox_rdr)
             cmd = cmd_base.format(
-                # inp=f, outp=outname, ulx=rgmin, uly=aztop, lrx=rgmax, lry=azbot
                 inp=f,
                 out=outname,
                 ulx=ulx,
@@ -275,10 +275,10 @@ def crop_isce_project(
                 lrx=lrx,
                 lry=lry,
             )
-            logger.info(cmd)
-            # breakpoint()
+            if verbose:
+                tqdm.write(cmd)
 
-            subprocess.check_call(cmd, shell=True)
+            subprocess.check_output(cmd, shell=True)
 
 
 def _get_bounds(fname, bbox_rdr):
