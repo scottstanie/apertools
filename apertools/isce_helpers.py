@@ -128,15 +128,20 @@ def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
     return imageInt, imageAmp
 
 
-def _create_isce_image(filename, shape, image_class, access_mode="write"):
+def _create_isce_image(
+    filename, shape, image_class=None, data_type="FLOAT", bands=1, access_mode="write"
+):
 
     length, width = shape
 
-    # demImage.initImage(dem_file, "read", width)
-    # demImage.dataType = "BYTE"
+    if image_class is not None:
+        imgFunc = getattr(isceobj, "create" + image_class)
+        image = imgFunc()
+    else:
+        image = isceobj.createImage()
+        image.dataType = data_type
+        image.bands = bands
 
-    imgFunc = getattr(isceobj, "create" + image_class)
-    image = imgFunc()
     image.setFilename(filename)
     image.setWidth(width)
     image.setLength(length)
@@ -150,10 +155,19 @@ def _create_isce_image(filename, shape, image_class, access_mode="write"):
     return image
 
 
-def create_cor_image(cor_filename, shape, access_mode="read"):
-    return _create_isce_image(
-        cor_filename, shape, "OffsetImage", access_mode=access_mode
-    )
+def create_cor_image(cor_filename, shape, bands=2, access_mode="read"):
+    if bands == 1:
+        return _create_isce_image(
+            cor_filename,
+            shape,
+            data_type="FLOAT",
+            bands=bands,
+            access_mode=access_mode,
+        )
+    else:
+        return _create_isce_image(
+            cor_filename, shape, image_class="OffsetImage", access_mode=access_mode
+        )
 
 
 def create_unw_image(filename, shape, access_mode="read"):
@@ -332,14 +346,20 @@ def create_dem_header(dem_file, rsc_file=None, datum="EGM96"):
     demImage.renderHdr()
 
 
-def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int"):
+def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int", verbose=False):
 
     ifglist = sario.find_ifgs(
         directory=project_dir, search_term=search_term, parse=False
     )
 
     for f1 in tqdm(ifglist):
+        with rio.open(f1) as src1:
+            shape = src1.shape
+
         a1 = f1.replace(".int", ".amp")
+        cor_filename = a1.replace(".amp", ".cor")
+        if verbose:
+            tqdm.write("Saving cor for %s" % cor_filename)
 
         with rio.open(f1) as src1, rio.open(a1) as src2:
             ifg = src1.read(1)
@@ -350,11 +370,7 @@ def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int"):
             meta["count"] = 1
 
         cor = np.abs(ifg) / (amp1 * amp2 + 1e-7)
-        cor_filename = a1.replace(".amp", ".cor")
-        # print("Saving cor for", cor_filename)
         # calulate and save (not sure how to just save an array in isce)
         with rio.open(cor_filename, "w", **meta) as dst:
             dst.write(cor, 1)
-        create_cor_image(cor_filename, ifg.shape, access_mode="write")
-
-
+        create_cor_image(cor_filename, shape, bands=1, access_mode="write")
