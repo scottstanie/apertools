@@ -1,5 +1,6 @@
 import os
 import re
+import datetime
 from pprint import pprint
 from glob import glob
 import subprocess
@@ -396,7 +397,8 @@ def crop_geocoded_project(
             ds = rioxarray.open_rasterio(fname)
             # rioxarray uses x/y instead of lat/lon
             ds_sub = ds.sel(x=slice(bbox[0], bbox[2]), y=slice(bbox[3], bbox[1]))
-            ds_sub.rio.to_raster(outname)
+            driver = "ROI_PAC" if outname.endswith(".dem") else None
+            ds_sub.rio.to_raster(outname, driver=driver)
 
 
 def subset_h5(
@@ -440,3 +442,78 @@ def subset_h5(
     logger.info("Output dimensions: %s", ds_sub.dims)
     logger.info("Writing to %s, compressing with: %s", f_out, compressions)
     ds_sub.to_netcdf(f_out, engine="h5netcdf", encoding=compressions, mode="a")
+
+
+def crop_stacks_by_date(
+    min_date=None,
+    max_date=None,
+    project_dir=".",
+    files_to_crop=list(COMP_DSETS.keys()),
+):
+    """Subset all important data stacks for geocoded project by bounding box
+
+    Args:
+        bbox (Iterable[float]): (left, bot, right, top) bounding box.
+        bbox_file (str, optional): file containing bounding box, either wkt or geojson.
+        project_dir (str): path to the original, full HDF5 dataset
+        fname (str, optional): filename of the HDF5 file at `full_path`. Defaults to "unw_stack.h5".
+        output_dir (str): path to save the output subsetted dataset
+    """
+    import xarray as xr
+    from apertools import sario
+
+    fmt = "%Y%m%d"
+    if min_date and max_date:
+        out_str = "_{}_{}".format(min_date.strftime(fmt), max_date.strftime(fmt))
+    elif min_date:
+        out_str = "_{}".format(min_date.strftime(fmt))
+    elif min_date:
+        out_str = "_{}".format(max_date.strftime(fmt))
+    else:
+        raise ValueError("Need either min_date or max_date")
+
+    if min_date:
+        if not min_date.tzinfo:
+            min_date = min_date.replace(tzinfo=datetime.timezone.utc)
+    else:
+        min_date = datetime.datetime(1900, 1, 1, tzinfo=datetime.timezone.utc)
+    if max_date:
+        if not max_date.tzinfo:
+            max_date = max_date.replace(tzinfo=datetime.timezone.utc)
+    else:
+        max_date = datetime.datetime(2100, 1, 1, tzinfo=datetime.timezone.utc)
+
+    ifglist = sario.load_ifglist_from_h5(files_to_crop[0])
+    # dc2 = datetime.datetime(2019, 1, 1, tzinfo=datetime.timezone.utc)
+    ifglist2019 = [
+        ifg
+        for ifg in ifglist
+        if min_date <= ifg[0] <= max_date and min_date <= ifg[1] <= max_date
+    ]
+    idxs_ifg = [ifglist.index(ifg) for ifg in ifglist2019]
+
+    # slclist = sario.load_slclist_from_h5(files_to_crop[0])
+    # slclist2019 = [slc for slc in slclist if min_date <= slc <= max_date]
+    # idxs_slc = [slclist.index(ifg) for ifg in slclist2019]
+
+    for fname in files_to_crop:
+        logger.info("Subsetting %s", fname)
+        filepath = os.path.join(project_dir, fname)
+        ext = os.path.splitext(filepath)[1]
+        f_out = filepath.replace(ext, out_str + ext)
+        if os.path.exists(f_out):
+            logger.info("%s exists: skipping", f_out)
+            continue
+
+        ds = xr.open_dataset(filepath, engine="h5netcdf", phony_dims="sort")
+        # ds_sub = ds.sel(ifg_idx=idxs_ifg, phony_dim_4=idxs_slc)
+        ds_sub = ds.sel(ifg_idx=idxs_ifg)
+        logger.info("Input dimensions: %s", ds.dims)
+        logger.info("Output dimensions: %s", ds_sub.dims)
+
+        ###
+        ###
+        dsets_to_compress = COMP_DSETS[fname]
+        compressions = {ds: {"zlib": True} for ds in dsets_to_compress}
+        logger.info("Writing to %s, compressing with: %s", f_out, compressions)
+        ds_sub.to_netcdf(f_out, engine="h5netcdf", encoding=compressions, mode="a")

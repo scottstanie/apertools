@@ -37,7 +37,10 @@ def load_bbox(bbox_file):
                 try:
                     return tuple(gj["bbox"])
                 except KeyError:
-                    return tuple(geometry.shape(gj['geometry']).bounds)
+                    try:
+                        return tuple(geometry.shape(gj["geometry"]).bounds)
+                    except KeyError:
+                        return tuple(geometry.shape(gj).bounds)
 
             else:
                 raise ValueError(
