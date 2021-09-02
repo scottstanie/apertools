@@ -134,13 +134,16 @@ def _create_isce_image(
 
     length, width = shape
 
-    if image_class is not None:
-        imgFunc = getattr(isceobj, "create" + image_class)
-        image = imgFunc()
-    else:
+    if image_class is None:
         image = isceobj.createImage()
         image.dataType = data_type
         image.bands = bands
+    elif image_class == "UnwImage":
+        imgFunc = getattr(isceobj.Image, "create" + image_class)
+        image = imgFunc()
+    else:
+        imgFunc = getattr(isceobj, "create" + image_class)
+        image = imgFunc()
 
     image.setFilename(filename)
     image.setWidth(width)

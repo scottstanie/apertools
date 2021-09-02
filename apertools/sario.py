@@ -826,6 +826,7 @@ def parse_ifglist_strings(date_pairs):
     # If we passed filename YYYYmmdd_YYYYmmdd.int
     if isinstance(date_pairs, str):
         dates = re.findall(r"\d{8}", date_pairs)
+        dates = list(sorted(set(dates)))
         if len(dates) != 2:
             raise ValueError("{} must contain 2 YYYYmmdd dates".format(date_pairs))
         return (_parse(dates[0]), _parse(dates[1]))

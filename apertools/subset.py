@@ -1,4 +1,5 @@
 import os
+import re
 from pprint import pprint
 from glob import glob
 import subprocess
@@ -236,6 +237,7 @@ ISCE_STRIPMAP_PROJECT_FILES = [
     ("merged/SLC/", "**/*.slc"),
     ("Igrams/", "**/*.int"),
     ("Igrams/", "**/*.cor"),
+    ("Igrams/", "**/*.unw"),
 ]
 
 
@@ -265,6 +267,8 @@ def crop_isce_project(
 
     cmd_base = "gdal_translate -projwin {ulx} {uly} {lrx} {lry} -of ISCE {inp} {out}"
     failures = []
+    ifg_folder_pat = re.compile(r"(?P<folder>\d{8}_\d{8})")
+    slc_folder_pat = re.compile(r"(?P<folder>\d{8})")
     for dirname, fileglob in tqdm(ISCE_STRIPMAP_PROJECT_FILES, position=0):
         filelist = glob(os.path.join(project_dir, dirname, fileglob))
         tqdm.write(
@@ -272,7 +276,18 @@ def crop_isce_project(
         )
         mkdir_p(os.path.join(output_dir, dirname))
         for f in tqdm(filelist, position=1):
-            outname = os.path.join(output_dir, dirname, os.path.split(f)[1])
+            _, filename = os.path.split(f)
+            # For SLCs or ifgs, add back in the sub-folder with the SAR date/ifg dates
+            if "slc" in f.lower() or "igrams" in f.lower():
+                pat = slc_folder_pat if "slc" in f.lower() else ifg_folder_pat
+                match = re.search(pat, f)
+                subfolder = match.group()
+                newdir = os.path.join(output_dir, dirname, subfolder)
+                mkdir_p(newdir)
+                outname = os.path.join(newdir, filename)
+            else:
+                outname = os.path.join(output_dir, dirname, filename)
+
             if os.path.exists(outname) and not overwrite:
                 if verbose:
                     tqdm.write("%s exists, skipping" % outname)
