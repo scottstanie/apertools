@@ -394,7 +394,8 @@ def crop_geocoded_project(
             if os.path.exists(outname):
                 logger.info("%s exists, skipping", outname)
 
-            ds = rioxarray.open_rasterio(fname)
+            filepath = os.path.join(project_dir, fname)
+            ds = rioxarray.open_rasterio(filepath)
             # rioxarray uses x/y instead of lat/lon
             ds_sub = ds.sel(x=slice(bbox[0], bbox[2]), y=slice(bbox[3], bbox[1]))
             driver = "ROI_PAC" if outname.endswith(".dem") else None
