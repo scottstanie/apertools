@@ -147,15 +147,32 @@ def plot_corr(
         fig.colorbar(axim, ax=ax)
 
 
-def kmeans(dem_da_sub, ifg_stack_sub, ifg_idx=0, k=3, std_normalize=True, log_height=True):
+def kmeans(
+    dem_da_sub,
+    ifg_stack_sub,
+    ifg_idx=0,
+    k=3,
+    std_normalize=True,
+    log_height=True,
+    cor_thresh=0.3,
+    cor_mean_sub=None,
+):
     from sklearn.cluster import KMeans
+    # from sklearn.cluster import SpectralClustering, DBSCAN
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
 
     llon, llat = np.meshgrid(dem_da_sub.lon, dem_da_sub.lat)
-    ifg = ifg_stack_sub[ifg_idx]
-    ifg_pixels = ifg.data.ravel()
-    dem_pixels = dem_da_sub.data.ravel()
+    ifg = ifg_stack_sub[ifg_idx].data
+    dem = dem_da_sub.data
+    if cor_thresh and cor_mean_sub is not None:
+        mask_cor = cor_mean_sub > cor_thresh
+        ifg = ifg[mask_cor]
+        dem = dem[mask_cor]
+        llon = llon[mask_cor]
+        llat = llat[mask_cor]
+    ifg_pixels = ifg.ravel()
+    dem_pixels = dem.ravel()
     goodidx = ~np.isnan(ifg_pixels)
     dem_pixels = dem_pixels[goodidx]
     ifg_pixels = ifg_pixels[goodidx]
@@ -165,6 +182,8 @@ def kmeans(dem_da_sub, ifg_stack_sub, ifg_idx=0, k=3, std_normalize=True, log_he
     X = np.stack((dem_pixels, ifg_pixels, lon, lat)).T
 
     kmeans = KMeans(init="k-means++", n_clusters=k)
+    # kmeans = SpectralClustering(n_clusters=k)
+    # kmeans = DBSCAN(eps=.15, min_samples=50)
     if log_height:
         # Make the height log transformed
         Xn = X.copy()
@@ -175,22 +194,25 @@ def kmeans(dem_da_sub, ifg_stack_sub, ifg_idx=0, k=3, std_normalize=True, log_he
     else:
         kmeans.fit(X)
 
-    centroids = kmeans.cluster_centers_
-    print("Height centers of clusters:")
-    print(centroids[:, 0])
+    try:
+        centroids = kmeans.cluster_centers_
+        print("Height centers of clusters:")
+        print(centroids[:, 0])
+        print("Lon, lat clusters:")
+        print(centroids[:, 2:])
+    except AttributeError:
+        pass
 
     # Plot the phase/el, labelled by color
     fig, axes = plt.subplots(2, 2, figsize=(10, 10))
     axes = axes.ravel()
     plot_phase_vs_elevation(X[:, 0], X[:, 1], labels=kmeans.labels_, ax=axes[0])
 
-    print("Lon, lat clusters:")
-    print(centroids[:, 2:])
     plot_kmeans_latlon(kmeans, X, ax=axes[1])
 
     # last, plot the DEM and the ifg
     dem_da_sub.plot.imshow(ax=axes[2])
-    ifg.plot.imshow(ax=axes[3])
+    ifg_stack_sub[ifg_idx].plot.imshow(ax=axes[3], cmap="RdBu")
     fig.tight_layout()
     return kmeans, fig, axes
 
