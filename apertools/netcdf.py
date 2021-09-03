@@ -138,7 +138,7 @@ def hdf5_to_netcdf(
             if copy_data_attrs:
                 for k, v in dset.attrs.items():
                     # Manual skip for the slclist or ifglist, or dimension scale stuff
-                    if "dates" in k or k.lower() == 'dimension_labels':
+                    if "dates" in k or 'dimension' in k.lower():
                         continue
                     setattr(data_var, k, v)
             if nstack > 1:
