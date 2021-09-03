@@ -14,6 +14,7 @@ from __future__ import division, print_function
 import re
 import os
 import difflib  # For station name misspelling checks
+from functools import reduce
 import datetime
 from datetime import date
 from itertools import repeat
@@ -339,7 +340,7 @@ def stations_within_image(
         good_idxs = []
         for row in gdf_within.itertuples():
             val = da.sel(lat=row.lat, lon=row.lon, method="nearest")
-            if np.any(np.isnan(val)) or np.any(val == v for v in bad_vals):
+            if np.any(np.isnan(val)) or np.any([val == v for v in bad_vals]):
                 continue
             else:
                 # good_stations.append([row.name, row.lon, row.lat])
@@ -798,33 +799,22 @@ class InsarGPSCompare:
         return insar_df
 
 
-def create_gps_los_df(
-    los_map_file=LOS_FILENAME, dset="linear_velocity", days_smooth=30
-):
+def create_gps_los_df(los_map_file=LOS_FILENAME, days_smooth=30):
     df_list = []
-    df_locations = stations_within_image(
-        "deformation_20190101_elevation.nc", dset="linear_velocity", mask_invalid=False
-    )
-    # station_df
+    df_locations = stations_within_image(filename=los_map_file)
     for row in df_locations.itertuples():
-        stat = row.name
         df_los = load_gps_los_data(los_map_file=los_map_file, station_name=row.name)
 
         # df = pd.DataFrame({"date": _series_to_date(gps_dts)})
         # df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
         # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
         df_list.append(df_los)
-    return df_list
-
-    min_date = np.min(pd.concat([df["date"] for df in df_list]))
-    max_date = np.max(pd.concat([df["date"] for df in df_list]))
-
-    # Now merge together based on uneven time data
-    gps_df = pd.DataFrame({"date": pd.date_range(start=min_date, end=max_date).date})
-    for df in df_list:
-        gps_df = pd.merge(gps_df, df, on="date", how="left")
-
-    return gps_df
+    # Now merge each one in turn, keeping all dates
+    df_merged = reduce(
+        lambda left, right: pd.merge(left, right, on=["date"], how="outer"), df_list
+    )
+    # Resort in case some dataframes were offset in date
+    return df_merged.sort_index()
 
 
 def combine_insar_gps_dfs(insar_df, gps_df):
