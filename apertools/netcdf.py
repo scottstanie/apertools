@@ -60,7 +60,7 @@ def hdf5_to_netcdf(
         lon_arr = lon_arr[col_left:col_right]
         rows, cols = len(lat_arr), len(lon_arr)
 
-        if stack_dim == "date":
+        if stack_dim in ("date", "slc_dates"):
             try:
                 slclist = sario.load_slclist_from_h5(filename, dset=dset_name)
             except KeyError:  # Give this one a shot too
@@ -137,7 +137,8 @@ def hdf5_to_netcdf(
                 data_var.units = data_units
             if copy_data_attrs:
                 for k, v in dset.attrs.items():
-                    if "dates" in k:  # Manual skip for the slclist or ifglist
+                    # Manual skip for the slclist or ifglist, or dimension scale stuff
+                    if "dates" in k or k.lower() == 'dimension_labels':
                         continue
                     setattr(data_var, k, v)
             if nstack > 1:
