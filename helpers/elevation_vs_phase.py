@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 # import multiprocessing
 # import os
 import numpy as np
+import xarray as xr
 
 from apertools import sario
 
@@ -41,7 +42,7 @@ def plot_phase_vs_elevation(elevation=None, phase=None, labels=None, ax=None):
             ax.scatter(elevation[idxs], phase[idxs], s=2, label=ii)
         ax.legend()
     else:
-        ax.scatter(elevation, phase, s=0.1)
+        ax.scatter(elevation.ravel(), phase.ravel(), s=0.1)
     ax.set_xlabel("elevation")
     ax.set_ylabel("unwrapped phase (rad)")
     ax.set_title("sample of all unwrapped igram points vs elevation")
@@ -53,10 +54,9 @@ def subsample_dem(
     stack_fname="unw_stack_20190101.h5",
     dem_fname="elevation_looked.dem",
     stack_dset="stack_flat_shifted",
-    cor_fname="cor_stack_20190101_mean.tif",
+    cor_fname="cor_stack_20190101.h5",
+    cor_mean_dset="stack_mean",
 ):
-    from apertools import sario
-    import xarray as xr
 
     ds = xr.open_dataset(stack_fname)
     ifg_stack = ds[stack_dset]
@@ -64,9 +64,8 @@ def subsample_dem(
     dem = xr.DataArray(
         sario.load(dem_fname), coords={"lat": ifg_stack.lat, "lon": ifg_stack.lon}
     )
-    cor = xr.DataArray(
-        sario.load(cor_fname), coords={"lat": ifg_stack.lat, "lon": ifg_stack.lon}
-    )
+    ds_cor = xr.open_dataset(cor_fname)
+    cor = ds_cor[cor_mean_dset]
     if sub > 1:
         ifg_stack_sub = ifg_stack.coarsen(lat=sub, lon=sub, boundary="trim").mean()
         dem_sub = dem.coarsen(lat=sub, lon=sub, boundary="trim").mean()
@@ -76,16 +75,21 @@ def subsample_dem(
         return dem, ifg_stack, cor
 
 
-def linear_trend(x, y, mask=None):
-    import xarray as xr
-
+def fit_linear(x, y, mask=None):
     if mask is not None:
         xx, yy = x[~mask], y[~mask]
+    else:
+        xx, yy = x, y
+    xx, yy = xx.ravel(), yy.ravel()
     mask_na = np.logical_or(np.isnan(xx), np.isnan(yy))
     xx, yy = xx[~mask_na], yy[~mask_na]
 
     pf = np.polyfit(xx, yy, 1)
-    # pf = np.polyfit(x[mask], y[mask], 1)
+    return xr.DataArray(pf)
+
+
+def linear_trend(x, y, mask=None):
+    pf = fit_linear(x, y, mask)
     return xr.DataArray(pf[0])
 
 
@@ -98,8 +102,6 @@ def plot_corr(
     cor_thresh=0.4,
     cor_mean_sub=None,
 ):
-    import xarray as xr
-    import matplotlib.pyplot as plt
 
     # cormean = sario.load("cor_stack_20190101_mean.tif")
     # cor_mean_sub = xr.DataArray(
@@ -278,12 +280,53 @@ def plot_kmeans_latlon(kmeans, X, ax=None):
     return ax
 
 
-if __name__ == "__main__":
-    # gdal_translate -outsize 2% 2% S1B_20190325.geo.vrt looked_S1B_20190325.geo.tif
-    ifg_date_list = sario.find_igrams(".")
-    unw_file_list = [
-        f.replace(".int", ".unw") for f in sario.find_igrams(".", parse=False)
-    ]
-    # unw_file_list = [f.replace(".int", ".unwflat") for f in sario.find_igrams(".", parse=False)]
-    save_unw_vs_elevation(unw_file_list)
-    plot_phase_vs_elevation()
+def fit_halves(dem, phase, col=500, vm=2):
+    poly_left = np.polyfit(dem.data[:, :col].ravel(), phase.data[:, :col].ravel(), 1)
+    poly_right = np.polyfit(dem.data[:, col:].ravel(), phase.data[:, col:].ravel(), 1)
+    plot_phase_vs_elevation(dem.data[:, :col].ravel(), phase.data[:, :col].ravel())
+    plot_phase_vs_elevation(dem.data[:, col:].ravel(), phase.data[:, col:].ravel())
+    print(poly_left, poly_right)
+    ll, rr = np.polyval(poly_left, dem), np.polyval(poly_right, dem)
+    ll[:, col:] = 0
+    rr[:, :col] = 0
+    fig, axes = plt.subplots(1, 2)
+    axes[0].imshow(ll, cmap="seismic_wide_y_r", vmax=vm, vmin=-vm)
+    axes[1].imshow(rr, cmap="seismic_wide_y_r", vmax=vm, vmin=-vm)
+    return ll, rr
+
+
+def remove_elevation(dem_da_sub, ifg_stack_sub):
+    cols = dem_da_sub.shape[1]
+    col_slices = [slice(0, cols // 2), slice(cols // 2, None)]
+    polys = []
+    col_maxes = []
+    cur_col = 0
+    for col_slice in col_slices:
+        # col_slice = col_slices[0]
+        col_slice = slice(cur_col, cur_col + cols // 2)
+        cur_col += cols // 2
+        col_maxes.append(cur_col)
+        print("Dem subset shape", dem_da_sub[:, col_slice].shape)
+        dem_pixels = dem_da_sub[:, col_slice].stack(space=("lat", "lon"))
+        ifg_pixels = ifg_stack_sub[:, :, col_slice].stack(space=("lat", "lon"))
+        print("ifg pixels shape:", ifg_pixels.shape)
+
+        xx = dem_pixels.data
+        yy = ifg_pixels.data.T
+        # mask_na = np.logical_or(np.isnan(xx), np.isnan(yy))
+        # xx, yy = xx[~mask_na], yy[~mask_na]
+
+        pf = np.polyfit(xx, np.nan_to_num(yy), 1)
+        polys.append(pf)
+        # print(pf)
+        # return xr.DataArray(pf)
+    return xr.DataArray(
+        np.stack(polys),
+        coords={
+            "max_col": col_maxes,
+            "poly_coeff": [1, 0],
+            "ifg_idx": ifg_stack_sub.ifg_idx,
+        },
+    )
+
+    # return trendvals
