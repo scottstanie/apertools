@@ -294,39 +294,3 @@ def fit_halves(dem, phase, col=500, vm=2):
     axes[1].imshow(rr, cmap="seismic_wide_y_r", vmax=vm, vmin=-vm)
     return ll, rr
 
-
-def remove_elevation(dem_da_sub, ifg_stack_sub):
-    cols = dem_da_sub.shape[1]
-    col_slices = [slice(0, cols // 2), slice(cols // 2, None)]
-    polys = []
-    col_maxes = []
-    cur_col = 0
-    for col_slice in col_slices:
-        # col_slice = col_slices[0]
-        col_slice = slice(cur_col, cur_col + cols // 2)
-        cur_col += cols // 2
-        col_maxes.append(cur_col)
-        print("Dem subset shape", dem_da_sub[:, col_slice].shape)
-        dem_pixels = dem_da_sub[:, col_slice].stack(space=("lat", "lon"))
-        ifg_pixels = ifg_stack_sub[:, :, col_slice].stack(space=("lat", "lon"))
-        print("ifg pixels shape:", ifg_pixels.shape)
-
-        xx = dem_pixels.data
-        yy = ifg_pixels.data.T
-        # mask_na = np.logical_or(np.isnan(xx), np.isnan(yy))
-        # xx, yy = xx[~mask_na], yy[~mask_na]
-
-        pf = np.polyfit(xx, np.nan_to_num(yy), 1)
-        polys.append(pf)
-        # print(pf)
-        # return xr.DataArray(pf)
-    return xr.DataArray(
-        np.stack(polys),
-        coords={
-            "max_col": col_maxes,
-            "poly_coeff": [1, 0],
-            "ifg_idx": ifg_stack_sub.ifg_idx,
-        },
-    )
-
-    # return trendvals
