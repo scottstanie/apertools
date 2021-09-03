@@ -1460,6 +1460,26 @@ def save_vrt(
     return outfile
 
 
+def shift_by_pixel(in_f, out_f, half_pixel=True):
+    """Shift a raster down and to the right by 1 (or 1/2 if `half_pixel`=True
+    
+    Can fix problem of pixel center vs pixel edge convention differences
+    """
+    import copy
+    import rasterio as rio
+
+    n = 2 if half_pixel else 1
+    with rio.open(in_f) as src:
+        meta2 = copy.deepcopy(src.meta)
+        tsl = list(src.meta["transform"])
+        tsl[2] += tsl[0] / n
+        tsl[5] += tsl[4] / n
+        a2 = rio.transform.Affine(*tsl[:6])
+        meta2["transform"] = a2
+        with rio.open(out_f, "w", **meta2) as dst:
+            dst.write(src.read())
+
+
 def create_derived_band(
     src_filename, outfile=None, src_dtype="CFloat32", desc=None, func="log10"
 ):
