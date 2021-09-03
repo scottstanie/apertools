@@ -53,21 +53,27 @@ def subsample_dem(
     stack_fname="unw_stack_20190101.h5",
     dem_fname="elevation_looked.dem",
     stack_dset="stack_flat_shifted",
+    cor_fname="cor_stack_20190101_mean.tif",
 ):
     from apertools import sario
     import xarray as xr
 
     ds = xr.open_dataset(stack_fname)
     ifg_stack = ds[stack_dset]
+    # Make DataArrays for the DEM and mean correlation image
     dem = xr.DataArray(
         sario.load(dem_fname), coords={"lat": ifg_stack.lat, "lon": ifg_stack.lon}
+    )
+    cor = xr.DataArray(
+        sario.load(cor_fname), coords={"lat": ifg_stack.lat, "lon": ifg_stack.lon}
     )
     if sub > 1:
         ifg_stack_sub = ifg_stack.coarsen(lat=sub, lon=sub, boundary="trim").mean()
         dem_sub = dem.coarsen(lat=sub, lon=sub, boundary="trim").mean()
-        return dem_sub, ifg_stack_sub
+        cor_sub = cor.coarsen(lat=sub, lon=sub, boundary="trim").mean()
+        return dem_sub, ifg_stack_sub, cor_sub
     else:
-        return dem, ifg_stack
+        return dem, ifg_stack, cor
 
 
 def linear_trend(x, y, mask=None):
@@ -84,20 +90,28 @@ def linear_trend(x, y, mask=None):
 
 
 def plot_corr(
-    dem_da_sub, ifg_stack, col_slices=[slice(None)], nbins=30, alpha=0.5, corthresh=0.4
+    dem_da_sub,
+    ifg_stack_sub,
+    col_slices=[slice(None)],
+    nbins=30,
+    alpha=0.5,
+    cor_thresh=0.4,
+    cor_mean_sub=None,
 ):
     import xarray as xr
     import matplotlib.pyplot as plt
 
-    cormean = sario.load("cor_stack_20190101_mean.tif")
-    cor_da = xr.DataArray(cormean, coords={"lat": ifg_stack.lat, "lon": ifg_stack.lon})
-    ifg_stack[0].data[(cor_da > corthresh)].shape
+    # cormean = sario.load("cor_stack_20190101_mean.tif")
+    # cor_mean_sub = xr.DataArray(
+    #     cormean, coords={"lat": ifg_stack_sub.lat, "lon": ifg_stack_sub.lon}
+    # )
+    # ifg_stack_sub[0].data[(cor_mean_sub > cor_thresh)].shape
 
     fig, axes = plt.subplots(4, len(col_slices))
     for idx, col_slice in enumerate(col_slices):
         ax = axes[0, idx]
         dem_pixels = dem_da_sub[:, col_slice].stack(space=("lat", "lon"))
-        ifg_pixels = ifg_stack[:, :, col_slice].stack(space=("lat", "lon"))
+        ifg_pixels = ifg_stack_sub[:, :, col_slice].stack(space=("lat", "lon"))
         print("ifg pixels shape:", ifg_pixels.shape)
 
         # # Option 1: get the correlation coefficients
@@ -109,8 +123,11 @@ def plot_corr(
         # mask_na = np.logical_and(np.isnan(x), np.isnan(y))
         # pf = np.polyfit(x[~mask_na], y[~mask_na], 1)
 
-        # if cor_thresh:
-        # ifg_mask = np.isnan(ifg_pixels)
+        ifg_mask = (
+            cor_mean_sub < cor_thresh
+            if (cor_thresh and cor_mean_sub is not None)
+            else None
+        )
 
         trendvals = xr.apply_ufunc(
             linear_trend,
@@ -143,8 +160,35 @@ def plot_corr(
 
         # row 3: plot the ifg with the strongest phase vs elevation trend
         ax = axes[3, idx]
-        axim = ax.imshow(ifg_stack[max_idx, :, col_slice])
+        axim = ax.imshow(ifg_stack_sub[max_idx, :, col_slice])
         fig.colorbar(axim, ax=ax)
+
+
+def fit_elevation_phase(dem_da_sub, ifg_stack_sub, cor_mean_sub=None, cor_thresh=0.3):
+    import xarray as xr
+
+    dem_pixels = dem_da_sub.stack(space=("lat", "lon"))
+    ifg_pixels = ifg_stack_sub.stack(space=("lat", "lon"))
+    print("ifg pixels shape:", ifg_pixels.shape)
+
+    ifg_mask = (
+        cor_mean_sub < cor_thresh if (cor_thresh and cor_mean_sub is not None) else None
+    )
+
+    trendvals = xr.apply_ufunc(
+        linear_trend,
+        dem_pixels,
+        ifg_pixels,
+        ifg_mask,
+        vectorize=True,
+        input_core_dims=[
+            ["space"],
+            ["space"],
+            ["space"],
+        ],  # reduce along "space", leaving 1 per ifg
+    )
+    trendvals *= 10  # Go from cm/meter of slope to mm/meter
+    return trendvals
 
 
 def kmeans(
@@ -158,6 +202,7 @@ def kmeans(
     cor_mean_sub=None,
 ):
     from sklearn.cluster import KMeans
+
     # from sklearn.cluster import SpectralClustering, DBSCAN
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
