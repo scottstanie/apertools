@@ -19,6 +19,7 @@ except NameError:
 
 logger = get_log()
 
+DEFAULT_CMAP = "seismic_wide_y_r"
 
 class DateSlider(Slider):
     # https://matplotlib.org/stable/_modules/matplotlib/widgets.html#Slider
@@ -151,7 +152,7 @@ def plot_image(
     dset=None,
     fig=None,
     ax=None,
-    cmap="seismic_wide_y",
+    cmap=DEFAULT_CMAP,
     rsc_data=None,
     title="",
     label="",
@@ -255,7 +256,7 @@ def view_stack(
     display_img,
     slclist=None,
     label="Centimeters",
-    cmap="seismic_wide_y",
+    cmap=DEFAULT_CMAP,
     perform_shift=False,
     title="",
     vmin=None,
@@ -551,7 +552,7 @@ def plot_img_diff(
     titles=[],
     show_diff=True,
     vdiff=4,
-    cmap="seismic_wide_y",
+    cmap=DEFAULT_CMAP,
     cbar_label="",
     show=True,
     figsize=None,
