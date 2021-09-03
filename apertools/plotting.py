@@ -21,6 +21,7 @@ logger = get_log()
 
 DEFAULT_CMAP = "seismic_wide_y_r"
 
+
 class DateSlider(Slider):
     # https://matplotlib.org/stable/_modules/matplotlib/widgets.html#Slider
     def _format(self, val):
@@ -133,6 +134,7 @@ def plot_rewrapped(unw, ax=None, cmap="dismph", show_cbar=True):
     if show_cbar:
         fig = ax.get_figure()
         fig.colorbar(axim, ax=ax)
+
 
 def get_fig_ax(fig, ax, **figkwargs):
     """Handle passing None to either fig or ax by creating new, returns both"""
@@ -570,7 +572,9 @@ def plot_img_diff(
     ncols = n + 1 if show_diff else n
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(1, ncols, sharex=True, sharey=True, figsize=figsize, squeeze=False)
+    fig, axes = plt.subplots(
+        1, ncols, sharex=True, sharey=True, figsize=figsize, squeeze=False
+    )
     axes = axes.ravel()
     for ii in range(n):
         ax = axes[ii]
@@ -725,3 +729,9 @@ def set_style(size=15, nolatex=True):
     plt.rcParams.update(style_dict)
     style = ["science", "no-latex"] if nolatex else "science"
     plt.style.use(style)
+    try:
+        import xarray as xr
+
+        xr.set_options(cmap_divergent="RdBu")
+    except:
+        pass

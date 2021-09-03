@@ -121,6 +121,8 @@ IFGLIST_DSET = "ifg_dates"
 DEM_RSC_DSET = "dem_rsc"
 STACK_FLAT_DSET = "stack_flat"
 
+LOS_FILENAME = "los_enu.tif"
+
 # List of platforms where i've set up loading for their files
 PLATFORMS = ("sentinel", "uavsar")
 

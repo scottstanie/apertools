@@ -22,19 +22,17 @@ from functools import lru_cache
 import requests
 import h5py
 import numpy as np
+import pandas as pd
+import xarray as xr
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
 # from scipy.ndimage.filters import uniform_filter1d
-try:
-    import pandas as pd
-except ImportError:
-    print("Warning: pandas not installed. apertools.gps will fail")
-    print(" to use gps module, pip install pandas")
 
 import apertools.los
 import apertools.utils
 import apertools.sario
+from apertools.sario import LOS_FILENAME
 import apertools.plotting
 from apertools.log import get_log
 
@@ -84,9 +82,9 @@ def plot_gps_los(
     insar_mm_list=[],
     labels=None,
     insar_colors=None,
-    ref="TXKM",
+    ref=None,
     start_date=date(2014, 11, 1),
-    end_date=date(2019, 2, 1),
+    end_date=None,
     days_smooth=0,
     ylim=(-3, 3),
     yticks=[-2, 0, 2],
@@ -98,33 +96,34 @@ def plot_gps_los(
     rasterized=True,
     gps_color="#86b251",
     ms=7,
-    los_map_file="los_map.h5",
+    los_map_file=LOS_FILENAME,
 ):
     if labels is None:
         labels = repeat(None, len(insar_mm_list))
     if insar_colors is None:
         insar_colors = repeat(None, len(insar_mm_list))
 
-    fig, ax = plt.subplots()
-    dts, los = load_gps_los_data(
-        los_map_file=los_map_file,
+    df = load_gps_los_data(
         station_name=name,
+        los_map_file=los_map_file,
         days_smooth=days_smooth,
         reference_station=ref,
         start_date=start_date,
         end_date=end_date,
     )
-    day_nums = (dts - dts.iloc[0]).dt.days
+    dts = df.index
+    day_nums = (dts - dts[0]).days
     # day_nums = _get_day_nums(dts)
 
+    fig, ax = plt.subplots()
     if bigfont:
         plt.rcParams["font.size"] = 20
         plt.rcParams["font.weight"] = "bold"
 
     ax.plot(
-        dts,
-        los,
-        ".",
+        df.index,
+        df.los,
+        marker=".",
         color=gps_color,
         markersize=ms,
         label="GPS",
@@ -133,14 +132,14 @@ def plot_gps_los(
 
     for (label, insar_mm, c) in zip(labels, insar_mm_list, insar_colors):
         insar_cm_day = insar_mm / 365 / 10
-        full_defo = insar_cm_day * (dts.iloc[-1] - dts.iloc[0]).days
+        full_defo = insar_cm_day * (dts[-1] - dts[0]).days
         bias = -full_defo / 2 if offset else 0
 
         # ipdb.set_trace()
         ax.plot(dts, bias + day_nums * insar_cm_day, "-", c=c, lw=lw, label=label)
 
     ax.grid(which="major", alpha=0.5)
-    ax.set_xticks(pd.date_range(dts[0], end=dts.iloc[-1], freq="365D"))
+    ax.set_xticks(pd.date_range(dts[0], end=dts[-1], freq="365D"))
     ax.set_yticks(yticks)
     ax.set_ylabel(ylabel)
 
@@ -299,7 +298,14 @@ def _clean_gps_df(df, start_date=None, end_date=None):
     return df_enu
 
 
-def stations_within_image(da, bad_vals=[0], mask_invalid=True):
+def stations_within_image(
+    filename=None,
+    dset=None,
+    da=None,
+    bad_vals=[0],
+    mask_invalid=True,
+    mask_by_date=False,
+):
     """Given an image, find gps stations contained in area
 
     Should be GDAL- or xarray-readable with lat/lon coordinates
@@ -317,24 +323,38 @@ def stations_within_image(da, bad_vals=[0], mask_invalid=True):
     from shapely import geometry
     from apertools import latlon
 
+    if da is None:
+        try:
+            da = xr.open_dataset(filename)[dset]
+        except Exception as e:
+            print(e)
+            print("Trying rasterio")
+            return stations_within_image_rio(filename)
+
     gdf = read_station_llas(to_geodataframe=True)
     image_bbox = geometry.box(*latlon.bbox_xr(da))
     gdf_within = gdf[gdf.geometry.within(image_bbox)]
-    if not mask_invalid:
-        return gdf_within
     # good_stations = []
-    good_idxs = []
-    for row in gdf_within.itertuples():
-        val = da.sel(lat=row.lat, lon=row.lon, method="nearest")
-        if np.isnan(val) or any(val == v for v in bad_vals):
-            continue
-        else:
-            # good_stations.append([row.name, row.lon, row.lat])
-            good_idxs.append(row.Index)
-    # to keep 'name' as column, but reset the former index to start at 0
-    return gdf_within.loc[good_idxs].reset_index(drop=True)
+    if mask_invalid:
+        good_idxs = []
+        for row in gdf_within.itertuples():
+            val = da.sel(lat=row.lat, lon=row.lon, method="nearest")
+            if np.any(np.isnan(val)) or np.any(val == v for v in bad_vals):
+                continue
+            else:
+                # good_stations.append([row.name, row.lon, row.lat])
+                good_idxs.append(row.Index)
+        # to keep 'name' as column, but reset the former index to start at 0
+        gdf_within = gdf_within.loc[good_idxs].reset_index(drop=True)
+    return gdf_within
     # # to have 'name' as index
     # return gdf_within.loc[good_idxs].set_index('name')
+
+    # if mask_by_date:
+    #     for name in list(da.coords):
+    #         if 'date' in name:
+    #             dates = da[name]
+    #     min_date, max_date = dates.min(), dates.max()
 
 
 def stations_within_image_rio(filename=None, mask_invalid=True, bad_vals=[0], band=1):
@@ -488,28 +508,23 @@ def station_rowcol(station_name, rsc_data=None, filename=None):
 
 
 def station_distance(station_name1, station_name2):
+    """Find distance (in meters) between two gps stations
+
+    Args:
+        station_name1 (str): name of first GPS station
+        station_name2 (str): name of second GPS station
+
+    Returns:
+        float: distance (in meters)
+    """
     lonlat1 = station_lonlat(station_name1)
     lonlat2 = station_lonlat(station_name2)
     return apertools.latlon.latlon_to_dist(lonlat1[::-1], lonlat2[::-1])
 
 
-def stations_within_rsc(rsc_filename=None, rsc_data=None, gps_filename=None):
-    if rsc_data is None:
-        if rsc_filename is None:
-            raise ValueError("Need rsc_data or rsc_filename")
-        rsc_data = apertools.sario.load(rsc_filename)
-
-    df = read_station_llas(filename=gps_filename)
-    station_lon_lat_arr = df[["lon", "lat"]].values
-    contains_bools = [
-        apertools.latlon.grid_contains(s, **rsc_data) for s in station_lon_lat_arr
-    ]
-    return df[contains_bools][["name", "lon", "lat"]].values
-
-
 def download_station_data(station_name):
     station_name = station_name.upper()
-    plate = get_station_plate(station_name)
+    plate = _get_station_plate(station_name)
     # plate = "PA"
     url = GPS_BASE_URL.format(station=station_name, plate=plate)
     response = requests.get(url)
@@ -524,7 +539,7 @@ def download_station_data(station_name):
         f.write(response.text)
 
 
-def get_station_plate(station_name):
+def _get_station_plate(station_name):
     url = GPS_STATION_URL.format(station=station_name)
     response = requests.get(url)
     response.raise_for_status()
@@ -603,8 +618,8 @@ def plot_gps_enu(
 
 
 def load_gps_los_data(
-    los_map_file=None,
     station_name=None,
+    los_map_file=LOS_FILENAME,
     to_cm=True,
     zero_mean=True,
     zero_start=False,
@@ -656,16 +671,17 @@ def load_gps_los_data(
     df_los = pd.DataFrame(data=los_gps_data, index=df_enu.index, columns=["los"])
     if reference_station is not None:
         df_ref = load_gps_los_data(
-            los_map_file,
-            reference_station,
-            to_cm,
-            zero_mean,
-            zero_start,
-            start_date,
-            end_date,
+            station_name=station_name,
+            los_map_file=los_map_file,
+            to_cm=to_cm,
+            zero_mean=zero_mean,
+            zero_start=zero_start,
+            start_date=start_date,
+            end_date=end_date,
             reference_station=None,
+            enu_coeffs=enu_coeffs,
             force_download=force_download,
-            days_smooth=days_smooth,
+            days_smooth=days_smooth
         )
         dfm = pd.merge(
             df_los,
@@ -764,42 +780,95 @@ def _series_to_date(series):
     return pd.to_datetime(series).apply(lambda row: row.date())
 
 
-def create_insar_gps_df(
-    geo_path="..",
-    los_map_file="los_map.h5",
-    defo_filename="deformation.h5",
-    station_name_list=[],
-    reference_station=None,
-    window_size=1,
-    days_smooth_insar=None,
-    days_smooth_gps=None,
-    create_diffs=True,
-    **kwargs,
-):
-    """Set days_smooth to None or 0 to avoid any data smoothing
+from dataclasses import dataclass
 
-    If refernce station is specified, all timeseries will subtract
-    that station's data
-    """
-    if not station_name_list:
-        igrams_dir = os.path.join(geo_path, "igrams")
-        station_name_list = _load_station_list(
-            igrams_dir=igrams_dir,
+
+@dataclass
+class InsarGPSCompare:
+    insar_filename: str = "deformation.h5"
+    dset: str = "linear_velocity"
+    los_map_file: str = LOS_FILENAME
+    reference_station: str = None
+    window_size: int = 3
+    days_smooth_insar: int = None
+    days_smooth_gps: int = None
+    create_diffs: bool = True
+
+    def run(self):
+        """Set days_smooth to None or 0 to avoid any data smoothing
+
+        If refernce station is specified, all timeseries will subtract
+        that station's data
+        """
+        station_df = stations_within_image(filename=self.insar_filename, dset=self.dset)
+        return station_df
+
+        insar_df = self.create_insar_df(
+            self.insar_filename, station_df, self.window_size, self.days_smooth_insar
+        )
+        gps_df = create_gps_los_df(
+            self.los_map_file, self.station_name_list, self.days_smooth_gps
+        )
+        df = combine_insar_gps_dfs(insar_df, gps_df)
+        if self.reference_station:
+            df = subtract_reference(df, self.reference_station)
+        if self.create_diffs:
+            for s in self.station_name_list:
+                df[f"{s}_diff"] = df[f"{s}_gps"] - df[f"{s}_insar"]
+        return _remove_bad_cols(df)
+
+    def create_insar_df(self):
+        # defo_filename="deformation.h5", station_df=None, window_size=1, days_smooth=5
+        # ):
+        """Set days_smooth to None or 0 to avoid any data smoothing"""
+        slclist, insar_ts_list = find_insar_ts(
             defo_filename=defo_filename,
             station_name_list=station_name_list,
+            window_size=window_size,
+        )
+        insar_df = pd.DataFrame({"date": _series_to_date(pd.Series(slclist))})
+        for stat, ts in zip(station_name_list, insar_ts_list):
+            insar_df[stat + "_insar"] = moving_average(ts, days_smooth)
+            # insar_df[stat + "_smooth_insar"] = moving_average(ts, days_smooth)
+        return insar_df
+
+
+def create_gps_los_df(los_map_file=LOS_FILENAME, station_name_list=[], days_smooth=30):
+    df_list = []
+    for stat in station_name_list:
+        gps_dts, los_gps_data = load_gps_los_data(
+            los_map_file=los_map_file, station_name=stat
         )
 
-    insar_df = create_insar_df(
-        defo_filename, station_name_list, window_size, days_smooth_insar
+        df = pd.DataFrame({"date": _series_to_date(gps_dts)})
+        df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
+        # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
+        df_list.append(df)
+
+    min_date = np.min(pd.concat([df["date"] for df in df_list]))
+    max_date = np.max(pd.concat([df["date"] for df in df_list]))
+
+    # Now merge together based on uneven time data
+    gps_df = pd.DataFrame({"date": pd.date_range(start=min_date, end=max_date).date})
+    for df in df_list:
+        gps_df = pd.merge(gps_df, df, on="date", how="left")
+
+    return gps_df
+
+
+def combine_insar_gps_dfs(insar_df, gps_df):
+    # First constrain the date range to just the InSAR min/max dates
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range(
+                start=np.min(insar_df["date"]), end=np.max(insar_df["date"])
+            ).date
+        }
     )
-    gps_df = create_gps_los_df(los_map_file, station_name_list, days_smooth_gps)
-    df = combine_insar_gps_dfs(insar_df, gps_df)
-    if reference_station:
-        df = subtract_reference(df, reference_station)
-    if create_diffs:
-        for s in station_name_list:
-            df[f"{s}_diff"] = df[f"{s}_gps"] - df[f"{s}_insar"]
-    return _remove_bad_cols(df)
+    df = pd.merge(df, insar_df, on="date", how="left")
+    df = pd.merge(df, gps_df, on="date", how="left", suffixes=("", "_gps"))
+    # Now final df has datetime as index
+    return df.set_index("date")
 
 
 def _find_bad_cols(df, nan_threshold):
@@ -844,60 +913,6 @@ def subtract_reference(df, reference_station):
         elif "insar" in col:
             df_out[col] = df[col] - df[insar_ref_col]
     return df_out
-
-
-def create_insar_df(
-    defo_filename="deformation.h5", station_name_list=[], window_size=1, days_smooth=5
-):
-    """Set days_smooth to None or 0 to avoid any data smoothing"""
-    slclist, insar_ts_list = find_insar_ts(
-        defo_filename=defo_filename,
-        station_name_list=station_name_list,
-        window_size=window_size,
-    )
-    insar_df = pd.DataFrame({"date": _series_to_date(pd.Series(slclist))})
-    for stat, ts in zip(station_name_list, insar_ts_list):
-        insar_df[stat + "_insar"] = moving_average(ts, days_smooth)
-        # insar_df[stat + "_smooth_insar"] = moving_average(ts, days_smooth)
-    return insar_df
-
-
-def create_gps_los_df(los_map_file="los_map.h5", station_name_list=[], days_smooth=30):
-    df_list = []
-    for stat in station_name_list:
-        gps_dts, los_gps_data = load_gps_los_data(
-            los_map_file=los_map_file, station_name=stat
-        )
-
-        df = pd.DataFrame({"date": _series_to_date(gps_dts)})
-        df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
-        # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
-        df_list.append(df)
-
-    min_date = np.min(pd.concat([df["date"] for df in df_list]))
-    max_date = np.max(pd.concat([df["date"] for df in df_list]))
-
-    # Now merge together based on uneven time data
-    gps_df = pd.DataFrame({"date": pd.date_range(start=min_date, end=max_date).date})
-    for df in df_list:
-        gps_df = pd.merge(gps_df, df, on="date", how="left")
-
-    return gps_df
-
-
-def combine_insar_gps_dfs(insar_df, gps_df):
-    # First constrain the date range to just the InSAR min/max dates
-    df = pd.DataFrame(
-        {
-            "date": pd.date_range(
-                start=np.min(insar_df["date"]), end=np.max(insar_df["date"])
-            ).date
-        }
-    )
-    df = pd.merge(df, insar_df, on="date", how="left")
-    df = pd.merge(df, gps_df, on="date", how="left", suffixes=("", "_gps"))
-    # Now final df has datetime as index
-    return df.set_index("date")
 
 
 def create_gps_enu_df(
@@ -1122,33 +1137,6 @@ def get_final_gps_insar_values(df, linear=True, as_df=False, velocity=True):
         )
 
 
-def _load_stations(igrams_dir=None, defo_filename=None, defo_full_path=None):
-    directory, filename, full_path = apertools.sario.get_full_path(
-        igrams_dir, defo_filename, defo_full_path
-    )
-    defo_img = apertools.latlon.load_deformation_img(
-        filename=filename, full_path=full_path
-    )
-    existing_station_tuples = stations_within_image(defo_img)
-    return existing_station_tuples
-
-
-def _load_station_list(
-    igrams_dir=None, defo_filename=None, defo_full_path=None, station_name_list=[]
-):
-    existing_station_tuples = _load_stations(igrams_dir, defo_filename, defo_full_path)
-    if not station_name_list:
-        # Take all station names
-        station_name_list = [name for name, lon, lat in existing_station_tuples]
-    else:
-        station_name_list = [
-            name
-            for name, lon, lat in existing_station_tuples
-            if name in station_name_list
-        ]
-    return sorted(station_name_list, key=lambda name: station_name_list.index(name))
-
-
 def _stations_from_df(df):
     """Takes df with columns ['NMHB_insar', 'TXAD_insar',...], returns unique station names"""
     return list(set(map(lambda s: s.split("_")[0], df.columns)))
@@ -1310,13 +1298,16 @@ def plot_gps_east_by_loc(
 
 
 def get_mean_correlations(
-    igrams_dir=None, defo_filename=None, defo_full_path=None, cor_filename="cor_stack.h5"
+    igrams_dir=None,
+    defo_filename=None,
+    defo_full_path=None,
+    cor_filename="cor_stack.h5",
 ):
-    existing_station_tuples = _load_stations(igrams_dir, defo_filename, defo_full_path)
+    available_station_tuples = _load_stations(igrams_dir, defo_filename, defo_full_path)
     corrs = {}
     dem_rsc = apertools.sario.load_dem_from_h5(defo_filename)
     with h5py.File(cor_filename) as f:
-        for name, lon, lat in existing_station_tuples:
+        for name, lon, lat in available_station_tuples:
             row, col = apertools.latlon.latlon_to_rowcol(lat, lon, dem_rsc)
             corrs[name] = f["mean_stack"][row, col]
     return corrs
