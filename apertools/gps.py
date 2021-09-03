@@ -327,9 +327,9 @@ def stations_within_image(
         try:
             da = xr.open_dataset(filename)[dset]
         except Exception as e:
-            print(e)
-            print("Trying rasterio")
-            return stations_within_image_rio(filename)
+            import rioxarray
+
+            da = rioxarray.open_rasterio(filename).rename({"x": "lon", "y": "lat"})
 
     gdf = read_station_llas(to_geodataframe=True)
     image_bbox = geometry.box(*latlon.bbox_xr(da))
@@ -355,41 +355,6 @@ def stations_within_image(
     #         if 'date' in name:
     #             dates = da[name]
     #     min_date, max_date = dates.min(), dates.max()
-
-
-def stations_within_image_rio(filename=None, mask_invalid=True, bad_vals=[0], band=1):
-    import rasterio as rio
-    from shapely import geometry
-
-    # with rio.open(filename) as ds:
-    ds = rio.open(filename)
-    image_bbox = geometry.box(*ds.bounds)
-    image = ds.read(band)
-    # if image_ll is None:
-    # image_ll = apertools.latlon.LatlonImage(filename=filename)
-
-    df = read_station_llas()
-    station_lon_lat_arr = df[["lon", "lat"]].values
-    # contains_bools = image_ll.contains(station_lon_lat_arr)
-    contains_bools = np.array(
-        [image_bbox.contains(geometry.Point(p)) for p in station_lon_lat_arr]
-    )
-    candidates = df.loc[contains_bools, ["name", "lon", "lat"]].values
-    good_stations = []
-    if mask_invalid:
-        for name, lon, lat in candidates:
-            # val = image[..., lat, lon]
-            row, col = ds.index(lon, lat)
-            val = image[..., row, col]
-            # TODO: with window 1 reference, it's 0
-            if np.isnan(val) or any(val == v for v in bad_vals):
-                continue
-            else:
-                good_stations.append([name, lon, lat])
-    else:
-        good_stations = candidates
-    ds.close()
-    return good_stations
 
 
 def save_station_points_kml(station_iter):
@@ -681,7 +646,7 @@ def load_gps_los_data(
             reference_station=None,
             enu_coeffs=enu_coeffs,
             force_download=force_download,
-            days_smooth=days_smooth
+            days_smooth=days_smooth,
         )
         dfm = pd.merge(
             df_los,
@@ -833,17 +798,23 @@ class InsarGPSCompare:
         return insar_df
 
 
-def create_gps_los_df(los_map_file=LOS_FILENAME, station_name_list=[], days_smooth=30):
+def create_gps_los_df(
+    los_map_file=LOS_FILENAME, dset="linear_velocity", days_smooth=30
+):
     df_list = []
-    for stat in station_name_list:
-        gps_dts, los_gps_data = load_gps_los_data(
-            los_map_file=los_map_file, station_name=stat
-        )
+    df_locations = stations_within_image(
+        "deformation_20190101_elevation.nc", dset="linear_velocity", mask_invalid=False
+    )
+    # station_df
+    for row in df_locations.itertuples():
+        stat = row.name
+        df_los = load_gps_los_data(los_map_file=los_map_file, station_name=row.name)
 
-        df = pd.DataFrame({"date": _series_to_date(gps_dts)})
-        df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
+        # df = pd.DataFrame({"date": _series_to_date(gps_dts)})
+        # df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
         # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
-        df_list.append(df)
+        df_list.append(df_los)
+    return df_list
 
     min_date = np.min(pd.concat([df["date"] for df in df_list]))
     max_date = np.max(pd.concat([df["date"] for df in df_list]))
