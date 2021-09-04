@@ -240,7 +240,6 @@ def filter_slclist_ifglist(
         )
     valid_ifg_pairs = list(sorted(valid_ifg_pairs + annual_ifgs))
 
-
     if verbose:
         logger.info(
             f"Ignoring {len(ifg_date_list) - len(valid_ifg_pairs)} igrams total"
@@ -248,7 +247,7 @@ def filter_slclist_ifglist(
 
     # Now just use the ones remaining to reform the unique SAR dates
     valid_sar_date = list(sorted(set(itertools.chain.from_iterable(valid_ifg_pairs))))
-    # breakpoint()    
+    # breakpoint()
     # Does the same as np.searchsorted, but works on a list[tuple]
     valid_ifg_idxs = [ifg_date_list.index(tup) for tup in valid_ifg_pairs]
     return valid_sar_date, valid_ifg_pairs, valid_ifg_idxs
@@ -605,12 +604,28 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
         print("Making window_size an odd number (%s) to get square" % window_size)
 
     win_size = window_size // 2
-    return func(
-        stack[
-            :, row - win_size : row + win_size + 1, col - win_size : col + win_size + 1
-        ],
-        axis=(1, 2),
-    )  # yapf: disable
+    subset = stack[
+        :, row - win_size : row + win_size + 1, col - win_size : col + win_size + 1
+    ]
+    return func(subset, axis=(1, 2))
+
+
+def window_stack_xr(da, x, y, window_size=3, x_name="lon", y_name="lat"):
+    """Combines square around (row, col) in 3D DataArray to a 1D array
+
+    Used to average around a pixel in a stack and produce a timeseries
+    """
+    x_loc = da.indexes[x_name].get_loc(x, method="nearest")
+    y_loc = da.indexes[y_name].get_loc(y, method="nearest")
+
+    w = window_size // 2 if window_size % 2 == 1 else (window_size - 1) // 2
+    subset = da.isel(
+        {
+            y_name: slice(y_loc - w, y_loc + w + 1),
+            x_name: slice(x_loc - w, x_loc + w + 1),
+        }
+    )
+    return subset.mean(dim=(x_name, y_name))
 
 
 # Randoms using the sentinelapi

@@ -14,11 +14,11 @@ from __future__ import division, print_function
 import re
 import os
 import difflib  # For station name misspelling checks
-from functools import reduce
 import datetime
 from datetime import date
 from itertools import repeat
 from functools import lru_cache
+from pandas.core.tools.datetimes import to_datetime
 
 import requests
 import h5py
@@ -666,20 +666,6 @@ def load_gps_los_data(
     return df_los
 
 
-def _merge_los(dt1, los1, dt_ref, los_ref):
-    df1 = pd.DataFrame(data={"g1": los1, "date": dt1})
-    df_ref = pd.DataFrame(data={"gref": los_ref, "date": dt_ref})
-
-    start = np.min(pd.concat([dt1, dt_ref]))
-    end = np.max(pd.concat([dt1, dt1]))
-    dt_merged = pd.date_range(start=start, end=end)
-
-    df = pd.DataFrame(data={"date": dt_merged})
-    df = pd.merge(df, df1, on="date", how="left")
-    df = pd.merge(df, df_ref, on="date", how="left")
-    return df["date"], (df["g1"] - df["gref"]).values
-
-
 def moving_average(arr, window_size=7):
     """Takes a 1D array and returns the running average of same size"""
     if not window_size:
@@ -766,101 +752,121 @@ class InsarGPSCompare:
         If refernce station is specified, all timeseries will subtract
         that station's data
         """
-        station_df = stations_within_image(filename=self.insar_filename, dset=self.dset)
-        return station_df
+        df_gps_locations = stations_within_image(
+            filename=self.insar_filename, dset=self.dset
+        )
 
-        insar_df = self.create_insar_df(
-            self.insar_filename, station_df, self.window_size, self.days_smooth_insar
-        )
-        gps_df = create_gps_los_df(
-            self.los_map_file, self.station_name_list, self.days_smooth_gps
-        )
-        df = combine_insar_gps_dfs(insar_df, gps_df)
+        gps_df = self.create_gps_los_df(df_gps_locations)
+        insar_df = self.create_insar_df(df_gps_locations)
+        df = self.combine_insar_gps_dfs(insar_df, gps_df)
         if self.reference_station:
             df = subtract_reference(df, self.reference_station)
         if self.create_diffs:
-            for s in self.station_name_list:
-                df[f"{s}_diff"] = df[f"{s}_gps"] - df[f"{s}_insar"]
-        return _remove_bad_cols(df)
+            for stat in df_gps_locations["name"]:
+                df[f"{stat}_diff"] = df[f"{stat}_gps"] - df[f"{stat}_insar"]
+        return self._remove_bad_cols(df)
 
-    def create_insar_df(self):
-        # defo_filename="deformation.h5", station_df=None, window_size=1, days_smooth=5
-        # ):
+    def create_gps_los_df(self, df_gps_locations):
+        df_list = []
+        # df_locations = stations_within_image(filename=los_map_file)
+        for row in df_gps_locations.itertuples():
+            df_los = load_gps_los_data(
+                los_map_file=self.los_map_file, station_name=row.name
+            )
+
+            # np.array(pd.Series(arr).rolling(window_size).mean())
+            # df = pd.DataFrame({"date": _series_to_date(gps_dts)})
+            # df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
+            # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
+            df_list.append(df_los)
+        # Now merge each one in turn, keeping all dates
+        gps_df = pd.concat(df_list, join="outer", axis="columns")
+        # These will all have the same name, so set equal to the station
+        gps_df.columns = df_gps_locations.name.values
+        return gps_df
+
+    def create_insar_df(self, df_gps_locations):
         """Set days_smooth to None or 0 to avoid any data smoothing"""
-        slclist, insar_ts_list = find_insar_ts(
-            defo_filename=defo_filename,
-            station_name_list=station_name_list,
-            window_size=window_size,
+        with xr.open_dataset(self.insar_filename) as ds:
+            da = ds[self.dset]
+            if "date" in da.coords:  # 3D
+                is_2d = False
+                dates = da.indexes["date"]
+            else:  # 2D, a velocity
+                is_2d = True
+                min_date = pd.to_datetime(ds.date.data).min()
+                max_date = pd.to_datetime(ds.date.data).max()
+                dates = [min_date, max_date]
+        insar_df = pd.DataFrame({"date": dates})
+        for row in df_gps_locations.itertuples():
+            # df_los = load_gps_los_data(los_map_file=self.los_map_file, station_name=row.name)
+            ts = apertools.utils.window_stack_xr(
+                da, row.lon, row.lat, window_size=self.window_size
+            )
+            if is_2d:
+                cum_defo = ts.item() * (max_date - min_date).days / 365
+                insar_df[row.name] = [0, cum_defo]
+            else:
+                insar_df[row.name] = ts
+
+        return insar_df.set_index("date")
+
+    def combine_insar_gps_dfs(self, insar_df, gps_df):
+        df = pd.merge(
+            gps_df,
+            insar_df,
+            how="left",
+            left_on="date",
+            right_on="date",
+            suffixes=("_gps", "_insar"),
         )
-        insar_df = pd.DataFrame({"date": _series_to_date(pd.Series(slclist))})
-        for stat, ts in zip(station_name_list, insar_ts_list):
-            insar_df[stat + "_insar"] = moving_average(ts, days_smooth)
-            # insar_df[stat + "_smooth_insar"] = moving_average(ts, days_smooth)
-        return insar_df
+        # constrain the date range to just the InSAR min/max dates
+        insar_min = insar_df.index.min()
+        insar_max = insar_df.index.max()
+        return df.loc[(df.index >= insar_min) & (df.index <= insar_max)]
 
-
-def create_gps_los_df(los_map_file=LOS_FILENAME, days_smooth=30):
-    df_list = []
-    df_locations = stations_within_image(filename=los_map_file)
-    for row in df_locations.itertuples():
-        df_los = load_gps_los_data(los_map_file=los_map_file, station_name=row.name)
-
-        # df = pd.DataFrame({"date": _series_to_date(gps_dts)})
-        # df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
-        # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
-        df_list.append(df_los)
-    # Now merge each one in turn, keeping all dates
-    df_merged = reduce(
-        lambda left, right: pd.merge(left, right, on=["date"], how="outer"), df_list
-    )
-    # Resort in case some dataframes were offset in date
-    return df_merged.sort_index()
-
-
-def combine_insar_gps_dfs(insar_df, gps_df):
-    # First constrain the date range to just the InSAR min/max dates
-    df = pd.DataFrame(
-        {
-            "date": pd.date_range(
-                start=np.min(insar_df["date"]), end=np.max(insar_df["date"])
-            ).date
-        }
-    )
-    df = pd.merge(df, insar_df, on="date", how="left")
-    df = pd.merge(df, gps_df, on="date", how="left", suffixes=("", "_gps"))
-    # Now final df has datetime as index
-    return df.set_index("date")
-
-
-def _find_bad_cols(df, nan_threshold):
-    empty_starts = df.columns[df.head(10).isna().all()]
-    empty_ends = df.columns[df.tail(10).isna().all()]
-    nan_pcts = df.isna().sum() / len(df)
-    high_pct_nan = df.columns[nan_pcts > nan_threshold]
-    high_pct_nan = [c for c in high_pct_nan if "gps" in c]  # Ignore all the insar nans
-
-    return np.concatenate(
-        (
-            np.array(empty_starts),
-            np.array(empty_ends),
-            np.array(high_pct_nan),
+    def _find_bad_cols(
+        self, df, nan_threshold=0.4, empty_start_len=None, empty_end_len=None
+    ):
+        # If we care about and empty `empty_start_len` entries at the beginnning, make into int
+        empty_starts = df.columns[df.head(empty_start_len).isna().all()]
+        if empty_end_len:
+            empty_ends = df.columns[df.tail(empty_end_len).isna().all()]
+        else:
+            empty_ends = []
+        nan_pcts = df.isna().sum() / len(df)
+        # print("nan pcts:\n", nan_pcts)
+        high_pct_nan = df.columns[nan_pcts > nan_threshold]
+        # Ignore all the insar nans
+        high_pct_nan = [c for c in high_pct_nan if "gps" in c]
+        all_cols = np.concatenate(
+            (
+                np.array(empty_starts),
+                np.array(empty_ends),
+                np.array(high_pct_nan),
+            )
         )
-    )
+        return list(set(all_cols))
 
+    def _remove_bad_cols(self, df, nan_threshold=0.4):
+        """Drops columns that are all NaNs, or where GPS doesn't cover whole period"""
+        bad_cols = self._find_bad_cols(df, nan_threshold=nan_threshold)
+        logger.info("Removing the following bad columns:")
+        logger.info(bad_cols)
 
-def _remove_bad_cols(df, nan_threshold=0.4):
-    """Drops columns that are all NaNs, or where GPS doesn't cover whole period"""
-    bad_cols = _find_bad_cols(df, nan_threshold)
-    logger.info("Removing the following bad columns:")
-    logger.info(bad_cols)
-
-    for col in bad_cols:
-        if col not in df.columns:
-            continue
-        station = col.replace("_gps", "").replace("_insar", "")
-        df.drop("%s_gps" % station, axis=1, inplace=True)
-        df.drop("%s_insar" % station, axis=1, inplace=True)
-    return df
+        df_out = df.copy()
+        for col in bad_cols:
+            if col not in df.columns:
+                continue
+            df_out.drop(col, axis=1, inplace=True)
+            station = col.replace("_gps", "").replace("_insar", "")
+            c = "%s_gps" % station
+            if c in df_out.columns:
+                df_out.drop(c, axis=1, inplace=True)
+            c = "%s_insar" % station
+            if c in df_out.columns:
+                df_out.drop(c, axis=1, inplace=True)
+        return df_out
 
 
 def subtract_reference(df, reference_station):
