@@ -6,11 +6,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# from scipy.ndimage.filters import uniform_filter1d
 
-from . import los
-from . import utils
-from . import sario
 from . import gps
 from . import plotting
 from apertools.sario import LOS_FILENAME
@@ -87,6 +83,59 @@ def plot_gps_los(
 
     ax.set_ylim(ylim)
     return fig, ax
+
+
+def plot_gps_enu(
+    station=None,
+    days_smooth=12,
+    start_date=None,
+    end_date=None,
+    force_download=True,
+):
+    """Plot the east,north,up components of `station`"""
+
+    def remove_xticks(ax):
+        ax.tick_params(
+            axis="x",  # changes apply to the x-axis
+            which="both",  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            top=False,  # ticks along the top edge are off
+            labelbottom=False,
+        )
+
+    enu_df = gps.load_station_enu(
+        station,
+        start_date=start_date,
+        end_date=end_date,
+        to_cm=True,
+        force_download=force_download,
+    )
+    dts = enu_df["dt"]
+    (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
+
+    fig, axes = plt.subplots(3, 1)
+    axes[0].plot(dts, east_cm, "b.")
+    axes[0].set_ylabel("east (cm)")
+    axes[0].plot(dts, gps.moving_average(east_cm, days_smooth), 'r-')
+    axes[0].grid(True)
+    remove_xticks(axes[0])
+
+    axes[1].plot(dts, north_cm, "b.")
+    axes[1].set_ylabel("north (cm)")
+    axes[1].plot(dts, gps.moving_average(north_cm, days_smooth), "r-")
+    axes[1].grid(True)
+    remove_xticks(axes[1])
+
+    axes[2].plot(dts, up_cm, "b.")
+    axes[2].set_ylabel("up (cm)")
+    axes[2].plot(dts, gps.moving_average(up_cm, days_smooth), "r-")
+    axes[2].grid(True)
+    # remove_xticks(axes[2])
+
+    fig.suptitle(station)
+    plt.show(block=False)
+
+    return fig, axes
 
 
 def plot_insar_vs_gps(

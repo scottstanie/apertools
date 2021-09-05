@@ -15,6 +15,7 @@ import re
 import os
 import difflib  # For station name misspelling checks
 import datetime
+from dataclasses import dataclass
 from functools import lru_cache
 
 import requests
@@ -22,7 +23,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import xarray as xr
-import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
 import apertools.los
@@ -60,7 +60,6 @@ STATION_XYZ_FILE = os.environ.get(
     "STATION_LIST_XYZ",
     os.path.join(DIRNAME, "data/station_xyz_all.csv"),
 )
-START_DATE = datetime.date(2014, 11, 1)  # Start of InSAR data I care about
 
 
 def _get_gps_dir():
@@ -73,9 +72,274 @@ def _get_gps_dir():
 GPS_DIR = _get_gps_dir()
 
 
+@dataclass
+class InsarGPSCompare:
+    insar_filename: str = "deformation.h5"
+    dset: str = "linear_velocity"
+    los_map_file: str = LOS_FILENAME
+    # to measure GPS relative to some other station, set the reference station
+    reference_station: str = None
+    # Used to average InSAR values in a box around the stations
+    window_size: int = 3
+    # These will get used by in the GPS df creation; they're set using the InSAR data
+    start_date: datetime.date = None
+    end_date: datetime.date = None
+    # To limit stations that have at least 60% coverage over the
+    # time period we care about, set a nan threshold of 0.4
+    max_nan_pct: float = 0.4
+    # To smooth the GPS or insar timeseries, set the number of smoothing days
+    days_smooth_insar: int = None
+    days_smooth_gps: int = None
+    # Create an extra column the the output with the difference
+    # of (GPS - InSAR) for each station
+    create_diffs: bool = True
+
+    def run(self):
+        """Set days_smooth to None or 0 to avoid any data smoothing
+
+        If refernce station is specified, all timeseries will subtract
+        that station's data
+        """
+        df_gps_locations = get_stations_within_image(
+            filename=self.insar_filename, dset=self.dset
+        )
+
+        df_insar = self.create_insar_df(df_gps_locations)
+        # Cap the GPS we use by the InSAR start/end dates
+        self._set_start_end_date(df_insar)
+        df_gps = self.create_gps_los_df(df_gps_locations)
+        df = self.combine_insar_gps_dfs(df_insar, df_gps)
+        if self.reference_station is not None:
+            df = self._subtract_reference(df)
+        if self.create_diffs:
+            for stat in df_gps_locations["name"]:
+                df[f"{stat}_diff"] = df[f"{stat}_gps"] - df[f"{stat}_insar"]
+
+        self.df = self._remove_bad_cols(df)
+        return self.df
+
+    def get_stations(self):
+        """Takes df with columns ['NMHB_insar', 'TXAD_insar',...],
+        returns list of unique station names"""
+        if getattr(self, "df", None) is None:
+            return []
+        return list(sorted(set(map(lambda s: s.split("_")[0], self.df.columns))))
+
+    def compare_velocities(self):
+        """Given the combine insar/gps dataframe, fit and compare slopes of"""
+        pass
+
+    def create_insar_df(self, df_gps_locations):
+        """Set days_smooth to None or 0 to avoid any data smoothing"""
+        with xr.open_dataset(self.insar_filename) as ds:
+            da = ds[self.dset]
+            if "date" in da.coords:
+                # 3D option
+                is_2d = False
+                dates = da.indexes["date"]
+            else:
+                # 2D: just the average ground velocity
+                is_2d = True
+                dates = ds.indexes["date"]
+        df_insar = pd.DataFrame({"date": dates})
+        for row in df_gps_locations.itertuples():
+            ts = apertools.utils.window_stack_xr(
+                da, x=row.lon, y=row.lat, window_size=self.window_size
+            )
+            print(row.name, ts.item())
+            if is_2d:
+                # Make a cum_defo from the linear trend
+                x = (dates - dates[0]).days
+                v_cm_yr = ts.item()
+                coeffs = [v_cm_yr / 365.25, 0]
+                df_insar[row.name] = linear_trend(coeffs=coeffs, x=x)
+                # NOTE: To recover the linear velocity used here:
+                # gps.fit_line(df_insar[station_name])[0] * 365.25
+            else:
+                df_insar[row.name] = ts
+
+        return df_insar.set_index("date")
+
+    def create_gps_los_df(self, df_gps_locations, start_date=None, end_date=None):
+        return self._create_gps_df(
+            df_gps_locations, kind="los", start_date=start_date, end_date=end_date
+        )
+
+    def create_gps_enu_df(self, df_gps_locations, start_date=None, end_date=None):
+        return self._create_gps_df(
+            df_gps_locations, kind="enu", start_date=start_date, end_date=end_date
+        )
+
+    def _create_gps_df(
+        self, df_gps_locations, start_date=None, end_date=None, kind="los"
+    ):
+        if start_date is None:
+            start_date = self.start_date
+        if end_date is None:
+            end_date = self.end_date
+        df_list = []
+        # df_locations = get_stations_within_image(filename=los_map_file)
+        for row in df_gps_locations.itertuples():
+            if kind.lower() == "los":
+                df_los = load_gps_los(
+                    los_map_file=self.los_map_file,
+                    station_name=row.name,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            elif kind.lower() == "enu":
+                df_los = load_station_enu(
+                    station_name=row.name,
+                    start_date=self.start_date,
+                    end_date=self.end_date,
+                )
+
+            # np.array(pd.Series(arr).rolling(window_size).mean())
+            # df = pd.DataFrame({"date": _series_to_date(gps_dts)})
+            # df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
+            # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
+            df_list.append(df_los)
+        # Now merge each one in turn, keeping all dates
+        df_gps = pd.concat(df_list, join="outer", axis="columns")
+        # These will all have the same name, so set equal to the station
+        df_gps.columns = df_gps_locations.name.values
+        return df_gps
+
+    def _set_start_end_date(self, df_insar):
+        # constrain the date range to just the InSAR min/max dates
+        self.start_date = df_insar.index.min()
+        self.end_date = df_insar.index.max()
+
+    def combine_insar_gps_dfs(self, df_insar, df_gps):
+        df = pd.merge(
+            df_gps,
+            df_insar,
+            how="left",
+            left_on="date",
+            right_on="date",
+            suffixes=("_gps", "_insar"),
+        )
+        if self.start_date:
+            df = df.loc[(df.index >= self.start_date)]
+        if self.end_date:
+            df = df.loc[(df.index <= self.end_date)]
+        return df
+
+    def _find_bad_cols(
+        self, df, max_nan_pct=0.4, empty_start_len=None, empty_end_len=None
+    ):
+        # If we care about and empty `empty_start_len` entries at the beginnning, make into int
+        empty_starts = df.columns[df.head(empty_start_len).isna().all()]
+        if empty_end_len:
+            empty_ends = df.columns[df.tail(empty_end_len).isna().all()]
+        else:
+            empty_ends = []
+        nan_pcts = df.isna().sum() / len(df)
+        # print("nan pcts:\n", nan_pcts)
+        high_pct_nan = df.columns[nan_pcts > max_nan_pct]
+        # Ignore all the insar nans
+        high_pct_nan = [c for c in high_pct_nan if "gps" in c]
+        all_cols = np.concatenate(
+            (
+                np.array(empty_starts),
+                np.array(empty_ends),
+                np.array(high_pct_nan),
+            )
+        )
+        return list(set(all_cols))
+
+    def _remove_bad_cols(self, df):
+        """Drops columns that are all NaNs, or where GPS doesn't cover whole period"""
+        bad_cols = self._find_bad_cols(df, max_nan_pct=self.max_nan_pct)
+        logger.info("Removing the following bad columns:")
+        logger.info(bad_cols)
+
+        df_out = df.copy()
+        for col in bad_cols:
+            if col not in df.columns:
+                continue
+            df_out.drop(col, axis=1, inplace=True)
+            station = col.replace("_gps", "").replace("_insar", "")
+            c = "%s_gps" % station
+            if c in df_out.columns:
+                df_out.drop(c, axis=1, inplace=True)
+            c = "%s_insar" % station
+            if c in df_out.columns:
+                df_out.drop(c, axis=1, inplace=True)
+        return df_out
+
+    def _subtract_reference(self, df):
+        """Center all columns of `df` based on the `reference_station` columns"""
+        gps_ref_col = "%s_%s" % (self.reference_station, "gps")
+        insar_ref_col = "%s_%s" % (self.reference_station, "insar")
+        df_out = df.copy()
+        for col in df.columns:
+            if "gps" in col:
+                df_out[col] = df[col] - df[gps_ref_col]
+            elif "insar" in col:
+                df_out[col] = df[col] - df[insar_ref_col]
+        return df_out
+
+
+@dataclass
+class TrendEstimator:
+    series: pd.Series
+    tol_days: int = 30
+
+    def tsia(self):
+        """Calculate the Thiel-Sen Inter-annual slope of a data Series
+        
+        https://en.wikipedia.org/wiki/Theil%E2%80%93Sen_estimator
+
+        Assumes the `series` has a DatetimeIndex.
+        Forms all possible difference of data which span 1 year +/- `tol_days`,
+        then takes the median slope of these differences
+        """
+        # Get the non-nan values of the series
+        data = self.series.dropna().values
+        times = self.series.dropna().index
+        t = (times - times[0]).days
+        tds = self._get_all_differences(t)
+        slopes = self._get_all_differences(data) / tds
+
+        # Now pick slopes within `tol_days` of annual
+        accept_idxs = np.logical_and(
+            tds > 180, (self._dist_from_year(tds) < self.tol_days)
+        )
+        slopes_annual = slopes[accept_idxs]
+        slope = np.median(slopes_annual)
+
+        # Add Normal dist. factor to MAD
+        sig = 1.4826 * self.mad(slopes_annual)
+        # TODO: track down Ben for origina of this formula... prob on Wiki for TSIA
+        uncertainty = 3 * np.sqrt(np.pi / 2) * sig / np.sqrt(len(slopes_annual) / 4)
+        b = np.median(data - slope * t)
+        return slope, b, uncertainty
+
+    @staticmethod
+    def mad(x):
+        """Median absolut deviation"""
+        return np.median(np.abs(x - np.median(x)))
+
+    @staticmethod
+    def _dist_from_year(v):
+        """Get the number of days away from 365, mod 1 year"""
+        return np.abs((v + 180) % 365 - 180)
+
+    @staticmethod
+    def _get_all_differences(a):
+        """Calculate all possible differences between elements of `a`"""
+        x = np.reshape(a, (1, len(a)))
+        difference_matrix = x - x.transpose()
+        # Now get the upper half (bottom is redundant)
+        td = np.triu(difference_matrix)
+        # Get non-zeros to flatten to an array
+        return td[td != 0]
+
+
 def load_station_enu(
     station_name,
-    start_date=START_DATE,
+    start_date=None,
     end_date=None,
     download_if_missing=True,
     force_download=False,
@@ -130,13 +394,15 @@ def load_station_enu(
 
 
 def _clean_gps_df(df, start_date=None, end_date=None):
+    """Reorganize the Nevada GPS data format"""
+    df = df.copy()
     df["date"] = pd.to_datetime(df["YYMMMDD"], format="%y%b%d")
 
     if start_date:
-        df_ranged = df[df["date"] >= pd.to_datetime(start_date)]
+        df = df[df["date"] >= pd.to_datetime(start_date)]
     if end_date:
-        df_ranged = df_ranged[df_ranged["date"] <= pd.to_datetime(end_date)]
-    df_enu = df_ranged[["date", "__east(m)", "_north(m)", "____up(m)"]]
+        df = df[df["date"] <= pd.to_datetime(end_date)]
+    df_enu = df[["date", "__east(m)", "_north(m)", "____up(m)"]]
     df_enu = df_enu.rename(
         mapper=lambda s: s.replace("_", "").replace("(m)", ""), axis="columns"
     )
@@ -144,13 +410,12 @@ def _clean_gps_df(df, start_date=None, end_date=None):
     return df_enu
 
 
-def stations_within_image(
+def get_stations_within_image(
     filename=None,
     dset=None,
     da=None,
     bad_vals=[0],
     mask_invalid=True,
-    mask_by_date=False,
 ):
     """Given an image, find gps stations contained in area
 
@@ -185,7 +450,7 @@ def stations_within_image(
         good_idxs = []
         for row in gdf_within.itertuples():
             val = da.sel(lat=row.lat, lon=row.lon, method="nearest")
-            if np.any(np.isnan(val)) or np.any([val == v for v in bad_vals]):
+            if np.any(np.isnan(val)) or np.any([np.all(val == v) for v in bad_vals]):
                 continue
             else:
                 # good_stations.append([row.name, row.lon, row.lat])
@@ -193,25 +458,6 @@ def stations_within_image(
         # to keep 'name' as column, but reset the former index to start at 0
         gdf_within = gdf_within.loc[good_idxs].reset_index(drop=True)
     return gdf_within
-    # # to have 'name' as index
-    # return gdf_within.loc[good_idxs].set_index('name')
-
-    # if mask_by_date:
-    #     for name in list(da.coords):
-    #         if 'date' in name:
-    #             dates = da[name]
-    #     min_date, max_date = dates.min(), dates.max()
-
-
-def save_station_points_kml(station_iter):
-    for name, lat, lon, alt in station_iter:
-        apertools.kml.create_kml(
-            title=name,
-            desc="GPS station location",
-            lon_lat=(lon, lat),
-            kml_out="%s.kml" % name,
-            shape="point",
-        )
 
 
 @lru_cache()
@@ -363,7 +609,7 @@ def _get_station_plate(station_name):
     return match.groupdict()["plate"]
 
 
-def station_std(station, to_cm=True, start_date=START_DATE, end_date=None):
+def station_std(station, to_cm=True, start_date=None, end_date=None):
     """Calculates the sum of east, north, and vertical stds of gps"""
     enu_df = load_station_enu(
         station, start_date=start_date, end_date=end_date, to_cm=to_cm
@@ -374,67 +620,13 @@ def station_std(station, to_cm=True, start_date=START_DATE, end_date=None):
     return np.sum(enu_df.std())
 
 
-def plot_gps_enu(
-    station=None,
-    days_smooth=12,
-    start_date=START_DATE,
-    end_date=None,
-    force_download=True,
-):
-    """Plot the east,north,up components of `station`"""
-
-    def remove_xticks(ax):
-        ax.tick_params(
-            axis="x",  # changes apply to the x-axis
-            which="both",  # both major and minor ticks are affected
-            bottom=False,  # ticks along the bottom edge are off
-            top=False,  # ticks along the top edge are off
-            labelbottom=False,
-        )
-
-    enu_df = load_station_enu(
-        station,
-        start_date=start_date,
-        end_date=end_date,
-        to_cm=True,
-        force_download=force_download,
-    )
-    dts = enu_df["dt"]
-    (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
-
-    fig, axes = plt.subplots(3, 1)
-    axes[0].plot(dts, east_cm, "b.")
-    axes[0].set_ylabel("east (cm)")
-    # axes[0].plot(dts, moving_average(east_cm, days_smooth), 'r-')
-    axes[0].plot(dts, moving_average(east_cm), "r-")
-    axes[0].grid(True)
-    remove_xticks(axes[0])
-
-    axes[1].plot(dts, north_cm, "b.")
-    axes[1].set_ylabel("north (cm)")
-    axes[1].plot(dts, moving_average(north_cm), "r-")
-    axes[1].grid(True)
-    remove_xticks(axes[1])
-
-    axes[2].plot(dts, up_cm, "b.")
-    axes[2].set_ylabel("up (cm)")
-    axes[2].plot(dts, moving_average(up_cm), "r-")
-    axes[2].grid(True)
-    # remove_xticks(axes[2])
-
-    fig.suptitle(station)
-    plt.show(block=False)
-
-    return fig, axes
-
-
 def load_gps_los(
     station_name=None,
     los_map_file=LOS_FILENAME,
     to_cm=True,
     zero_mean=True,
     zero_start=False,
-    start_date=START_DATE,
+    start_date=None,
     end_date=None,
     reference_station=None,
     enu_coeffs=None,
@@ -576,216 +768,6 @@ def _series_to_date(series):
     return pd.to_datetime(series).apply(lambda row: row.date())
 
 
-from dataclasses import dataclass
-
-
-@dataclass
-class InsarGPSCompare:
-    insar_filename: str = "deformation.h5"
-    dset: str = "linear_velocity"
-    los_map_file: str = LOS_FILENAME
-    reference_station: str = None
-    window_size: int = 3
-    days_smooth_insar: int = None
-    days_smooth_gps: int = None
-    create_diffs: bool = True
-
-    def run(self):
-        """Set days_smooth to None or 0 to avoid any data smoothing
-
-        If refernce station is specified, all timeseries will subtract
-        that station's data
-        """
-        df_gps_locations = stations_within_image(
-            filename=self.insar_filename, dset=self.dset
-        )
-
-        gps_df = self.create_gps_los_df(df_gps_locations)
-        insar_df = self.create_insar_df(df_gps_locations)
-        df = self.combine_insar_gps_dfs(insar_df, gps_df)
-        if self.reference_station:
-            df = self._subtract_reference(df, self.reference_station)
-        if self.create_diffs:
-            for stat in df_gps_locations["name"]:
-                df[f"{stat}_diff"] = df[f"{stat}_gps"] - df[f"{stat}_insar"]
-        return self._remove_bad_cols(df)
-
-    def create_gps_los_df(self, df_gps_locations):
-        df_list = []
-        # df_locations = stations_within_image(filename=los_map_file)
-        for row in df_gps_locations.itertuples():
-            df_los = load_gps_los(
-                los_map_file=self.los_map_file, station_name=row.name
-            )
-
-            # np.array(pd.Series(arr).rolling(window_size).mean())
-            # df = pd.DataFrame({"date": _series_to_date(gps_dts)})
-            # df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
-            # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
-            df_list.append(df_los)
-        # Now merge each one in turn, keeping all dates
-        gps_df = pd.concat(df_list, join="outer", axis="columns")
-        # These will all have the same name, so set equal to the station
-        gps_df.columns = df_gps_locations.name.values
-        return gps_df
-
-    def create_insar_df(self, df_gps_locations):
-        """Set days_smooth to None or 0 to avoid any data smoothing"""
-        with xr.open_dataset(self.insar_filename) as ds:
-            da = ds[self.dset]
-            if "date" in da.coords:  # 3D
-                is_2d = False
-                dates = da.indexes["date"]
-            else:  # 2D, a velocity
-                is_2d = True
-                min_date = pd.to_datetime(ds.date.data).min()
-                max_date = pd.to_datetime(ds.date.data).max()
-                dates = [min_date, max_date]
-        insar_df = pd.DataFrame({"date": dates})
-        for row in df_gps_locations.itertuples():
-            # df_los = load_gps_los(los_map_file=self.los_map_file, station_name=row.name)
-            ts = apertools.utils.window_stack_xr(
-                da, row.lon, row.lat, window_size=self.window_size
-            )
-            if is_2d:
-                cum_defo = ts.item() * (max_date - min_date).days / 365
-                insar_df[row.name] = [0, cum_defo]
-            else:
-                insar_df[row.name] = ts
-
-        return insar_df.set_index("date")
-
-    def combine_insar_gps_dfs(self, insar_df, gps_df):
-        df = pd.merge(
-            gps_df,
-            insar_df,
-            how="left",
-            left_on="date",
-            right_on="date",
-            suffixes=("_gps", "_insar"),
-        )
-        # constrain the date range to just the InSAR min/max dates
-        insar_min = insar_df.index.min()
-        insar_max = insar_df.index.max()
-        return df.loc[(df.index >= insar_min) & (df.index <= insar_max)]
-
-    def _find_bad_cols(
-        self, df, nan_threshold=0.4, empty_start_len=None, empty_end_len=None
-    ):
-        # If we care about and empty `empty_start_len` entries at the beginnning, make into int
-        empty_starts = df.columns[df.head(empty_start_len).isna().all()]
-        if empty_end_len:
-            empty_ends = df.columns[df.tail(empty_end_len).isna().all()]
-        else:
-            empty_ends = []
-        nan_pcts = df.isna().sum() / len(df)
-        # print("nan pcts:\n", nan_pcts)
-        high_pct_nan = df.columns[nan_pcts > nan_threshold]
-        # Ignore all the insar nans
-        high_pct_nan = [c for c in high_pct_nan if "gps" in c]
-        all_cols = np.concatenate(
-            (
-                np.array(empty_starts),
-                np.array(empty_ends),
-                np.array(high_pct_nan),
-            )
-        )
-        return list(set(all_cols))
-
-    def _remove_bad_cols(self, df, nan_threshold=0.4):
-        """Drops columns that are all NaNs, or where GPS doesn't cover whole period"""
-        bad_cols = self._find_bad_cols(df, nan_threshold=nan_threshold)
-        logger.info("Removing the following bad columns:")
-        logger.info(bad_cols)
-
-        df_out = df.copy()
-        for col in bad_cols:
-            if col not in df.columns:
-                continue
-            df_out.drop(col, axis=1, inplace=True)
-            station = col.replace("_gps", "").replace("_insar", "")
-            c = "%s_gps" % station
-            if c in df_out.columns:
-                df_out.drop(c, axis=1, inplace=True)
-            c = "%s_insar" % station
-            if c in df_out.columns:
-                df_out.drop(c, axis=1, inplace=True)
-        return df_out
-
-    def _subtract_reference(df, reference_station):
-        """Center all columns of `df` based on the `reference_station` columns"""
-        gps_ref_col = "%s_%s" % (reference_station, "gps")
-        insar_ref_col = "%s_%s" % (reference_station, "insar")
-        df_out = df.copy()
-        for col in df.columns:
-            if "gps" in col:
-                df_out[col] = df[col] - df[gps_ref_col]
-            elif "insar" in col:
-                df_out[col] = df[col] - df[insar_ref_col]
-        return df_out
-
-
-    def create_gps_enu_df(
-        self,
-        df_gps_locations,
-        station_name_list=None,
-        defo_filename=None,
-        igrams_dir=None,
-        start_date=START_DATE,
-        end_date=None,
-        days_smooth=None,
-        to_cm=True,
-    ):
-
-        def create_gps_los_df(self, df_gps_locations):
-            df_list = []
-            # df_locations = stations_within_image(filename=los_map_file)
-            for row in df_gps_locations.itertuples():
-                df_los = load_station_enu(
-                    los_map_file=self.los_map_file, station_name=row.name
-                )
-                df_list.append(df_los)
-            # Now merge each one in turn, keeping all dates
-            gps_df = pd.concat(df_list, join="outer", axis="columns")
-            # These will all have the same name, so set equal to the station
-            gps_df.columns = df_gps_locations.name.values
-            return gps_df
-    ##################################33
-
-        df_list = []
-        for station in station_name_list:
-            enu_df = load_station_enu(
-                station, start_date=start_date, end_date=end_date, to_cm=to_cm
-            )
-
-            # enu_df["date"] = _series_to_date(dts)
-            # Add station name to columns for post-merge identification
-            mapper = {
-                direction: "{}_{}".format(station, direction)
-                for direction in ("east", "north", "up")
-            }
-            enu_df.rename(mapper, inplace=True, axis=1)
-            df_list.append(enu_df)
-
-        min_date = np.min(pd.concat([df["date"] for df in df_list]))
-        max_date = np.max(pd.concat([df["date"] for df in df_list]))
-
-        # Now merge together based on uneven time data
-        enu_df = pd.DataFrame({"date": pd.date_range(start=min_date, end=max_date).date})
-        for df in df_list:
-            enu_df = pd.merge(enu_df, df, on="date", how="left")
-
-        enu_df = enu_df.set_index("date")
-        nan_thresh = 0.8
-        # Drop empty columns or no data for last 14 days
-        bad_cols = _find_bad_cols(enu_df, nan_thresh)
-        for col in np.unique(bad_cols):
-            logger.info("Dropping %s", col)
-            enu_df.drop(col, axis=1, inplace=True)
-
-        return enu_df
-
-
 def get_final_east_values(east_df):
     stations, vals = [], []
 
@@ -798,31 +780,54 @@ def get_final_east_values(east_df):
     return pd.DataFrame(index=stations, data={direc: vals})
 
 
-def _fit_date_series(series):
+def fit_line(series):
     """Fit a line to `series` with (possibly) uneven dates as index.
 
     Can be used to detrend, or predict final value
 
-    Returns:
-        Series: a line, equal length to arr, with same index as `series`
+    Returns: [slope, intercept]
     """
     # TODO: check that subtracting first item doesn't change it
-    full_dates = series.index  # Keep for final series formation
-    full_date_idxs = mdates.date2num(full_dates)
 
     series_clean = series.dropna()
     idxs = mdates.date2num(series_clean.index)
 
     coeffs = np.polyfit(idxs, series_clean, 1)
-    poly = np.poly1d(coeffs)
+    return coeffs
 
-    line_fit = poly(full_date_idxs)
-    return pd.Series(line_fit, index=full_dates)
+
+def linear_trend(series=None, coeffs=None, index=None, x=None):
+    """Get a series of points representing a linear trend through `series`
+
+    First computes the lienar regression, the evaluates at each
+    dates of `series.index`
+
+    Args:
+        series (pandas.Series): data with DatetimeIndex as the index.
+        coeffs (array or List): [slope, intercept], result from np.polyfit
+        index (DatetimeIndex, list[date]): Optional. If not passing series, can pass
+            the DatetimeIndex or list of dates to evaluate coeffs at.
+            Converts to numbers using `matplotlib.dates.date2num`
+        x (ndarray-like): directly pass the points to evaluate the poly1d
+    Returns:
+        Series: a line, equal length to arr, with same index as `series`
+    """
+    if coeffs is None:
+        coeffs = fit_line(series)
+
+    if index is None and x is None:
+        index = series.index
+    if x is None:
+        x = mdates.date2num(index)
+
+    poly = np.poly1d(coeffs)
+    linear_points = poly(x)
+    return pd.Series(linear_points, index=index)
 
 
 def _flat_std(series):
     """Find the std dev of an Series with a linear component removed"""
-    return np.std(series - _fit_date_series(series))
+    return np.std(series - linear_trend(series))
 
 
 def _get_gps_insar_cols(df):
@@ -834,7 +839,7 @@ def _get_gps_insar_cols(df):
 
 
 def _fit_line_to_dates(df):
-    return np.array([_fit_date_series(df[col]).tail(1).squeeze() for col in df.columns])
+    return np.array([linear_trend(df[col]).tail(1).squeeze() for col in df.columns])
 
 
 def get_final_gps_insar_values(df, linear=True, as_df=False, velocity=True):
@@ -862,27 +867,22 @@ def get_final_gps_insar_values(df, linear=True, as_df=False, velocity=True):
         )
 
 
-def _stations_from_df(df):
-    """Takes df with columns ['NMHB_insar', 'TXAD_insar',...], returns unique station names"""
-    return list(set(map(lambda s: s.split("_")[0], df.columns)))
+# def create_station_location_df(timeseries_df=None, station_name_list=None):
+#     """Start with a list of station names or a df
+#     with index of `dts` and columns as ['NMHB_gps', 'TXAD_insar'...],
+#     Create a dataframe like
 
+#     station_name |     lon    |   lat
+#     ------------------------------------
+#      TXKM        |  -103.108  | 31.8426
 
-def create_station_location_df(timeseries_df=None, station_name_list=None):
-    """Start with a list of station names or a df
-    with index of `dts` and columns as ['NMHB_gps', 'TXAD_insar'...],
-    Create a dataframe like
-
-    station_name |     lon    |   lat
-    ------------------------------------
-     TXKM        |  -103.108  | 31.8426
-
-    Index is station_name, so lon/lat can be accessed with `df.loc['TXKM']`
-    """
-    if station_name_list is None:
-        station_name_list = _stations_from_df(timeseries_df)
-    station_lonlats = [station_lonlat(name) for name in station_name_list]
-    lons, lats = zip(*station_lonlats)
-    return pd.DataFrame(index=station_name_list, data={"lon": lons, "lat": lats})
+#     Index is station_name, so lon/lat can be accessed with `df.loc['TXKM']`
+#     """
+#     if station_name_list is None:
+#         station_name_list = _stations_from_df(timeseries_df)
+#     station_lonlats = [station_lonlat(name) for name in station_name_list]
+#     lons, lats = zip(*station_lonlats)
+#     return pd.DataFrame(index=station_name_list, data={"lon": lons, "lat": lats})
 
 
 def _get_residuals(df, which):
@@ -909,7 +909,7 @@ def total_abs_error(errors):
 
 
 def get_mean_correlations(defo_filename=None, dset=None, cor_filename="cor_stack.h5"):
-    df_stations_available = stations_within_image(
+    df_stations_available = get_stations_within_image(
         filename=defo_filename, dset=dset, mask_invalid=True
     )
     corrs = {}
@@ -919,3 +919,14 @@ def get_mean_correlations(defo_filename=None, dset=None, cor_filename="cor_stack
             row, col = apertools.latlon.latlon_to_rowcol(tup.lat, tup.lon, dem_rsc)
             corrs[tup.name] = f["mean_stack"][row, col]
     return corrs
+
+
+def save_station_points_kml(station_iter):
+    for name, lat, lon, alt in station_iter:
+        apertools.kml.create_kml(
+            title=name,
+            desc="GPS station location",
+            lon_lat=(lon, lat),
+            kml_out="%s.kml" % name,
+            shape="point",
+        )
