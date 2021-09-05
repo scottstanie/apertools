@@ -37,6 +37,8 @@ def to_datetime(dates, tzinfo=datetime.timezone.utc):
         return dates
     try:
         iter(dates)
+        if len(dates) == 0:
+            return dates
         try:  # Check if its a list of tuples (an ifglist)
             iter(dates[0])
             return [to_datetime(tup) for tup in dates]

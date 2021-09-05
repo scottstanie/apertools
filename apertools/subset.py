@@ -235,7 +235,7 @@ def merge_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
 ISCE_STRIPMAP_PROJECT_FILES = [
     # (directory name, search string for glob())
     ("geom_reference/", "*.rdr"),
-    ("merged/SLC/", "**/*.slc"),
+    ("SLC/", "**/*.slc"),
     ("Igrams/", "**/*.int"),
     ("Igrams/", "**/*.cor"),
     ("Igrams/", "**/*.unw"),
@@ -266,7 +266,9 @@ def crop_isce_project(
     with open(os.path.join(output_dir, "bbox_rdr.wkt"), "w") as f:
         f.write(geojson.bbox_to_wkt(bbox_rdr) + "\n")
 
+    # Get the affine tranform the the multilooked version. use for all (including SLC)
     cmd_base = "gdal_translate -projwin {ulx} {uly} {lrx} {lry} -of ISCE {inp} {out}"
+    transform = None
     failures = []
     ifg_folder_pat = re.compile(r"(?P<folder>\d{8}_\d{8})")
     slc_folder_pat = re.compile(r"(?P<folder>\d{8})")
@@ -277,6 +279,9 @@ def crop_isce_project(
         )
         mkdir_p(os.path.join(output_dir, dirname))
         for f in tqdm(filelist, position=1):
+            if transform is None:
+                transform = _get_transform(f)
+
             _, filename = os.path.split(f)
             # For SLCs or ifgs, add back in the sub-folder with the SAR date/ifg dates
             if "slc" in f.lower() or "igrams" in f.lower():
@@ -297,7 +302,7 @@ def crop_isce_project(
             if verbose:
                 tqdm.write("Subsetting %s to %s" % (f, outname))
 
-            ulx, uly, lrx, lry = _get_bounds(f, bbox_rdr)
+            ulx, uly, lrx, lry = _get_bounds(bbox_rdr, fname=f, transform=transform)
             cmd = cmd_base.format(
                 inp=f,
                 out=outname,
@@ -322,15 +327,23 @@ def crop_isce_project(
     return failures
 
 
-def _get_bounds(fname, bbox_rdr):
+def _get_transform(fname):
+    with rio.open(fname) as src:
+        return src.transform
+
+
+def _get_bounds(bbox_rdr, fname=None, transform=None):
     """Convert the multilooked radar coords, using the Affine transform, to full sized coords
 
     https://github.com/sgillies/affine
     """
+    if transform is None:
+        with rio.open(fname) as src:
+            transform = src.transform
+
     left, bot, right, top = bbox_rdr
-    with rio.open(fname) as src:
-        ulx, uly = src.transform * (left, top)
-        lrx, lry = src.transform * (right, bot)
+    ulx, uly = transform * (left, top)
+    lrx, lry = transform * (right, bot)
     return ulx, uly, lrx, lry
 
 

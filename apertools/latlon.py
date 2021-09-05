@@ -655,18 +655,6 @@ def bbox_xr(dataset):
 
 # ###### ISCE/ Radar coordinate functions #######
 
-def load_isce_latlon(project_dir=".", geom_dir=None):
-    import rasterio as rio
-    if geom_dir is None:
-        geom_dir = os.path.join(project_dir, "geom_reference")
-    imgs = []
-    files = ["lat.rdr", "lon.rdr"]
-    for f in files:
-        with rio.open(os.path.join(geom_dir, f)) as src:
-            imgs.append(src.read(1))
-    return imgs
-
-
 def bbox_from_latlon_arrs(lon_arr, lat_arr):
     """Generate the (left, bot, right, top) latitudes/longitudes from radar geometry images"""
     left, right = lon_arr.min(), lon_arr.max()
@@ -690,10 +678,11 @@ def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None):
     Returns:
         (row, col) for the (az, range) position of point closest to lat/lon
     """
+    import apertools.sario
     if lat_arr is None or lon_arr is None:
         if geom_dir is None:
             raise ValueError("need either lat/lon geomaetry arrays or geom_dir")
-        lat_arr, lon_arr = load_isce_latlon(geom_dir=geom_dir)
+        lat_arr, lon_arr = apertools.sario.load_rdr_latlon(geom_dir=geom_dir)
     # Find the minimum distance location (and convert from linear index to row/col)
     dlat = np.abs(lat_arr - lat)
     dlon = np.abs(lon_arr - lon)

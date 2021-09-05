@@ -122,12 +122,14 @@ DEM_RSC_DSET = "dem_rsc"
 STACK_FLAT_DSET = "stack_flat"
 
 LOS_FILENAME = "los_enu.tif"
+ISCE_GEOM_DIR = "geom_reference"
+ISCE_SLC_DIR = "SLC"
 
 # List of platforms where i've set up loading for their files
 PLATFORMS = ("sentinel", "uavsar")
 
 
-def load_file(
+def load(
     filename,
     arr=None,
     downsample=None,
@@ -138,6 +140,7 @@ def load_file(
     ann_info=None,
     rows=None,
     cols=None,
+    use_gdal=False,
     verbose=False,
     **kwargs,
 ):
@@ -188,7 +191,7 @@ def load_file(
             return json.load(f)
 
     # Pass though and load with gdal
-    if ext in GDAL_FORMATS:
+    if ext in GDAL_FORMATS or use_gdal:
         # Use rasterio for easier loading of all bands into stack
         import rasterio as rio
 
@@ -308,8 +311,8 @@ def load_file(
         )
 
 
-# Make a shorter alias for load_file
-load = load_file
+# Make a original alias of load/load_file
+load_file = load
 
 
 def _get_file_dtype(filename=None, ext=None):
@@ -937,16 +940,16 @@ def save_dem_to_h5(h5file, rsc_data, dset_name="dem_rsc", overwrite=True):
 
 
 def save_latlon_to_h5(
-    h5file, lat_arr=None, lon_arr=None, rsc_data=None, overwrite=True
+    h5file, lat=None, lon=None, rsc_data=None, overwrite=True
 ):
     """Save the lat/lon information from a .rsc file as HDF5 scale datasets
 
     Args:
         fname (str): name of HDF5 file
-        lat_arr (ndarray): array of latitude points
-        lon_arr (ndarray): array of longitude points
+        lat (ndarray): array of latitude points
+        lon (ndarray): array of longitude points
         rsc_data (dict): data from an rsc file
-            required if not passing lat_arr/lon_arr
+            required if not passing lat/lon
     """
     from apertools.latlon import grid
 
@@ -955,14 +958,14 @@ def save_latlon_to_h5(
     ):
         return
 
-    if lon_arr is None or lat_arr is None:
-        lon_arr, lat_arr = grid(**rsc_data, sparse=True)
+    if lon is None or lat is None:
+        lon, lat = grid(**rsc_data, sparse=True)
     with h5py.File(h5file, "a") as hf:
-        ds = hf.create_dataset("lon", data=lon_arr.ravel())
+        ds = hf.create_dataset("lon", data=lon.ravel())
         hf["lon"].make_scale("longitude")
         ds.attrs["units"] = "degrees east"
 
-        ds = hf.create_dataset("lat", data=lat_arr.ravel())
+        ds = hf.create_dataset("lat", data=lat.ravel())
         hf["lat"].make_scale("latitude")
         ds.attrs["units"] = "degrees north"
 
@@ -991,6 +994,89 @@ def attach_latlon(fname, dset, depth_dim=None):
                 hf[depth_dim].make_scale(depth_dim)
             hf[dset].dims[0].attach_scale(hf[depth_dim])
             hf[dset].dims[0].label = depth_dim
+
+
+def attach_latlon_2d(fname, dset, depth_dim=None):
+    # Make dummy logical coordinates for the 2d lat/lon arrays
+    with h5py.File(fname, "a") as hf:
+        ndim = hf[dset].ndim
+        # use the logical coords, since lat/lon are 2d
+        hf[dset].dims[ndim - 2].attach_scale(hf["y"])
+        hf[dset].dims[ndim - 1].attach_scale(hf["x"])
+        if depth_dim:
+            if depth_dim not in hf:
+                hf.create_dataset(depth_dim, data=np.arange(hf[dset].shape[0]))
+                hf[depth_dim].make_scale(depth_dim)
+            hf[dset].dims[0].attach_scale(hf[depth_dim])
+            hf[dset].dims[0].label = depth_dim
+
+
+def create_2d_latlon_dataset(
+    fname, array, lat, lon, dset_name=None, coord_3d_name=None, coord_3d_arr=None
+):
+    import xarray as xr
+
+    if coord_3d_name is not None and coord_3d_arr is not None:
+        if array.ndim != 3:
+            raise ValueError("array must be 3D to pass coord_3d_name")
+        coords = {
+            coord_3d_name: coord_3d_arr,
+            "lat": (["y", "x"], lat),
+            "lon": (["y", "x"], lon),
+        }
+        dims = [coord_3d_name, "y", "x"]
+    else:
+        coords = {"lat": (["y", "x"], lat), "lon": (["y", "x"], lon)}
+        dims = ["y", "x"]
+
+    da = xr.DataArray(array, coords=coords, dims=dims)
+    ds = da.to_dataset(name=dset_name)
+    ds.to_netcdf(fname, engine="h5netcdf", mode="a")
+
+
+def load_rdr_latlon(geom_dir="geom_reference", lat_name="lat.rdr", lon_name="lon.rdr"):
+    """Load the (lat, lon) 2d arrays corresponding to radar coorindates"""
+    import rasterio as rio
+
+    out_arrs = []
+    for name in (lat_name, lon_name):
+        with rio.open(os.path.join(geom_dir, name)) as src:
+            out_arrs.append(src.read(1))
+    return out_arrs
+
+
+def save_latlon_2d_to_h5(
+    h5file, lat=None, lon=None, geom_dir="geom_reference/", overwrite=True
+):
+    """Save the lat/lon information from a .rsc file as HDF5 scale datasets
+
+    Args:
+        fname (str): name of HDF5 file
+        lat (ndarray): 2D array of latitude points
+        lon (ndarray): 2D array of longitude points
+    """
+    if not check_dset(h5file, "lat", overwrite) or not check_dset(
+        h5file, "lon", overwrite
+    ):
+        return
+    if lon is None or lat is None:
+        lon, lat = load_rdr_latlon(geom_dir=geom_dir)
+
+    # Make dummy logical coordinates for the 2d lat/lon arrays
+    xx, yy = np.arange(lon.shape[1]), np.arange(lon.shape[0])
+    with h5py.File(h5file, "a") as hf:
+        hf["x"] = xx
+        hf["y"] = yy
+        hf["x"].make_scale()
+        hf["y"].make_scale()
+        hf["lon"] = lon
+        hf["lon"].attrs["units"] = "degrees east"
+        hf["lon"].dims[0].attach_scale(hf["y"])
+        hf["lon"].dims[1].attach_scale(hf["x"])
+        hf["lat"] = lat
+        hf["lat"].attrs["units"] = "degrees north"
+        hf["lat"].dims[0].attach_scale(hf["y"])
+        hf["lat"].dims[1].attach_scale(hf["x"])
 
 
 def save_datelist_to_h5(
@@ -1464,7 +1550,7 @@ def save_vrt(
 
 def shift_by_pixel(in_f, out_f, half_pixel=True):
     """Shift a raster down and to the right by 1 (or 1/2 if `half_pixel`=True
-    
+
     Can fix problem of pixel center vs pixel edge convention differences
     """
     import copy
