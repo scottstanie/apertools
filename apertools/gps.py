@@ -288,7 +288,7 @@ class TrendEstimator:
 
     def tsia(self):
         """Calculate the Thiel-Sen Inter-annual slope of a data Series
-        
+
         https://en.wikipedia.org/wiki/Theil%E2%80%93Sen_estimator
 
         Assumes the `series` has a DatetimeIndex.
@@ -299,12 +299,13 @@ class TrendEstimator:
         data = self.series.dropna().values
         times = self.series.dropna().index
         t = (times - times[0]).days
-        tds = self._get_all_differences(t)
-        slopes = self._get_all_differences(data) / tds
+        time_diffs = self._get_all_differences(t)
+        slopes = self._get_all_differences(data) / time_diffs
 
         # Now pick slopes within `tol_days` of annual
+        # > 180 to make sure we dont' use super short periods
         accept_idxs = np.logical_and(
-            tds > 180, (self._dist_from_year(tds) < self.tol_days)
+            time_diffs > 180, (self._dist_from_year(time_diffs) < self.tol_days)
         )
         slopes_annual = slopes[accept_idxs]
         slope = np.median(slopes_annual)
