@@ -95,11 +95,16 @@ class InsarGPSCompare:
     create_diffs: bool = True
     # Use the median trend to compare differences
     median: bool = True
+    # convert velocity comparisons to millimeter/year
+    to_mm_year: bool = True
+    print_summary: bool = True
 
     def run(self):
-        df = self.create_df()
-        df_velo_diffs = self.compare_velocities()
-        return df, df_velo_diffs
+        df_full = self.create_df()
+        df_velo_diffs = self.compare_velocities(
+            to_mm_year=self.to_mm_year, print_summary=self.print_summary
+        )
+        return df_full, df_velo_diffs
 
     def create_df(self):
         """Set days_smooth to None or 0 to avoid any data smoothing
@@ -125,9 +130,9 @@ class InsarGPSCompare:
         self.df = self._remove_bad_cols(df)
         return self.df
 
-    def compare_velocities(self, median=None, to_mm_year=True):
+    def compare_velocities(self, median=None, to_mm_year=True, print_summary=True):
         """Given the combine insar/gps dataframe, fit and compare slopes
-        
+
         Args:
             median (bool): optional. If True, uses TSIA median estimator
             to_mm_year (bool): convert the velocities to mm/year. Otherwise, cm/day
@@ -154,8 +159,13 @@ class InsarGPSCompare:
         df_velo_diffs["velo_diff"] = diffs
         df_velo_diffs["v_gps"] = v_gps_list
         df_velo_diffs["v_insar"] = v_insar_list
-        if to_mm_year: # as opposed to cm/day
+        if to_mm_year:  # as opposed to cm/day
             df_velo_diffs[["velo_diff", "v_gps", "v_insar"]] *= 365.25 * 10
+        df_velo_diffs.set_index("name", inplace=True)
+        if print_summary:
+            units = "mm/year" if to_mm_year else "cm/day"
+            print("RMS Difference:")
+            print(f"{self.rms(df_velo_diffs['velo_diff']):.3f} {units}")
         return df_velo_diffs
 
     def get_stations(self):
@@ -261,6 +271,12 @@ class InsarGPSCompare:
         if self.end_date:
             df = df.loc[(df.index <= self.end_date)]
         return df
+
+    def rms(self, values):
+        return np.sqrt(np.mean(np.square(values)))
+
+    def total_abs_error(self, errors):
+        return np.sum(np.abs(errors))
 
     def _find_bad_cols(
         self, df, max_nan_pct=0.4, empty_start_len=None, empty_end_len=None
@@ -916,47 +932,6 @@ def get_final_gps_insar_values(df, linear=True, as_df=False, velocity=True):
             index=final_val_station_order,
             data={"gps": final_gps_vals, "insar": final_insar_vals},
         )
-
-
-# def create_station_location_df(timeseries_df=None, station_name_list=None):
-#     """Start with a list of station names or a df
-#     with index of `dts` and columns as ['NMHB_gps', 'TXAD_insar'...],
-#     Create a dataframe like
-
-#     station_name |     lon    |   lat
-#     ------------------------------------
-#      TXKM        |  -103.108  | 31.8426
-
-#     Index is station_name, so lon/lat can be accessed with `df.loc['TXKM']`
-#     """
-#     if station_name_list is None:
-#         station_name_list = _stations_from_df(timeseries_df)
-#     station_lonlats = [station_lonlat(name) for name in station_name_list]
-#     lons, lats = zip(*station_lonlats)
-#     return pd.DataFrame(index=station_name_list, data={"lon": lons, "lat": lats})
-
-
-def _get_residuals(df, which):
-    if which not in ("gps", "insar", "diff"):
-        raise ValueError("argument `which` must in ('diff','gps','insar')")
-
-    df_final_vals = get_final_gps_insar_values(df, as_df=True)
-    df_locations = create_station_location_df(df)
-    df_merged = df_locations.join(df_final_vals)
-
-    if which == "diff":
-        values = df_merged["gps"] - df_merged["insar"]
-    else:
-        values = df_merged[which]
-    return df_merged, values
-
-
-def rms(values):
-    return np.sqrt(np.mean(np.square(values)))
-
-
-def total_abs_error(errors):
-    return np.sum(np.abs(errors))
 
 
 def get_mean_correlations(defo_filename=None, dset=None, cor_filename="cor_stack.h5"):
