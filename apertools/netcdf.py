@@ -213,8 +213,8 @@ def create_empty_nc_stack(
         # Could make this unlimited to add to it later?
         latitudes = f.createVariable("lat", "f4", ("lat",), zlib=True)
         longitudes = f.createVariable("lon", "f4", ("lon",), zlib=True)
-        latitudes.units = "degrees north"
-        longitudes.units = "degrees east"
+        latitudes.units = lat_units
+        longitudes.units = lon_units
 
         #######
         # for dset_name, stack_dim_name, stack_arr in zip(
