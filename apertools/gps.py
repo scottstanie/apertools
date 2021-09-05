@@ -93,8 +93,15 @@ class InsarGPSCompare:
     # Create an extra column the the output with the difference
     # of (GPS - InSAR) for each station
     create_diffs: bool = True
+    # Use the median trend to compare differences
+    median: bool = True
 
     def run(self):
+        df = self.create_df()
+        df_velo_diffs = self.compare_velocities()
+        return df, df_velo_diffs
+
+    def create_df(self):
         """Set days_smooth to None or 0 to avoid any data smoothing
 
         If refernce station is specified, all timeseries will subtract
@@ -118,16 +125,47 @@ class InsarGPSCompare:
         self.df = self._remove_bad_cols(df)
         return self.df
 
+    def compare_velocities(self, median=None, to_mm_year=True):
+        """Given the combine insar/gps dataframe, fit and compare slopes
+        
+        Args:
+            median (bool): optional. If True, uses TSIA median estimator
+            to_mm_year (bool): convert the velocities to mm/year. Otherwise, cm/day
+        """
+        df = getattr(self, "df", None)
+        if df is None:
+            raise ValueError("Must run create_df before compare_velocities")
+        if median is None:
+            median = self.median
+
+        station_names = self.get_stations()
+        df_velo_diffs = pd.DataFrame({"name": station_names})
+        diffs = []
+        v_gps_list = []
+        v_insar_list = []
+        for station in station_names:
+            ts_gps = df[station + "_gps"]
+            ts_insar = df[station + "_insar"]
+            v_gps = fit_line(ts_gps, median=self.median)[0]
+            v_insar = fit_line(ts_insar, median=self.median)[0]
+            v_gps_list.append(v_gps)
+            v_insar_list.append(v_insar)
+            diffs.append(v_gps - v_insar)
+        df_velo_diffs["velo_diff"] = diffs
+        df_velo_diffs["v_gps"] = v_gps_list
+        df_velo_diffs["v_insar"] = v_insar_list
+        if to_mm_year: # as opposed to cm/day
+            df_velo_diffs[["velo_diff", "v_gps", "v_insar"]] *= 365.25 * 10
+        return df_velo_diffs
+
     def get_stations(self):
         """Takes df with columns ['NMHB_insar', 'TXAD_insar',...],
         returns list of unique station names"""
-        if getattr(self, "df", None) is None:
+        # Check that we have run `create_df`
+        df = getattr(self, "df", None)
+        if df is None:
             return []
-        return list(sorted(set(map(lambda s: s.split("_")[0], self.df.columns))))
-
-    def compare_velocities(self):
-        """Given the combine insar/gps dataframe, fit and compare slopes of"""
-        pass
+        return list(sorted(set(map(lambda s: s.split("_")[0], df.columns))))
 
     def create_insar_df(self, df_gps_locations):
         """Set days_smooth to None or 0 to avoid any data smoothing"""
