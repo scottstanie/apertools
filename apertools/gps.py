@@ -166,6 +166,7 @@ class InsarGPSCompare:
             units = "mm/year" if to_mm_year else "cm/day"
             print("RMS Difference:")
             print(f"{self.rms(df_velo_diffs['velo_diff']):.3f} {units}")
+        self.df_velo_diffs = df_velo_diffs
         return df_velo_diffs
 
     def get_stations(self):
@@ -205,7 +206,9 @@ class InsarGPSCompare:
             else:
                 df_insar[row.name] = ts
 
-        return df_insar.set_index("date")
+        df_insar.set_index("date", inplace=True)
+        self.df_insar = df_insar
+        return df_insar
 
     def create_gps_los_df(self, df_gps_locations, start_date=None, end_date=None):
         return self._create_gps_df(
@@ -250,6 +253,7 @@ class InsarGPSCompare:
         df_gps = pd.concat(df_list, join="outer", axis="columns")
         # These will all have the same name, so set equal to the station
         df_gps.columns = df_gps_locations.name.values
+        self.df_gps = df_gps
         return df_gps
 
     def _set_start_end_date(self, df_insar):
@@ -272,10 +276,14 @@ class InsarGPSCompare:
             df = df.loc[(df.index <= self.end_date)]
         return df
 
-    def rms(self, values):
-        return np.sqrt(np.mean(np.square(values)))
+    def rms(self, errors=None):
+        if errors is None:
+            errors = self.df_velo_diffs["velo_diffs"]
+        return np.sqrt(np.mean(np.square(errors)))
 
     def total_abs_error(self, errors):
+        if errors is None:
+            errors = self.df_velo_diffs["velo_diffs"]
         return np.sum(np.abs(errors))
 
     def _find_bad_cols(
