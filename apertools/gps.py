@@ -146,7 +146,6 @@ class InsarGPSCompare:
             ts = apertools.utils.window_stack_xr(
                 da, x=row.lon, y=row.lat, window_size=self.window_size
             )
-            print(row.name, ts.item())
             if is_2d:
                 # Make a cum_defo from the linear trend
                 x = (dates - dates[0]).days
@@ -256,7 +255,7 @@ class InsarGPSCompare:
 
         df_out = df.copy()
         for col in bad_cols:
-            if col not in df.columns:
+            if col not in df_out.columns:
                 continue
             df_out.drop(col, axis=1, inplace=True)
             station = col.replace("_gps", "").replace("_insar", "")
@@ -264,6 +263,9 @@ class InsarGPSCompare:
             if c in df_out.columns:
                 df_out.drop(c, axis=1, inplace=True)
             c = "%s_insar" % station
+            if c in df_out.columns:
+                df_out.drop(c, axis=1, inplace=True)
+            c = "%s_diff" % station
             if c in df_out.columns:
                 df_out.drop(c, axis=1, inplace=True)
         return df_out
@@ -298,7 +300,9 @@ class TrendEstimator:
         # Get the non-nan values of the series
         data = self.series.dropna().values
         times = self.series.dropna().index
-        t = (times - times[0]).days
+        # Convert to numerical values for fitting:
+        # t = (times - times[0]).days
+        t = mdates.date2num(times)
         time_diffs = self._get_all_differences(t)
         slopes = self._get_all_differences(data) / time_diffs
 
@@ -330,12 +334,82 @@ class TrendEstimator:
     @staticmethod
     def _get_all_differences(a):
         """Calculate all possible differences between elements of `a`"""
-        x = np.reshape(a, (1, len(a)))
+        n = len(a)
+        x = np.reshape(a, (1, n))
         difference_matrix = x - x.transpose()
         # Now get the upper half (bottom is redundant)
-        td = np.triu(difference_matrix)
-        # Get non-zeros to flatten to an array
-        return td[td != 0]
+        return difference_matrix[np.triu_indices(n)].ravel()
+
+
+def get_final_east_values(east_df):
+    stations, vals = [], []
+
+    direc = None
+    for column, val in east_df.tail(14).mean().items():
+        station, d = column.split("_")
+        direc = d
+        stations.append(station)
+        vals.append(val)
+    return pd.DataFrame(index=stations, data={direc: vals})
+
+
+def fit_line(series, median=False):
+    """Fit a line to `series` with (possibly) uneven dates as index.
+
+    Can be used to detrend, or predict final value
+
+    Args:
+        series (pd.Series): data to fit, with a DatetimeIndex
+        median (bool): if true, use the TSIA median estimator to fit
+
+    Returns: [slope, intercept]
+    """
+    # TODO: check that subtracting first item doesn't change it
+
+    series_clean = series.dropna()
+    idxs = mdates.date2num(series_clean.index)
+
+    coeffs = np.polyfit(idxs, series_clean, 1)
+    if median:
+        # Replace the Least squares fit with the median inter-annual slope
+        est = TrendEstimator(series)
+        # med_slope, intercept, uncertainty = est.tsia()
+        coeffs = est.tsia()[:2]
+    return coeffs
+
+
+def linear_trend(series=None, coeffs=None, index=None, x=None, median=False):
+    """Get a series of points representing a linear trend through `series`
+
+    First computes the lienar regression, the evaluates at each
+    dates of `series.index`
+
+    Args:
+        series (pandas.Series): data with DatetimeIndex as the index.
+        coeffs (array or List): [slope, intercept], result from np.polyfit
+        index (DatetimeIndex, list[date]): Optional. If not passing series, can pass
+            the DatetimeIndex or list of dates to evaluate coeffs at.
+            Converts to numbers using `matplotlib.dates.date2num`
+        x (ndarray-like): directly pass the points to evaluate the poly1d
+    Returns:
+        Series: a line, equal length to arr, with same index as `series`
+    """
+    if coeffs is None:
+        coeffs = fit_line(series, median=median)
+
+    if index is None and x is None:
+        index = series.dropna().index
+    if x is None:
+        x = mdates.date2num(index)
+
+    poly = np.poly1d(coeffs)
+    linear_points = poly(x)
+    return pd.Series(linear_points, index=index)
+
+
+def _flat_std(series):
+    """Find the std dev of an Series with a linear component removed"""
+    return np.std(series - linear_trend(series))
 
 
 def load_station_enu(
@@ -767,68 +841,6 @@ def get_stack_timeseries(
 
 def _series_to_date(series):
     return pd.to_datetime(series).apply(lambda row: row.date())
-
-
-def get_final_east_values(east_df):
-    stations, vals = [], []
-
-    direc = None
-    for column, val in east_df.tail(14).mean().items():
-        station, d = column.split("_")
-        direc = d
-        stations.append(station)
-        vals.append(val)
-    return pd.DataFrame(index=stations, data={direc: vals})
-
-
-def fit_line(series):
-    """Fit a line to `series` with (possibly) uneven dates as index.
-
-    Can be used to detrend, or predict final value
-
-    Returns: [slope, intercept]
-    """
-    # TODO: check that subtracting first item doesn't change it
-
-    series_clean = series.dropna()
-    idxs = mdates.date2num(series_clean.index)
-
-    coeffs = np.polyfit(idxs, series_clean, 1)
-    return coeffs
-
-
-def linear_trend(series=None, coeffs=None, index=None, x=None):
-    """Get a series of points representing a linear trend through `series`
-
-    First computes the lienar regression, the evaluates at each
-    dates of `series.index`
-
-    Args:
-        series (pandas.Series): data with DatetimeIndex as the index.
-        coeffs (array or List): [slope, intercept], result from np.polyfit
-        index (DatetimeIndex, list[date]): Optional. If not passing series, can pass
-            the DatetimeIndex or list of dates to evaluate coeffs at.
-            Converts to numbers using `matplotlib.dates.date2num`
-        x (ndarray-like): directly pass the points to evaluate the poly1d
-    Returns:
-        Series: a line, equal length to arr, with same index as `series`
-    """
-    if coeffs is None:
-        coeffs = fit_line(series)
-
-    if index is None and x is None:
-        index = series.index
-    if x is None:
-        x = mdates.date2num(index)
-
-    poly = np.poly1d(coeffs)
-    linear_points = poly(x)
-    return pd.Series(linear_points, index=index)
-
-
-def _flat_std(series):
-    """Find the std dev of an Series with a linear component removed"""
-    return np.std(series - linear_trend(series))
 
 
 def _get_gps_insar_cols(df):
