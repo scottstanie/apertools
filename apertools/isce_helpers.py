@@ -381,7 +381,7 @@ def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int", verbose=F
         create_cor_image(cor_filename, shape, bands=1, access_mode="write")
 
 
-def multilook_configs(project_dir=".", looks=(15, 9), max_temp=500):
+def multilook_configs(project_dir=".", looks=(15, 9), max_temp=500, crossmul_only=False):
     from . import utils
 
     # TODO: fix
@@ -408,6 +408,9 @@ def multilook_configs(project_dir=".", looks=(15, 9), max_temp=500):
 
         out_lines = []
         for line in cfg_lines:
+            # If we only want to crossmul, skip the rest
+            if "Function-2" in line and crossmul_only:
+                break
             if "alks" in line:  # azimuth -> row
                 out_lines.append(f"alks : {row_looks}")
             elif "rlks" in line:  # range -> col

@@ -4,6 +4,7 @@ utils.py: Miscellaneous helper functions
 Email: scott.stanie@utexas.edu
 """
 from __future__ import division, print_function
+import contextlib
 import datetime
 import copy
 import errno
@@ -1036,3 +1037,19 @@ def ifg_to_mag_phase(filename, outname=None, driver=None):
         with rio.open(outname, "w", **out_meta) as dst:
             dst.write(np.abs(arr), 1)
             dst.write(np.angle(arr), 2)
+
+
+@contextlib.contextmanager
+def chdir_then_revert(path):
+    """Temporarily change directory to `path`, then go back to original working dir
+
+    with chdir_then_revert('temp_dir'):
+        #...do stuff
+    # now back in original
+    """
+    orig_path = os.getcwd()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(orig_path)

@@ -11,8 +11,8 @@ import rasterio as rio  # TODO: figure out if i want rio or gdal...
 from apertools.log import get_log
 from apertools.latlon import km_to_deg
 from apertools.deramp import remove_ramp
-from apertools.utils import mkdir_p
-from apertools import geojson
+from apertools.utils import mkdir_p, chdir_then_revert
+from apertools import geojson, isce_helpers
 
 logger = get_log()
 
@@ -251,6 +251,9 @@ def crop_isce_project(
     overwrite=False,
     project_files=ISCE_STRIPMAP_PROJECT_FILES,
 ):
+    import isce  # noqa
+    import isceobj
+
     if bbox_rdr is None and bbox_latlon is None:
         raise ValueError("need either bbox_rdr or bbox_latlon")
     elif bbox_latlon:
@@ -281,7 +284,8 @@ def crop_isce_project(
         mkdir_p(os.path.join(output_dir, dirname))
         for f in tqdm(filelist, position=1):
             if transform is None:
-                transform = _get_transform(f)
+                with rio.open(f) as src:
+                    transform = src.transform
 
             _, filename = os.path.split(f)
             # For SLCs or ifgs, add back in the sub-folder with the SAR date/ifg dates
@@ -291,9 +295,9 @@ def crop_isce_project(
                 subfolder = match.group()
                 newdir = os.path.join(output_dir, dirname, subfolder)
                 mkdir_p(newdir)
-                outname = os.path.join(newdir, filename)
             else:
-                outname = os.path.join(output_dir, dirname, filename)
+                newdir = os.path.join(output_dir, dirname)
+            outname = os.path.join(newdir, filename)
 
             if os.path.exists(outname) and not overwrite:
                 if verbose:
@@ -316,7 +320,12 @@ def crop_isce_project(
                 tqdm.write(cmd)
 
             try:
-                subprocess.check_output(cmd, shell=True)
+                # subprocess.check_output(cmd, shell=True)
+                with chdir_then_revert(newdir):
+                    # Also add the .vrt header, which doesn't seem to appear from gdal
+                    img = isceobj.createImage()
+                    img.load(filename + ".xml")
+                    img.renderHdr()
             except subprocess.CalledProcessError:
                 tqdm.write("Command dailed on %s:" % f)
                 tqdm.write(cmd)
@@ -326,11 +335,6 @@ def crop_isce_project(
     logger.info("Failed on the following:")
     pprint(failures)
     return failures
-
-
-def _get_transform(fname):
-    with rio.open(fname) as src:
-        return src.transform
 
 
 def _get_bounds(bbox_rdr, fname=None, transform=None):
