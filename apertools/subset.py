@@ -43,7 +43,7 @@ def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True):
         logger.info(msg)
 
     # out_ds = gdal.Translate(out_fname, in_fname, projWin=projwin)
-    ds_in = gdal.Open(in_fname)
+    # ds_in = gdal.Open(in_fname)
     out_ds = gdal.Warp(out_fname, in_fname, outputBounds=bbox, format="VRT")
     out_arr = out_ds.ReadAsArray()
     # ds_in, out_ds = None, None
@@ -249,6 +249,7 @@ def crop_isce_project(
     output_dir="cropped",
     verbose=True,
     overwrite=False,
+    project_files=ISCE_STRIPMAP_PROJECT_FILES,
 ):
     if bbox_rdr is None and bbox_latlon is None:
         raise ValueError("need either bbox_rdr or bbox_latlon")
@@ -272,7 +273,7 @@ def crop_isce_project(
     failures = []
     ifg_folder_pat = re.compile(r"(?P<folder>\d{8}_\d{8})")
     slc_folder_pat = re.compile(r"(?P<folder>\d{8})")
-    for dirname, fileglob in tqdm(ISCE_STRIPMAP_PROJECT_FILES, position=0):
+    for dirname, fileglob in tqdm(project_files, position=0):
         filelist = glob(os.path.join(project_dir, dirname, fileglob))
         tqdm.write(
             "Found %s files to subset for %s/%s" % (len(filelist), dirname, fileglob)

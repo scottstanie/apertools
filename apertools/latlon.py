@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-from numpy import sin, cos, sqrt, arctan2, radians
 from xml.etree import ElementTree
 import os
 import numpy as np
@@ -697,7 +695,8 @@ def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None):
     rows, cols = np.where(found_area)
 
     if not rows.size or not cols.size:
-        print(f"{lat = }, {lon = } is outside latitude array bounds")
+        logger.error(f"{lat = }, {lon = } is outside latitude array bounds")
+        breakpoint()
         return None, None
 
     return round(np.mean(rows)), round(np.mean(cols))

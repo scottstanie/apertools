@@ -146,6 +146,16 @@ def take_looks_rsc(rsc_data, row_looks, col_looks):
     return out_rsc
 
 
+def get_looks_rdr(filename: str):
+    """Get the row/col looks of a radar coordinates file from the transform"""
+    import rasterio as rio
+
+    with rio.open(filename) as src:
+        x_step, _, _, _, y_step, _ = tuple(src.transform)[:6]
+        # x_step is column looks, y_step is row looks
+        return y_step, x_step
+
+
 def scale_dset(filename, dset, scale):
     import h5py
 

@@ -72,8 +72,7 @@ def geocode(
     )
 
     if not outfile:
-        filename_only = os.path.split(infile.replace("HDF5:", "").split(":")[0])[0]
-        outfile = os.path.join(dirname, filename_only) + ".geo"
+        outfile = _form_outfile(infile)
     driver = "GTiff"
     if outfile.endswith(".tif"):
         driver = "GTiff"
@@ -81,7 +80,9 @@ def geocode(
         driver = "VRT"
     else:
         driver = "ENVI"
-    logger.info("Geocoding output to %s to %s with driver %s", infile, outfile, driver)
+    logger.info(
+        "Geocoding input %s to output %s , using driver %s", infile, outfile, driver
+    )
 
     cmd = (
         # use the geolocation array to geocode, set target extent w/ bbox
@@ -144,7 +145,7 @@ def _get_size(f):
         return src.shape
 
 
-def _get_looks(f):
+def get_looks_rdr(f):
     """Get the row/col looks from the transform"""
     import rasterio as rio
 
@@ -180,10 +181,22 @@ def _abs_path_hdf5_string(fname):
         return dirname, full_path, None
 
 
+def _form_outfile(infile):
+    if "HDF5" in infile:
+        _, fname, subdset = infile.split(":")
+        fname = fname.replace(".h5", "").replace(".hdf5", "")
+        subdset = subdset.strip("//")
+        dirname = os.path.dirname(fname)
+        outfile = os.path.join(dirname, f"{fname}_{subdset}.geo")
+    else:
+        outfile = infile + ".geo"
+    return outfile
+
+
 def prepare_lat_lon(lat_file, lon_file):
     dirname, lat_file, _ = _abs_path_hdf5_string(lat_file)
     dirname, lon_file, _ = _abs_path_hdf5_string(lon_file)
-    row_looks, col_looks = _get_looks(lat_file)
+    row_looks, col_looks = get_looks_rdr(lat_file)
     print(f"{row_looks = } {col_looks = }")
 
     # temp_lat = lat_file + ".temp_geoloc.vrt"

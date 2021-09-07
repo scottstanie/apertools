@@ -1,6 +1,8 @@
 # adapted from components/isceobj/StripmapProc/runInterferogram.py
 import os
+import glob
 import datetime
+import subprocess
 import numpy as np
 
 # from osgeo import gdal
@@ -379,9 +381,8 @@ def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int", verbose=F
         create_cor_image(cor_filename, shape, bands=1, access_mode="write")
 
 
-def redo_multilook_configs(project_dir=".", looks=(15, 9), max_temp=500):
+def multilook_configs(project_dir=".", looks=(15, 9), max_temp=500):
     from . import utils
-    import glob
 
     # TODO: fix
     os.chdir(project_dir)
@@ -422,3 +423,26 @@ def redo_multilook_configs(project_dir=".", looks=(15, 9), max_temp=500):
             fout.write("\n")
         with open(new_run_file, "a") as f_run:
             f_run.write(stripmap_line.format(os.path.abspath(out_fname)) + "\n")
+
+
+def multilook_geom(looks=(15, 9), geom_dir="geom_reference"):
+    """Redo the geom_reference files with the extra multilook factor for unwrapping"""
+    from . import utils
+    geom_files = glob.glob(os.path.join(geom_dir, "*.rdr"))
+    glooks = utils.get_looks_rdr(geom_files[0])
+
+    with rio.open(geom_files[0]) as src:
+        in_rows, in_cols = src.shape[-2:]
+    extra_row_looks = looks[0] // glooks[0]
+    extra_col_looks = looks[1] // glooks[1]
+    out_rows = in_rows // extra_row_looks
+    out_cols = in_cols // extra_col_looks
+
+    geom_dir_new = geom_dir.rstrip("/") + f"_{looks[0]}_{looks[1]}"
+    utils.mkdir_p(geom_dir_new)
+
+    for f in tqdm(geom_files):
+        f_out = f.replace(geom_dir, geom_dir_new)
+        cmd = f"gdal_translate -of ISCE -outsize {out_cols} {out_rows} {f} {f_out}"
+        tqdm.write(cmd)
+        subprocess.check_call(cmd, shell=True)
