@@ -235,7 +235,7 @@ def merge_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
 ISCE_STRIPMAP_PROJECT_FILES = [
     # (directory name, search string for glob())
     ("geom_reference/", "*.rdr"),
-    ("SLC/", "**/*.slc"),
+    ("merged/SLC/", "**/*.slc"),
     ("Igrams/", "**/*.int"),
     ("Igrams/", "**/*.cor"),
     ("Igrams/", "**/*.unw"),

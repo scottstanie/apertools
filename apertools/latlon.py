@@ -403,7 +403,7 @@ def grid_contains(point, **kwargs):
 
 
 def window_rowcol(lon_arr, lat_arr, bbox=None):
-    """Get the row bounds an col bounds of a box in lat/lon arrays
+    """Get the row bounds and col bounds of a box in lat/lon arrays
 
     Returns:
         (row_top, row_bot), (col_left, col_right)
@@ -411,7 +411,6 @@ def window_rowcol(lon_arr, lat_arr, bbox=None):
     if bbox is None or len(bbox) == 0:
         return (0, len(lat_arr)), (0, len(lon_arr))
 
-    # TODO: this should def be in latlon
     left, bot, right, top = bbox
     lat_step = np.diff(lat_arr)[0]
     lon_step = np.diff(lon_arr)[0]
@@ -651,9 +650,10 @@ def bbox_xr(dataset):
     else:
         raise ValueError("dataset {} must contain 'lon' or 'x'".format(dataset))
     return x.min(), y.min(), x.max(), y.max()
-    
+
 
 # ###### ISCE/ Radar coordinate functions #######
+
 
 def bbox_from_latlon_arrs(lon_arr, lat_arr):
     """Generate the (left, bot, right, top) latitudes/longitudes from radar geometry images"""
@@ -679,6 +679,7 @@ def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None):
         (row, col) for the (az, range) position of point closest to lat/lon
     """
     import apertools.sario
+
     if lat_arr is None or lon_arr is None:
         if geom_dir is None:
             raise ValueError("need either lat/lon geomaetry arrays or geom_dir")
@@ -700,3 +701,52 @@ def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None):
         return None, None
 
     return round(np.mean(rows)), round(np.mean(cols))
+
+
+def rowcol_to_latlon_rdr(row, col, lat_arr=None, lon_arr=None, geom_dir=None):
+    """Look up the lat/lon for a row/col in radar coordinates (azimuth/range index)
+
+    Args:
+        row (int): row (azimuth index) of point of interest
+        col (int): column (range index) of point of interest
+        lat_arr (ndarray, optional): lat geometry array for radar coordinates.
+        lon_arr (ndarray, optional): lon geometry array for radar coordinates.
+        geom_dir (str, optional): directory containing the lat/lon arrays, if not passed
+
+    Raises:
+        ValueError: If none of lat_arr/lon_arr/geom_dir are provided
+
+    Returns:
+        (lat, col) for the (az, range) position of point closest to lat/lon
+    """
+
+    if lat_arr is None or lon_arr is None:
+        import apertools.sario
+
+        if geom_dir is None:
+            raise ValueError("need either lat/lon geomaetry arrays or geom_dir")
+        lat_arr, lon_arr = apertools.sario.load_rdr_latlon(geom_dir=geom_dir)
+    return lat_arr[row, col], lon_arr[row, col]
+
+
+def crop_by_bbox(rdr_image, lat, lon, bbox):
+    """Crop an image in radar coordinates by a lat/lon bbox"""
+    import numpy as np
+
+    left, bot, right, top = bbox
+    mlon = np.logical_and(lon < right, lon > left)
+    mlat = np.logical_and(lat < top, lat > bot)
+    mask = mlon & mlat
+    rows, cols = np.where(mask)
+    rmin, rmax = np.min(rows), np.max(rows)
+    cmin, cmax = np.min(cols), np.max(cols)
+    img_crop = rdr_image.copy()
+    img_crop[~mask] = np.nan
+    img_crop = img_crop[rmin:rmax, cmin:cmax]
+    lat_crop = lat.copy()
+    lat_crop[~mask] = np.nan
+    lat_crop = lat_crop[rmin:rmax, cmin:cmax]
+    lon_crop = lon.copy()
+    lon_crop[~mask] = np.nan
+    lon_crop = lon_crop[rmin:rmax, cmin:cmax]
+    return img_crop, lat_crop, lon_crop

@@ -14,26 +14,32 @@ def geocode(
     lon=None,
     rows=None,
     cols=None,
-    row_looks=1,
-    col_looks=1,
     bbox=None,
     lon_step=0.0005,
     lat_step=0.0005,
     resampling="nearest",
     dtype="float32",
+    cleanup=False,
 ):
     import rasterio.errors
 
-    if not infile or not lat or not lon:
-        raise ValueError("infile, lat, lon are required")
+    if not infile:
+        raise ValueError("infile is required")
+    is_hdf5_dset = infile.startswith("HDF5")
+    if lat is None or lon is None:
+        if not is_hdf5_dset:
+            raise ValueError("lat, lon are required if `infile` is not HDF5")
+        else:
+            dirname, full_path, subdset = _abs_path_hdf5_string(infile)
+            lat = full_path.replace(subdset, "//lat")
+            lon = full_path.replace(subdset, "//lon")
+            logger.info("Using lat/lon files: %s, %s", lat, lon)
 
-    logger.info("Createing lat/lon VRT files.")
-    lat_file, lon_file = prepare_lat_lon(
-        lat, lon, row_looks=row_looks, col_looks=col_looks
-    )
+    logger.info("Creating temp lat/lon VRT files.")
+    tmp_lat_file, tmp_lon_file = prepare_lat_lon(lat, lon)
     if not bbox:
         logger.info("Finding bbox from lat/lon file")
-        bbox = _get_bbox_from_files(lat_file, lon_file)
+        bbox = _get_bbox_from_files(tmp_lat_file, tmp_lon_file)
     bbox_str = "%f %f %f %f" % tuple(bbox)
     logger.info(
         f"Geocoding in {bbox = } with (lon, lat) step = ({lon_step, lat_step })"
@@ -51,23 +57,32 @@ def geocode(
             "must pass --rows, --cols, --dtype"
         )
 
-    infile = os.path.abspath(infile)
-    vrt_in_file = infile + ".temp_geoloc.vrt"
-    logger.info("Saving VRT for %s to %s", infile, vrt_in_file)
-    # writeVRT(infile, lat_file, lon_file)
-    vrt_in_file = write_vrt(
+    dirname, infile, _ = _abs_path_hdf5_string(infile)
+    tmp_vrt_in_file = os.path.join(dirname, "temp_geoloc_data.vrt")
+    logger.info("Saving VRT for %s to %s", infile, tmp_vrt_in_file)
+    # writeVRT(infile, tmp_lat_file, tmp_lon_file)
+    tmp_vrt_in_file = write_vrt(
         infile,
-        vrt_in_file,
-        lat_file,
-        lon_file,
+        tmp_vrt_in_file,
+        tmp_lat_file,
+        tmp_lon_file,
         rows,
         cols,
         dtype,
     )
 
     if not outfile:
-        outfile = infile + ".geo"
-    logger.info("Geocoding output to %s to %s", infile, outfile)
+        filename_only = os.path.split(infile.replace("HDF5:", "").split(":")[0])[0]
+        outfile = os.path.join(dirname, filename_only) + ".geo"
+    driver = "GTiff"
+    if outfile.endswith(".tif"):
+        driver = "GTiff"
+    elif outfile.endswith(".vrt"):
+        driver = "VRT"
+    else:
+        driver = "ENVI"
+    logger.info("Geocoding output to %s to %s with driver %s", infile, outfile, driver)
+
     cmd = (
         # use the geolocation array to geocode, set target extent w/ bbox
         f"gdalwarp -geoloc -te {bbox_str} "
@@ -78,12 +93,17 @@ def geocode(
         # Add warp option: run on multiple threads. Give the output a latlon projection
         ' -multi -wo GDAL_NUM_THREADS=ALL_CPUS -t_srs "+proj=longlat +datum=WGS84 +nodefs"'
         # Add ENVI header suffix, not replace (.unw.geo.hdr, not .unw.hdr)
-        " -of ENVI -co SUFFIX=ADD"
+        f" -of {driver} -co SUFFIX=ADD"
         # set nodata values on source and destination
         " -srcnodata 0 -dstnodata 0 "
-        f" {vrt_in_file} {outfile}"
+        f" {tmp_vrt_in_file} {outfile}"
     )
     _log_and_run(cmd)
+
+    if cleanup:
+        for f in [tmp_lat_file, tmp_lon_file, tmp_vrt_in_file]:
+            logger.info("Removing %s", f)
+            os.remove(f)
 
 
 def _read_4_corners(f, band=1):
@@ -95,7 +115,6 @@ def _read_4_corners(f, band=1):
     pixels = []
     with rio.open(f) as src:
         for offset in [(0, 0), (cols - 1, 0), (0, rows - 1), (cols - 1, rows - 1)]:
-            w = Window(*offset, 1, 1)
             pixel = src.read(band, window=Window(*offset, 1, 1))
             pixels.append(float(pixel))
     return pixels
@@ -109,7 +128,6 @@ def _get_dtype(f):
 
 
 def _get_bbox_from_files(lat_file, lon_file):
-    # TODO: pick out cornrs...
     lon_corners = _read_4_corners(lon_file)
     left, right = min(lon_corners), max(lon_corners)
 
@@ -126,16 +144,57 @@ def _get_size(f):
         return src.shape
 
 
-def prepare_lat_lon(lat_file, lon_file, row_looks=1, col_looks=1):
-    lat_file = os.path.abspath(lat_file)
-    lon_file = os.path.abspath(lon_file)
+def _get_looks(f):
+    """Get the row/col looks from the transform"""
+    import rasterio as rio
 
-    temp_lat = lat_file + ".temp_geoloc.vrt"
-    temp_lon = lon_file + ".temp_geoloc.vrt"
+    with rio.open(f) as src:
+        x_step, _, _, _, y_step, _ = tuple(src.transform)[:6]
+        # x_step is column looks, y_step is row looks
+        return y_step, x_step
 
-    cmd = f"gdal_translate -of VRT -a_nodata 0 -tr {col_looks} {row_looks} {lat_file} {temp_lat} "
+
+def _abs_path_hdf5_string(fname):
+    """Get the absolute path and directory from (possibly) HDF5 gdal string
+    If it's just a path name, returns the absolute path
+
+    Args:
+        fname (str): file path, or HDF5 path string
+
+    Returns:
+        dirname, full_path (loadable by gdal), sub-dataset
+
+    Example:
+        >>> _abs_path_hdf5_string('HDF5:file.h5://dataset_name')
+        "/path/to/", "HDF5:/path/to/file.h5://dataset_name", "datset_name"
+
+    """
+    if "HDF5" in fname:
+        driver, f, subdset = fname.split(":")
+        full_path = os.path.abspath(f)
+        dirname = os.path.dirname(full_path)
+        return dirname, "{}:{}:{}".format(driver, full_path, subdset), subdset
+    else:
+        full_path = os.path.abspath(fname)
+        dirname = os.path.dirname(fname)
+        return dirname, full_path, None
+
+
+def prepare_lat_lon(lat_file, lon_file):
+    dirname, lat_file, _ = _abs_path_hdf5_string(lat_file)
+    dirname, lon_file, _ = _abs_path_hdf5_string(lon_file)
+    row_looks, col_looks = _get_looks(lat_file)
+    print(f"{row_looks = } {col_looks = }")
+
+    # temp_lat = lat_file + ".temp_geoloc.vrt"
+    # temp_lon = lon_file + ".temp_geoloc.vrt"
+    temp_lat = os.path.join(dirname, "temp_geoloc_lat.vrt")
+    temp_lon = os.path.join(dirname, "temp_geoloc_lon.vrt")
+
+    target_res = f"-tr {col_looks} {row_looks}" if "HDF5" not in lat_file else ""
+    cmd = f"gdal_translate -of VRT -a_nodata 0 {target_res} {lat_file} {temp_lat} "
     _log_and_run(cmd)
-    cmd = f"gdal_translate -of VRT -a_nodata 0 -tr {col_looks} {row_looks} {lon_file} {temp_lon} "
+    cmd = f"gdal_translate -of VRT -a_nodata 0 {target_res} {lon_file} {temp_lon} "
     _log_and_run(cmd)
 
     return temp_lat, temp_lon
@@ -156,24 +215,36 @@ def write_vrt(
 ):
     import apertools.sario
 
-    outfile = apertools.sario.save_vrt(
-        filename,
-        outfile=outfile,
-        rows=rows,
-        cols=cols,
-        dtype=dtype,
-        metadata_domain="GEOLOCATION",
-        metadata_dict={
-            "Y_DATASET": lat_file,
-            "X_DATASET": lon_file,
-            "X_BAND": "1",
-            "Y_BAND": "1",
-            "PIXEL_OFFSET": "0",
-            "LINE_OFFSET": "0",
-            "LINE_STEP": str(row_looks),
-            "PIXEL_STEP": str(col_looks),
-        },
-    )
+    metadata_dict = {
+        "Y_DATASET": lat_file,
+        "X_DATASET": lon_file,
+        "X_BAND": "1",
+        "Y_BAND": "1",
+        "PIXEL_OFFSET": "0",
+        "LINE_OFFSET": "0",
+        "LINE_STEP": str(row_looks),
+        "PIXEL_STEP": str(col_looks),
+    }
+    if "HDF5" not in filename:
+        outfile = apertools.sario.save_vrt(
+            filename,
+            outfile=outfile,
+            rows=rows,
+            cols=cols,
+            dtype=dtype,
+            metadata_domain="GEOLOCATION",
+            metadata_dict=metadata_dict,
+        )
+    else:
+        from osgeo import gdal
+
+        # Virst translate for base VRT, then add the -geoloc array data
+        cmd = f"gdal_translate -of VRT {filename} {outfile} "
+        _log_and_run(cmd)
+        ds = gdal.Open(outfile, gdal.GA_Update)
+        ds.SetMetadata(metadata_dict, "GEOLOCATION")
+        ds = None
+
     return outfile
 
 
@@ -206,22 +277,18 @@ def get_cli_args():
         help="Name of input file to be geocoded (default = `infile`.geo).",
     )
     parser.add_argument(
+        "--lat",
+        help="latitude file in radar coordinate (if not contained within `infile`)",
+    )
+    parser.add_argument(
+        "--lon",
+        help="longitude file in radar coordinate (if not contained within `infile`)",
+    )
+    parser.add_argument(
         "--rows", type=int, help="Number of rows of input files (if not GDAL readable)"
     )
     parser.add_argument(
         "--cols", type=int, help="Number of cols of input files (if not GDAL readable)"
-    )
-    parser.add_argument("--row-looks", default=1)
-    parser.add_argument("--col-looks", default=1)
-    parser.add_argument(
-        "--lat",
-        required=True,
-        help="latitude file in radar coordinate",
-    )
-    parser.add_argument(
-        "--lon",
-        required=True,
-        help="longitude file in radar coordinate",
     )
     parser.add_argument(
         "--bbox",
@@ -256,33 +323,12 @@ def get_cli_args():
         help="(numpy-style) data type of binary array "
         "(choices = %(choices)s, default=%(default)s)",
     )
+    parser.add_argument("--cleanup", help="Remove temp .vrt files after finished")
     return parser.parse_args()
 
     # <metadata domain="GEOLOCATION">
     # <mdi key="Y_DATASET">/data7/jpl/sanAnd_23511/testint/tempLAT.vrt</mdi>
     # <mdi key="X_DATASET">/data7/jpl/sanAnd_23511/testint/tempLON.vrt</mdi>
-
-
-def crop_by_bbox(img, lat, lon, bbox):
-    import numpy as np
-
-    left, bot, right, top = bbox
-    mlon = np.logical_and(lon < right, lon > left)
-    mlat = np.logical_and(lat < top, lat > bot)
-    mask = mlon & mlat
-    rows, cols = np.where(mask)
-    rmin, rmax = np.min(rows), np.max(rows)
-    cmin, cmax = np.min(cols), np.max(cols)
-    img_crop = img.copy()
-    img_crop[~mask] = np.nan
-    img_crop = img_crop[rmin:rmax, cmin:cmax]
-    lat_crop = lat.copy()
-    lat_crop[~mask] = np.nan
-    lat_crop = lat_crop[rmin:rmax, cmin:cmax]
-    lon_crop = lon.copy()
-    lon_crop[~mask] = np.nan
-    lon_crop = lon_crop[rmin:rmax, cmin:cmax]
-    return img_crop, lat_crop, lon_crop
 
 
 def main():

@@ -123,7 +123,7 @@ STACK_FLAT_DSET = "stack_flat"
 
 LOS_FILENAME = "los_enu.tif"
 ISCE_GEOM_DIR = "geom_reference"
-ISCE_SLC_DIR = "SLC"
+ISCE_SLC_DIR = "merged/SLC"
 
 # List of platforms where i've set up loading for their files
 PLATFORMS = ("sentinel", "uavsar")
@@ -939,9 +939,7 @@ def save_dem_to_h5(h5file, rsc_data, dset_name="dem_rsc", overwrite=True):
         f[dset_name] = json.dumps(rsc_data)
 
 
-def save_latlon_to_h5(
-    h5file, lat=None, lon=None, rsc_data=None, overwrite=True
-):
+def save_latlon_to_h5(h5file, lat=None, lon=None, rsc_data=None, overwrite=True):
     """Save the lat/lon information from a .rsc file as HDF5 scale datasets
 
     Args:
@@ -1003,12 +1001,16 @@ def attach_latlon_2d(fname, dset, depth_dim=None):
         # use the logical coords, since lat/lon are 2d
         hf[dset].dims[ndim - 2].attach_scale(hf["y"])
         hf[dset].dims[ndim - 1].attach_scale(hf["x"])
+        # Used for xarray coordinate tracking
+        coords = "lat lon"
         if depth_dim:
             if depth_dim not in hf:
                 hf.create_dataset(depth_dim, data=np.arange(hf[dset].shape[0]))
                 hf[depth_dim].make_scale(depth_dim)
             hf[dset].dims[0].attach_scale(hf[depth_dim])
             hf[dset].dims[0].label = depth_dim
+            coords = depth_dim + " " + coords
+        hf[dset].attrs["coordinates"] = coords
 
 
 def create_2d_latlon_dataset(
