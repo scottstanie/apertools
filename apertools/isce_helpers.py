@@ -377,3 +377,48 @@ def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int", verbose=F
         with rio.open(cor_filename, "w", **meta) as dst:
             dst.write(cor, 1)
         create_cor_image(cor_filename, shape, bands=1, access_mode="write")
+
+
+def redo_multilook_configs(project_dir=".", looks=(15, 9), max_temp=500):
+    from . import utils
+    import glob
+
+    # TODO: fix
+    os.chdir(project_dir)
+
+    row_looks, col_looks = looks
+    new_igrams_dir = f"Igrams_{row_looks}_{col_looks}"
+    utils.mkdir_p(new_igrams_dir)
+    new_configs_dir = f"configs_{row_looks}_{col_looks}"
+    utils.mkdir_p(new_configs_dir)
+
+    new_run_file = f"run_igram_{row_looks}_{col_looks}.sh"
+    with open(new_run_file, "w") as f_run:
+        f_run.write("set -e\n")
+    stripmap_line = "stripmapWrapper.py -c {}"
+
+    for fname in glob.glob("configs/config_igram_*"):
+        ifg = sario.parse_ifglist_strings(fname)
+        baseline = (ifg[1] - ifg[0]).days
+        if baseline > max_temp:
+            continue
+        with open(fname) as f:
+            cfg_lines = f.read().splitlines()
+
+        out_lines = []
+        for line in cfg_lines:
+            if "alks" in line:  # azimuth -> row
+                out_lines.append(f"alks : {row_looks}")
+            elif "rlks" in line:  # range -> col
+                out_lines.append(f"rlks : {col_looks}")
+            elif "Igrams" in line:
+                out_lines.append(line.replace("Igrams", new_igrams_dir))
+            else:
+                out_lines.append(line)
+
+        out_fname = os.path.join(new_configs_dir, os.path.split(fname)[1])
+        with open(out_fname, "w") as fout:
+            fout.write("\n".join(out_lines))
+            fout.write("\n")
+        with open(new_run_file, "a") as f_run:
+            f_run.write(stripmap_line.format(os.path.abspath(out_fname)) + "\n")
