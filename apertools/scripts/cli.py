@@ -842,3 +842,43 @@ def subset_vrt(filenames, bbox, out_dir):  # , start_date, end_date):
 from apertools.netcdf import run_hdf5_to_netcdf
 
 cli.add_command(run_hdf5_to_netcdf)
+
+
+@cli.command("shift-pixel")
+@click.argument("in_filename")
+@click.argument("out_filename")
+@click.option(
+    "--half-pixel",
+    default=False,
+    help="Shift by only half a pixel, instead of full",
+    is_flag=True,
+)
+def shift_by_pixel(in_filename, out_filename, half_pixel):
+    """Shift an image by a full (or half) pixel down and right"""
+    import apertools.sario
+
+    apertools.sario.shift_by_pixel(in_filename, out_filename, half_pixel=half_pixel)
+
+@cli.command("nc-to-tif")
+@click.argument("in_filename")
+@click.argument("out_filename")
+@click.option(
+    "--dset",
+    help="dataset within the netcdf to write out."
+)
+@click.option(
+    "--crs",
+    default="epsg:4326",
+    help="add a coordinate reference system, if not discovered",
+    show_default=True,
+)
+def nc_to_tif(in_filename, out_filename, dset, crs):
+    import xarray as xr
+    # import rioxarray
+    # xds = rioxarray.open_rasterio
+    xds = xr.open_dataset(in_filename)
+    da = xds[dset] if dset is not None else xds
+    da.rio.write_crs(crs, inplace=True)
+    if "lat" in xds:
+        da.rio.set_spatial_dims("lon", "lat", inplace=True)
+    da.rio.to_raster(out_filename)

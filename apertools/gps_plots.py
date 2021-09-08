@@ -110,7 +110,7 @@ def plot_gps_enu(
         to_cm=True,
         force_download=force_download,
     )
-    dts = enu_df["dt"]
+    dts = enu_df.index
     (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
 
     fig, axes = plt.subplots(3, 1)
@@ -316,7 +316,7 @@ def _plot_line_df(
 def plot_gps_east_by_loc(
     defo_filename,
     igrams_dir,
-    start_date=START_DATE,
+    start_date=None,
     end_date=None,
     cmap_name="seismic_r",
     **plot_kwargs,

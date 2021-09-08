@@ -101,6 +101,14 @@ class InsarGPSCompare:
     print_summary: bool = True
 
     def run(self):
+        """Create the GPS/InSAR DataFrame and compare average velocities
+
+        Returns:
+            df_full (DataFrame) with 1 GPS, 1 InSAR, and 1 _diff column per station
+            df_velo_diffs (DataFrame): 3-column dataframe comparing average velocities.
+                Columns: velo_diff     v_gps   v_insar
+                Each row is one station
+        """
         df_full = self.create_df()
         df_velo_diffs = self.compare_velocities(
             to_mm_year=self.to_mm_year, print_summary=self.print_summary
@@ -489,11 +497,12 @@ def load_station_enu(
     Args:
         station_name (str): 4 Letter name of GPS station
             See http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html for map
-        start_date (datetime), default 2014-11-1, cutoff for beginning of GPS data
-        end_date (datetime): default None, cut off for end of GPS data
+        start_date (datetime or str): Optional. cutoff for beginning of GPS data
+        end_date (datetime or str): Optional. cut off for end of GPS data
         download_if_missing (bool): default True
         force_download (bool): default False
     """
+    # start_date, end_date = _parse_dates(start_date, end_date)
     if zero_by not in ("start", "mean"):
         raise ValueError("'zero_by' must be either 'start' or 'mean'")
     station_name = station_name.upper()
@@ -546,7 +555,6 @@ def _clean_gps_df(df, start_date=None, end_date=None):
     )
     df_enu.reset_index(inplace=True, drop=True)
     return df_enu
-
 
 def get_stations_within_image(
     filename=None,

@@ -109,42 +109,42 @@ def plot_corr(
     # )
     # ifg_stack_sub[0].data[(cor_mean_sub > cor_thresh)].shape
 
-    fig, axes = plt.subplots(4, len(col_slices))
+    fig, axes = plt.subplots(4, len(col_slices), squeeze=False)
     for idx, col_slice in enumerate(col_slices):
         ax = axes[0, idx]
         dem_pixels = dem_da_sub[:, col_slice].stack(space=("lat", "lon"))
         ifg_pixels = ifg_stack_sub[:, :, col_slice].stack(space=("lat", "lon"))
         print("ifg pixels shape:", ifg_pixels.shape)
 
-        # # Option 1: get the correlation coefficients
-        # trendvals = xr.corr(dem_pixels, ifg_pixels, dim="space")
-        # bins = np.linspace(-1, 1, nbins)
-        # trendvals.plot.hist(ax=ax, bins=bins, alpha=alpha)
+        # Option 1: get the correlation coefficients
+        trendvals = xr.corr(dem_pixels, ifg_pixels, dim="space")
+        bins = np.linspace(-1, 1, nbins)
 
-        # Option 2: fit a line, find the slope of the line
+        # # Option 2: fit a line, find the slope of the line
+        # x, y = dem_da_sub.data, ifg_stack_sub.data
         # mask_na = np.logical_and(np.isnan(x), np.isnan(y))
         # pf = np.polyfit(x[~mask_na], y[~mask_na], 1)
 
-        ifg_mask = (
-            cor_mean_sub < cor_thresh
-            if (cor_thresh and cor_mean_sub is not None)
-            else None
-        )
+        # ifg_mask = (
+        #     cor_mean_sub < cor_thresh
+        #     if (cor_thresh and cor_mean_sub is not None)
+        #     else None
+        # )
+        # trendvals = xr.apply_ufunc(
+        #     linear_trend,
+        #     dem_pixels,
+        #     ifg_pixels,
+        #     ifg_mask,
+        #     vectorize=True,
+        #     input_core_dims=[
+        #         ["space"],
+        #         ["space"],
+        #         ["space"],
+        #     ],  # reduce along "space", leaving 1 per ifg
+        # )
+        # trendvals *= 10  # Go from cm/meter of slope to mm/meter
+        # bins = nbins
 
-        trendvals = xr.apply_ufunc(
-            linear_trend,
-            dem_pixels,
-            ifg_pixels,
-            ifg_mask,
-            vectorize=True,
-            input_core_dims=[
-                ["space"],
-                ["space"],
-                ["space"],
-            ],  # reduce along "space", leaving 1 per ifg
-        )
-        trendvals *= 10  # Go from cm/meter of slope to mm/meter
-        bins = nbins
         trendvals.plot.hist(ax=ax, bins=bins, alpha=alpha)
 
         # row 2: plot the phase vs elevation plot for one
@@ -163,6 +163,7 @@ def plot_corr(
         # row 3: plot the ifg with the strongest phase vs elevation trend
         ax = axes[3, idx]
         axim = ax.imshow(ifg_stack_sub[max_idx, :, col_slice])
+        ax.set_title(f"ifg_idx = {max_idx}")
         fig.colorbar(axim, ax=ax)
 
 

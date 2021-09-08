@@ -629,7 +629,7 @@ def window_stack_xr(da, x, y, window_size=3, x_name="lon", y_name="lat"):
     Used to average around a pixel in a stack and produce a timeseries
     """
     is_2d_latlon = getattr(da, x_name).ndim
-    if is_2d_latlon:
+    if is_2d_latlon == 2:
         # It wont be in the indices in this case, just a 2d data array
         from apertools import latlon
 
