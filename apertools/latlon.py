@@ -660,7 +660,7 @@ def bbox_from_latlon_arrs(lon_arr, lat_arr):
     return left, bot, right, top
 
 
-def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None):
+def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None, warn_oob=True):
     """Find the row/col in radar coordinates (azimuth/range index) for a lat/lon point
 
     Args:
@@ -695,10 +695,9 @@ def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None):
     rows, cols = np.where(found_area)
 
     if not rows.size or not cols.size:
-        logger.error(f"{lat = }, {lon = } is outside latitude array bounds")
-        breakpoint()
+        if warn_oob:
+            logger.warning(f"{lat = }, {lon = } is outside latitude array bounds")
         return None, None
-
     return round(np.mean(rows)), round(np.mean(cols))
 
 

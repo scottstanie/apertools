@@ -12,7 +12,7 @@ from apertools.log import get_log
 from apertools.latlon import km_to_deg
 from apertools.deramp import remove_ramp
 from apertools.utils import mkdir_p, chdir_then_revert
-from apertools import geojson, isce_helpers
+from apertools import geojson
 
 logger = get_log()
 

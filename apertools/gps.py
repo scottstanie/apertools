@@ -25,6 +25,7 @@ import pandas as pd
 import xarray as xr
 import matplotlib.dates as mdates
 
+import apertools.latlon
 import apertools.los
 import apertools.utils
 import apertools.sario
@@ -569,7 +570,6 @@ def get_stations_within_image(
         ndarray: Nx3, with columns ['name', 'lon', 'lat']
     """
     from shapely import geometry
-    from apertools import latlon
 
     if da is None:
         try:
@@ -579,14 +579,28 @@ def get_stations_within_image(
 
             da = rioxarray.open_rasterio(filename).rename({"x": "lon", "y": "lat"})
 
+    # Do i care to filter out those not really in the image for radar coords?
+    is_2d_latlon = da.lat.ndim == 2
     gdf = read_station_llas(to_geodataframe=True)
-    image_bbox = geometry.box(*latlon.bbox_xr(da))
+    image_bbox = geometry.box(*apertools.latlon.bbox_xr(da))
     gdf_within = gdf[gdf.geometry.within(image_bbox)]
     # good_stations = []
+    # Will need to select differently for radar coords
     if mask_invalid:
         good_idxs = []
         for row in gdf_within.itertuples():
-            val = da.sel(lat=row.lat, lon=row.lon, method="nearest")
+            if is_2d_latlon:
+                r, c = apertools.latlon.latlon_to_rowcol_rdr(
+                    row.lat, row.lon, lat_arr=da.lat.data, lon_arr=da.lon.data, warn_oob=False
+                )
+                if r is None or c is None:
+                    # out of bounds (could be on a diagonal corner of the bbox)
+                    continue
+
+                val = da[..., r, c]
+            else:
+                val = da.sel(lat=row.lat, lon=row.lon, method="nearest")
+
             if np.any(np.isnan(val)) or np.any([np.all(val == v) for v in bad_vals]):
                 continue
             else:

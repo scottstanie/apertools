@@ -628,17 +628,26 @@ def window_stack_xr(da, x, y, window_size=3, x_name="lon", y_name="lat"):
 
     Used to average around a pixel in a stack and produce a timeseries
     """
-    x_loc = da.indexes[x_name].get_loc(x, method="nearest")
-    y_loc = da.indexes[y_name].get_loc(y, method="nearest")
+    is_2d_latlon = getattr(da, x_name).ndim
+    if is_2d_latlon:
+        # It wont be in the indices in this case, just a 2d data array
+        from apertools import latlon
+
+        y_loc, x_loc = latlon.latlon_to_rowcol_rdr(
+            y, x, lat_arr=getattr(da, y_name).data, lon_arr=getattr(da, x_name).data
+        )
+        if x_loc is None or y_loc is None:
+            # out of bounds (could be on a diagonal corner of the bbox)
+            raise ValueError(f"({x}, {y}) is out of bounds for {da}")
+    else:
+        x_loc = da.indexes[x_name].get_loc(x, method="nearest")
+        y_loc = da.indexes[y_name].get_loc(y, method="nearest")
 
     w = window_size // 2 if window_size % 2 == 1 else (window_size - 1) // 2
-    subset = da.isel(
-        {
-            y_name: slice(y_loc - w, y_loc + w + 1),
-            x_name: slice(x_loc - w, x_loc + w + 1),
-        }
-    )
-    return subset.mean(dim=(x_name, y_name))
+
+    y_slice = slice(y_loc - w, y_loc + w + 1)
+    x_slice = slice(x_loc - w, x_loc + w + 1)
+    return da[..., y_slice, x_slice].mean(axis=(-2, -1))
 
 
 # Randoms using the sentinelapi
@@ -764,7 +773,7 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
     return path
 
 
-def az_inc_to_enu(infile, outfile="geo_los_enu.tif"):
+def az_inc_to_enu(infile, outfile="los_enu.tif"):
     """azimuth/inclination to ENU
 
     Source: http://earthdef.caltech.edu/boards/4/topics/327
