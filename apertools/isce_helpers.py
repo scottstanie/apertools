@@ -175,11 +175,30 @@ def create_cor_image(cor_filename, shape, bands=2, access_mode="read"):
         )
 
 
-def create_unw_image(filename, shape, access_mode="read"):
+def _try_get_shape(filename, extra_exts=[]):
+    shape = None
+    ext = os.path.splitext(filename)[1]
+    for newext in [ext] + extra_exts:
+        try:
+            with rio.open(filename.replace(ext, newext)) as src:
+                shape = src.shape
+        except rio.RasterioIOError:
+            pass
+    if shape is None:
+        raise ValueError("Cant open %s, need to pass `shape`" % filename)
+    else:
+        return shape
+
+
+def create_unw_image(filename, shape=None, access_mode="read"):
+    if shape is None:
+        shape = _try_get_shape(filename, extra_exts=[".int"])
     return _create_isce_image(filename, shape, "UnwImage", access_mode=access_mode)
 
 
-def create_int_image(filename, shape, access_mode="read"):
+def create_int_image(filename, shape=None, access_mode="read"):
+    if shape is None:
+        shape = _try_get_shape(filename)
     return _create_isce_image(filename, shape, "IntImage", access_mode=access_mode)
 
 
@@ -351,37 +370,93 @@ def create_dem_header(dem_file, rsc_file=None, datum="EGM96"):
     demImage.renderHdr()
 
 
-def create_unfiltered_cor(project_dir, search_term="Igrams/**/2*.int", verbose=False):
+def create_unfiltered_cor_for_project(
+    project_dir, search_term="Igrams/**/2*.int", verbose=False
+):
 
     ifglist = sario.find_ifgs(
         directory=project_dir, search_term=search_term, parse=False
     )
 
     for f1 in tqdm(ifglist):
-        with rio.open(f1) as src1:
-            shape = src1.shape
-
-        a1 = f1.replace(".int", ".amp")
-        cor_filename = a1.replace(".amp", ".cor")
-        if verbose:
-            tqdm.write("Saving cor for %s" % cor_filename)
-
-        with rio.open(f1) as src1, rio.open(a1) as src2:
-            ifg = src1.read(1)
-            amp1, amp2 = src2.read()
-
-            # For output: copy all metadata, but change band count
-            meta = deepcopy(src2.meta)
-            meta["count"] = 1
-
-        cor = np.abs(ifg) / (amp1 * amp2 + 1e-7)
-        # calulate and save (not sure how to just save an array in isce)
-        with rio.open(cor_filename, "w", **meta) as dst:
-            dst.write(cor, 1)
-        create_cor_image(cor_filename, shape, bands=1, access_mode="write")
+        create_cor_from_int_amp(f1, verbose=verbose)
 
 
-def multilook_configs(project_dir=".", looks=(15, 9), max_temp=500, crossmul_only=False):
+def create_unfiltered_phsig_for_project(project_dir, search_term="Igrams/**/2*.int"):
+    from . import utils
+
+    ifglist = sario.find_ifgs(
+        directory=project_dir, search_term=search_term, parse=False
+    )
+
+    for f1 in tqdm(ifglist):
+        dirname, fname = os.path.split(f1)
+        with utils.chdir_then_revert(dirname):
+            create_phsig(fname)
+
+
+def create_cor_from_int_amp(fname, verbose=False):
+    with rio.open(fname) as src1:
+        shape = src1.shape
+
+    a1 = fname.replace(".int", ".amp")
+    cor_filename = a1.replace(".amp", ".cor")
+    if verbose:
+        tqdm.write("Saving cor for %s" % cor_filename)
+
+    with rio.open(fname) as src1, rio.open(a1) as src2:
+        ifg = src1.read(1)
+        amp1, amp2 = src2.read()
+
+        # For output: copy all metadata, but change band count
+        meta = deepcopy(src2.meta)
+        meta["count"] = 1
+
+    cor = np.abs(ifg) / (amp1 * amp2 + 1e-7)
+    # calulate and save (not sure how to just save an array in isce)
+    with rio.open(cor_filename, "w", **meta) as dst:
+        dst.write(cor, 1)
+    create_cor_image(cor_filename, shape, bands=1, access_mode="write")
+
+
+def create_phsig(ifg_file, cor_file=None):
+    from mroipac.icu.Icu import Icu
+
+    logger.info("Estimating spatial coherence based phase sigma")
+    if cor_file is None:
+        ext = os.path.splitext(ifg_file)[1]
+        cor_file = ifg_file.replace(ext, ".cor")
+        logger.info("writing output to %s", cor_file)
+
+    # Create phase sigma correlation file here
+    intImage = isceobj.createIntImage()
+    intImage.load(ifg_file.replace(".xml", "") + ".xml")
+    intImage.setAccessMode("read")
+    intImage.createImage()
+
+    phsigImage = isceobj.createImage()
+    phsigImage.dataType = "FLOAT"
+    phsigImage.bands = 1
+    phsigImage.setWidth(intImage.getWidth())
+    phsigImage.setFilename(cor_file)
+    phsigImage.setAccessMode("write")
+    phsigImage.createImage()
+
+    icuObj = Icu(name="filter_icu")
+    icuObj.configure()
+    icuObj.unwrappingFlag = False
+    icuObj.useAmplitudeFlag = False
+
+    icuObj.icu(intImage=intImage, phsigImage=phsigImage)
+    phsigImage.renderHdr()
+
+    intImage.finalizeImage()
+    phsigImage.finalizeImage()
+
+
+def multilook_configs(
+    project_dir=".", looks=(15, 9), max_temp=500, crossmul_only=False
+):
     from . import utils
 
     # TODO: fix
@@ -431,6 +506,7 @@ def multilook_configs(project_dir=".", looks=(15, 9), max_temp=500, crossmul_onl
 def multilook_geom(looks=(15, 9), geom_dir="geom_reference"):
     """Redo the geom_reference files with the extra multilook factor for unwrapping"""
     from . import utils
+
     geom_files = glob.glob(os.path.join(geom_dir, "*.rdr"))
     glooks = utils.get_looks_rdr(geom_files[0])
 
