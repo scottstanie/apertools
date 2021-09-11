@@ -11,6 +11,7 @@ Note: ^^ This file is stored in the `STATION_LLH_FILE`
 
 """
 from __future__ import division, print_function
+from glob import glob
 import re
 import os
 import difflib  # For station name misspelling checks
@@ -50,18 +51,6 @@ GPS_STATION_URL = "http://geodesy.unr.edu/NGLStationPages/stations/{station}.sta
 
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
 
-STATION_LLH_URL = "http://geodesy.unr.edu/NGLStationPages/llh.out"
-STATION_LLH_FILE = os.environ.get(
-    "STATION_LIST_LLH",
-    os.path.join(DIRNAME, "data/station_llh_all.csv"),
-)
-
-STATION_XYZ_URL = "http://geodesy.unr.edu/NGLStationPages/DataHoldings.txt"
-STATION_XYZ_FILE = os.environ.get(
-    "STATION_LIST_XYZ",
-    os.path.join(DIRNAME, "data/station_xyz_all.csv"),
-)
-
 
 def _get_gps_dir():
     path = apertools.utils.get_cache_dir(force_posix=True)
@@ -71,6 +60,14 @@ def _get_gps_dir():
 
 
 GPS_DIR = _get_gps_dir()
+
+# These lists get update occasionally... to keep fresh, download one for current day
+# old ones will be removed upon new download
+STATION_LLH_URL = "http://geodesy.unr.edu/NGLStationPages/llh.out"
+STATION_LLH_FILE = os.path.join(GPS_DIR, "station_llh_all_{today}.csv")
+
+STATION_XYZ_URL = "http://geodesy.unr.edu/NGLStationPages/DataHoldings.txt"
+STATION_XYZ_FILE = os.path.join(GPS_DIR, "station_xyz_all_{today}.csv")
 
 
 @dataclass
@@ -556,6 +553,7 @@ def _clean_gps_df(df, start_date=None, end_date=None):
     df_enu.reset_index(inplace=True, drop=True)
     return df_enu
 
+
 def get_stations_within_image(
     filename=None,
     dset=None,
@@ -599,7 +597,11 @@ def get_stations_within_image(
         for row in gdf_within.itertuples():
             if is_2d_latlon:
                 r, c = apertools.latlon.latlon_to_rowcol_rdr(
-                    row.lat, row.lon, lat_arr=da.lat.data, lon_arr=da.lon.data, warn_oob=False
+                    row.lat,
+                    row.lon,
+                    lat_arr=da.lat.data,
+                    lon_arr=da.lon.data,
+                    warn_oob=False,
                 )
                 if r is None or c is None:
                     # out of bounds (could be on a diagonal corner of the bbox)
@@ -620,19 +622,24 @@ def get_stations_within_image(
 
 
 @lru_cache()
-def read_station_llas(filename=None, to_geodataframe=False):
+def read_station_llas(filename=None, to_geodataframe=False, force_download=True):
     """Read in the name, lat, lon, alt list of gps stations
 
     Assumes file is a space-separated with "name,lat,lon,alt" as columns
     """
-    filename = filename or STATION_LLH_FILE
+    today = datetime.date.today().strftime("%Y%m%d")
+    filename = filename or STATION_LLH_FILE.format(today=today)
+
+    lla_path = os.path.join(GPS_DIR, filename)
+    _remove_old_lists(lla_path)
     logger.debug("Searching %s for gps data" % filename)
+
     try:
-        df = pd.read_csv(filename, sep=r"\s+", engine="python", header=None)
+        df = pd.read_csv(lla_path, sep=r"\s+", engine="python", header=None)
     except FileNotFoundError:
-        logger.warning("%s not found; downloading from %s", filename, STATION_LLH_URL)
-        download_station_locations(filename, STATION_LLH_URL)
-        df = pd.read_csv(filename, sep=r"\s+", engine="python", header=None)
+        logger.info("Downloading from %s to %s", STATION_LLH_URL, lla_path)
+        download_station_locations(lla_path, STATION_LLH_URL)
+        df = pd.read_csv(lla_path, sep=r"\s+", engine="python", header=None)
 
     df.columns = ["name", "lat", "lon", "alt"]
     if to_geodataframe:
@@ -643,10 +650,22 @@ def read_station_llas(filename=None, to_geodataframe=False):
         return df
 
 
+def _remove_old_lists(lla_path):
+    today = datetime.date.today().strftime("%Y%m%d")
+    gps_dir = os.path.split(lla_path)[0]
+    station_list_files = glob(os.path.join(gps_dir, "station_*"))
+    files_to_delete = [f for f in station_list_files if today not in f]
+    for f in files_to_delete:
+        logger.info("Removing old station list file: %s", f)
+        os.remove(f)
+
+
 @lru_cache()
 def read_station_xyzs(filename=None):
     """Read in the name, X, Y, Z position of gps stations"""
-    filename = filename or STATION_XYZ_FILE
+    today = datetime.date.today().strftime("%Y%m%d")
+    filename = filename or STATION_XYZ_FILE.format(today=today)
+    _remove_old_lists(filename)
     logger.debug("Searching %s for gps data" % filename)
     try:
         df = pd.read_csv(
@@ -681,6 +700,34 @@ def download_station_locations(filename, url):
 
     with open(filename, "w") as f:
         f.write(resp.text)
+
+
+def download_station_data(station_name):
+    station_name = station_name.upper()
+    plate = _get_station_plate(station_name)
+    # plate = "PA"
+    url = GPS_BASE_URL.format(station=station_name, plate=plate)
+    response = requests.get(url)
+    response.raise_for_status()
+
+    filename = os.path.join(GPS_DIR, GPS_FILE.format(station=station_name, plate=plate))
+    logger.info(f"Saving {url} to {filename}")
+
+    with open(filename, "w") as f:
+        f.write(response.text)
+
+
+def _get_station_plate(station_name):
+    url = GPS_STATION_URL.format(station=station_name)
+    response = requests.get(url)
+    response.raise_for_status()
+
+    # NOTE: This is not necessarily the only one!
+    # CA GPS stations have PA and NA plate fixed... do i ever care about both?
+    match = re.search(r"(?P<plate>[A-Z]{2}) Plate Fixed", response.text)
+    if not match:
+        raise ValueError("Could not find plate name on %s" % url)
+    return match.groupdict()["plate"]
 
 
 def station_lonlat(station_name):
@@ -736,36 +783,6 @@ def station_distance(station_name1, station_name2):
     lonlat1 = station_lonlat(station_name1)
     lonlat2 = station_lonlat(station_name2)
     return apertools.latlon.latlon_to_dist(lonlat1[::-1], lonlat2[::-1])
-
-
-def download_station_data(station_name):
-    station_name = station_name.upper()
-    plate = _get_station_plate(station_name)
-    # plate = "PA"
-    url = GPS_BASE_URL.format(station=station_name, plate=plate)
-    response = requests.get(url)
-    response.raise_for_status()
-
-    filename = "{}/{}".format(
-        GPS_DIR, GPS_FILE.format(station=station_name, plate=plate)
-    )
-    logger.info(f"Saving {url} to {filename}")
-
-    with open(filename, "w") as f:
-        f.write(response.text)
-
-
-def _get_station_plate(station_name):
-    url = GPS_STATION_URL.format(station=station_name)
-    response = requests.get(url)
-    response.raise_for_status()
-
-    # NOTE: This is not necessarily the only one!
-    # CA GPS stations have PA and NA plate fixed... do i ever care about both?
-    match = re.search(r"(?P<plate>[A-Z]{2}) Plate Fixed", response.text)
-    if not match:
-        raise ValueError("Could not find plate name on %s" % url)
-    return match.groupdict()["plate"]
 
 
 def station_std(station, to_cm=True, start_date=None, end_date=None):
