@@ -320,7 +320,7 @@ def crop_isce_project(
                 tqdm.write(cmd)
 
             try:
-                # subprocess.check_output(cmd, shell=True)
+                subprocess.check_output(cmd, shell=True)
                 with chdir_then_revert(newdir):
                     # Also add the .vrt header, which doesn't seem to appear from gdal
                     img = isceobj.createImage()

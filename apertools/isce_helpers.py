@@ -135,6 +135,7 @@ def _create_isce_image(
 ):
 
     length, width = shape
+    filename = os.path.abspath(filename)
 
     if image_class is None:
         image = isceobj.createImage()
@@ -455,9 +456,12 @@ def create_phsig(ifg_file, cor_file=None):
 
 
 def multilook_configs(
-    project_dir=".", looks=(15, 9), max_temp=500, crossmul_only=False
+    project_dir=".", looks=(15, 9), max_temp=None, crossmul_only=False
 ):
     from . import utils
+
+    if not max_temp:
+        max_temp = 100000
 
     # TODO: fix
     os.chdir(project_dir)
@@ -501,6 +505,8 @@ def multilook_configs(
             fout.write("\n")
         with open(new_run_file, "a") as f_run:
             f_run.write(stripmap_line.format(os.path.abspath(out_fname)) + "\n")
+
+    return new_run_file, new_configs_dir
 
 
 def multilook_geom(looks=(15, 9), geom_dir="geom_reference"):
