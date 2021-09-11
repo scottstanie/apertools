@@ -100,7 +100,7 @@ DATE_FMT = "%Y%m%d"
 
 # Constants for dataset keys saved in .h5 files
 MASK_FILENAME = "masks.h5"
-# ifg_FILENAME = "ifg_stack.h5"
+IFG_FILENAME = "ifg_stack.h5"
 UNW_FILENAME = "unw_stack.h5"
 COR_FILENAME = "cor_stack.h5"
 

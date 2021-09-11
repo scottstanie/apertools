@@ -353,9 +353,10 @@ def _get_bounds(bbox_rdr, fname=None, transform=None):
 
 
 GEOCODED_PROJECT_FILES = [
-    "unw_stack.h5",
-    "cor_stack.h5",
-    "masks.h5",
+    # "unw_stack.h5",
+    # "cor_stack.h5",
+    "ifg_stack.h5",
+    # "masks.h5",
     "elevation_looked.dem",
     "los_enu.tif",
 ]
@@ -364,6 +365,7 @@ COMP_DSETS = {
     "unw_stack.h5": ["stack_flat_shifted"],
     "cor_stack.h5": ["stack"],
     "masks.h5": ["ifg", "slc"],
+    "ifg_stack.h5": ["stack"],
 }
 
 
@@ -372,6 +374,7 @@ def crop_geocoded_project(
     bbox_file=None,
     project_dir=".",
     files_to_crop=GEOCODED_PROJECT_FILES,
+    dsets_to_compress=COMP_DSETS,
     output_dir="cropped",
 ):
     """Subset all important data stacks for geocoded project by bounding box
@@ -395,10 +398,14 @@ def crop_geocoded_project(
         f.write(geojson.bbox_to_wkt(bbox) + "\n")
 
     for fname in files_to_crop:
-        logger.info("Subsetting %s", fname)
+        filepath = os.path.join(project_dir, fname)
+        logger.info("Subsetting %s", filepath)
+        if not os.path.exists(filepath):
+            logger.warning("%s doesn't exists. Skipping subset", filepath)
+            continue
 
         if fname.endswith(".h5"):
-            dsets = COMP_DSETS[fname]
+            dsets = dsets_to_compress[fname]
             subset_h5(
                 project_dir,
                 output_dir,
@@ -466,6 +473,8 @@ def subset_h5(
 def crop_stacks_by_date(
     min_date=None,
     max_date=None,
+    max_temporal_baseline=None,
+    max_temporal_bandwidth=None,
     project_dir=".",
     files_to_crop=list(COMP_DSETS.keys()),
 ):
@@ -479,17 +488,24 @@ def crop_stacks_by_date(
         output_dir (str): path to save the output subsetted dataset
     """
     import xarray as xr
-    from apertools import sario
+    from apertools import sario,utils
 
     fmt = "%Y%m%d"
+    out_str = ""
+    if max_temporal_baseline:
+        out_str += "_maxtemp{}".format(max_temporal_baseline)
+    if max_temporal_bandwidth:
+        out_str += "_maxbw{}".format(max_temporal_bandwidth)
+
     if min_date and max_date:
-        out_str = "_{}_{}".format(min_date.strftime(fmt), max_date.strftime(fmt))
+        out_str += "_{}_{}".format(min_date.strftime(fmt), max_date.strftime(fmt))
     elif min_date:
-        out_str = "_{}".format(min_date.strftime(fmt))
+        out_str += "_{}".format(min_date.strftime(fmt))
     elif min_date:
-        out_str = "_{}".format(max_date.strftime(fmt))
-    else:
-        raise ValueError("Need either min_date or max_date")
+        out_str += "_{}".format(max_date.strftime(fmt))
+
+    if not out_str:
+        raise ValueError("No limiting criteria provided.")
 
     if min_date:
         if not min_date.tzinfo:
@@ -504,12 +520,19 @@ def crop_stacks_by_date(
 
     ifglist = sario.load_ifglist_from_h5(files_to_crop[0])
     # dc2 = datetime.datetime(2019, 1, 1, tzinfo=datetime.timezone.utc)
-    ifglist2019 = [
-        ifg
-        for ifg in ifglist
-        if min_date <= ifg[0] <= max_date and min_date <= ifg[1] <= max_date
-    ]
-    idxs_ifg = [ifglist.index(ifg) for ifg in ifglist2019]
+    # ifglist2019 = [
+    #     ifg
+    #     for ifg in ifglist
+    #     if min_date <= ifg[0] <= max_date and min_date <= ifg[1] <= max_date
+    # ]
+    # ifg_idxs = [ifglist.index(ifg) for ifg in ifglist2019]
+    slclist, ifglist, ifg_idxs = utils.filter_slclist_ifglist(
+        ifg_date_list=ifglist,
+        min_date=min_date,
+        max_date=max_date,
+        max_temporal_baseline=max_temporal_baseline,
+        max_bandwidth=max_temporal_bandwidth,
+    )
 
     # slclist = sario.load_slclist_from_h5(files_to_crop[0])
     # slclist2019 = [slc for slc in slclist if min_date <= slc <= max_date]
@@ -525,8 +548,8 @@ def crop_stacks_by_date(
             continue
 
         ds = xr.open_dataset(filepath, engine="h5netcdf", phony_dims="sort")
-        # ds_sub = ds.sel(ifg_idx=idxs_ifg, phony_dim_4=idxs_slc)
-        ds_sub = ds.sel(ifg_idx=idxs_ifg)
+        # ds_sub = ds.sel(ifg_idx=ifg_idxs, phony_dim_4=idxs_slc)
+        ds_sub = ds.sel(ifg_idx=ifg_idxs)
         logger.info("Input dimensions: %s", ds.dims)
         logger.info("Output dimensions: %s", ds_sub.dims)
 

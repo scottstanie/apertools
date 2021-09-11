@@ -509,7 +509,7 @@ def multilook_configs(
     return new_run_file, new_configs_dir
 
 
-def multilook_geom(looks=(15, 9), geom_dir="geom_reference"):
+def multilook_geom(looks=(15, 9), geom_dir="geom_reference", overwrite=False):
     """Redo the geom_reference files with the extra multilook factor for unwrapping"""
     from . import utils
 
@@ -528,6 +528,8 @@ def multilook_geom(looks=(15, 9), geom_dir="geom_reference"):
 
     for f in tqdm(geom_files):
         f_out = f.replace(geom_dir, geom_dir_new)
+        if os.path.exists(f_out) and not overwrite:
+            continue
         cmd = f"gdal_translate -of ISCE -outsize {out_cols} {out_rows} {f} {f_out}"
         tqdm.write(cmd)
         subprocess.check_call(cmd, shell=True)
