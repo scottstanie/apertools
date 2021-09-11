@@ -202,7 +202,7 @@ class InsarGPSCompare:
         df_insar = pd.DataFrame({"date": dates})
         for row in df_gps_locations.itertuples():
             ts = apertools.utils.window_stack_xr(
-                da, x=row.lon, y=row.lat, window_size=self.window_size
+                da, lon=row.lon, lat=row.lat, window_size=self.window_size
             )
             if is_2d:
                 # Make a cum_defo from the linear trend

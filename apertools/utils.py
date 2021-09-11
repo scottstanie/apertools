@@ -616,38 +616,45 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
         window_size -= 1
         print("Making window_size an odd number (%s) to get square" % window_size)
 
-    win_size = window_size // 2
-    subset = stack[
-        :, row - win_size : row + win_size + 1, col - win_size : col + win_size + 1
-    ]
-    return func(subset, axis=(1, 2))
+    half_win = window_size // 2
+    row_slice = slice(row - half_win, row + half_win + 1)
+    col_slice = slice(col - half_win, col + half_win + 1)
+    subset = stack[..., row_slice, col_slice]
+    return func(subset, axis=(-2, -1))
 
 
-def window_stack_xr(da, x, y, window_size=3, x_name="lon", y_name="lat"):
+def window_stack_xr(
+    da,
+    lon=None,
+    lat=None,
+    row=None,
+    col=None,
+    window_size=5,
+    lon_name="lon",
+    lat_name="lat",
+    func=np.mean,
+):
     """Combines square around (row, col) in 3D DataArray to a 1D array
 
     Used to average around a pixel in a stack and produce a timeseries
     """
-    is_2d_latlon = getattr(da, x_name).ndim
-    if is_2d_latlon == 2:
-        # It wont be in the indices in this case, just a 2d data array
-        from apertools import latlon
+    is_2d_latlon = getattr(da, lon_name).ndim
+    if row is None or col is None:
+        if is_2d_latlon == 2:
+            # It wont be in the indices in this case, just a 2d data array
+            from apertools import latlon
 
-        y_loc, x_loc = latlon.latlon_to_rowcol_rdr(
-            y, x, lat_arr=getattr(da, y_name).data, lon_arr=getattr(da, x_name).data
-        )
-        if x_loc is None or y_loc is None:
-            # out of bounds (could be on a diagonal corner of the bbox)
-            raise ValueError(f"({x}, {y}) is out of bounds for {da}")
-    else:
-        x_loc = da.indexes[x_name].get_loc(x, method="nearest")
-        y_loc = da.indexes[y_name].get_loc(y, method="nearest")
+            row, col = latlon.latlon_to_rowcol_rdr(
+                lat, lon, lat_arr=getattr(da, lat_name).data, lon_arr=getattr(da, lon_name).data
+            )
+            if col is None or row is None:
+                # out of bounds (could be on a diagonal corner of the bbox)
+                raise ValueError(f"({lon}, {lat}) is out of bounds for {da}")
+        else:
+            col = da.indexes[lon_name].get_loc(lon, method="nearest")
+            row = da.indexes[lat_name].get_loc(lat, method="nearest")
 
-    w = window_size // 2 if window_size % 2 == 1 else (window_size - 1) // 2
-
-    y_slice = slice(y_loc - w, y_loc + w + 1)
-    x_slice = slice(x_loc - w, x_loc + w + 1)
-    return da[..., y_slice, x_slice].mean(axis=(-2, -1))
+    return window_stack(da, row, col, window_size=window_size, func=func)
 
 
 # Randoms using the sentinelapi
