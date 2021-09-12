@@ -42,7 +42,7 @@ setuptools.setup(
             "aper=apertools.scripts.cli:cli",
             # "createdem=apertools.createdem:cli",
             "asfdownload=apertools.asfdownload:cli",
-            "geocode=apertools.scripts.geocode:main",
+            "geocode=apertools.scripts.run_geocode:main",
         ],
     },
     zip_safe=False,

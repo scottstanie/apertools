@@ -12,33 +12,39 @@ from apertools.log import get_log
 logger = get_log()
 
 
-def find_enu_coeffs(lon, lat, los_map_file=None, verbose=False):
+def find_enu_coeffs(lon, lat, los_map_file=None, coordinates=None, geom_dir="geom_reference"):
     """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
 
     Args:
         lon (float): longitude of point to get LOS vector
         lat (float): latitude of point
+        los_map_file (str): name of 3-band image with E,N,U as bands.
+        coordinates (str): ['geo', 'rdr']. Pass 'rdr' if `los_map_file` is in
+            radar coordinates
+        geom_dir (str): if `los_map_file` is in radar coordinates, directory
+            containing `lat.rdr` and `lon.rdr` files
 
     Returns:
         ndarray: enu_coeffs, shape = (3,) array [alpha_e, alpha_n, alpha_up]
         Pointing from satellite to ground
         Can be used to project an ENU vector into the line of sight direction
     """
+    import rasterio as rio
 
-    # if los_map_file is not None:
-    if los_map_file.endswith(".h5"):
-        lats, lons, stack = read_los_map_file(los_map_file)
-        row = _find_nearest_idx(lats, lat)
-        col = _find_nearest_idx(lons, lon)
-        return stack[:, row, col]
-    elif los_map_file.endswith(".tif"):
-        # note: could also do this with xarray... but prob would be using rio anyway
-        import rasterio as rio
+    with rio.open(los_map_file) as src:
 
-        with rio.open(los_map_file) as src:
-            # Note: https://github.com/mapbox/rasterio/blob/master/rasterio/sample.py#L42
-            # uses floor by default, so may be different
-            return list(src.sample([(lon, lat)]))
+        # src.index(-121.915628095, 37.87857542)  # (1250, -566)
+        if coordinates == "rdr":
+            from apertools import latlon
+
+            row, col = latlon.latlon_to_rowcol_rdr(lat, lon, geom_dir=geom_dir)
+        else:
+            row, col = src.index(lon, lat)
+
+        nrows, ncols = src.shape[-2:]
+        if any([row < 0, col < 0, row >= nrows, col >= ncols]):
+            raise ValueError(f"({lon}, {lat}) is out of bounds from {src.bounds}")
+        return src.read(window=((row, row + 1), (col, col + 1))).ravel()
 
 
 def solve_east_up(
@@ -94,26 +100,6 @@ def solve_east_up(
         )
 
     return east, up
-
-
-def read_los_map_file(los_map_file):
-    """Returns the (lats, lons, ENU stack) from `los_map_file`"""
-    if los_map_file.endswith(".tif"):
-        import rasterio as rio
-
-        with rio.open(los_map_file) as src:
-            return src.read()
-    elif los_map_file.endswith(".h5"):
-        with h5py.File(los_map_file, "r") as f:
-            return f["lats"][:], f["lons"][:], f["stack"][:]
-    else:
-        raise ValueError("Expected los_map_file to be HDF5 or .tif")
-
-
-def _find_nearest_idx(array, value):
-    array = np.asarray(array)
-    return (np.abs(array - value)).argmin()
-    # return array[idx]
 
 
 # TODO: fix this for having premade map
@@ -219,9 +205,9 @@ def project_enu_to_los(
         data_enu (ndarray[float]): E,N,U coordinates, either
             as list of 3, or a (3, k) array of k ENU vectors
         enu_coeffs (ndarray) size 3 array of the E,N,U coefficients
-        of a line of sight vector. Comes from `find_enu_coeffs`.
-            If this arg is used, others are not needed
-        los_xyz (ndarray[float]) length 3 line of sight, in XYZ frame
+            of a line of sight vector.
+        los_xyz (ndarray[float]): Optional. length 3 line of sight, in XYZ frame
+            Needed if enu_coeffs is not provided
         lat (float): degrees latitude of los point
         lon (float): degrees longitude of los point
 

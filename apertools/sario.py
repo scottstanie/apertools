@@ -1404,6 +1404,7 @@ def save_vrt(
     metadata_dict=None,
     metadata_domain=None,
     verbose=True,
+    **kwargs,
 ):
     """Save a VRT corresponding to a raw raster file
 
