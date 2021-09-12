@@ -242,6 +242,7 @@ class InsarGPSCompare:
                     station_name=row.name,
                     start_date=start_date,
                     end_date=end_date,
+                    zero_start=True,
                     # coordinates=self.coordinates,
                 )
             elif kind.lower() == "enu":

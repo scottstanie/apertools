@@ -1114,12 +1114,18 @@ def save_slclist_to_h5(
     slc_date_list=None,
     igram_ext=".int",
     overwrite=False,
+    alt_name="date",
 ):
     if slc_date_list is None:
         slc_date_list, _ = load_slclist_ifglist(igram_path, igram_ext=igram_ext)
-    return save_datelist_to_h5(
+    dl = save_datelist_to_h5(
         SLCLIST_DSET, out_file, dset_name, slc_date_list, overwrite
     )
+    if alt_name:
+        with h5py.File(out_file, "a") as hf:
+            hf[alt_name] = hf[SLCLIST_DSET]
+
+    return dl
 
 
 def save_ifglist_to_h5(
@@ -1223,21 +1229,25 @@ def check_dset(h5file, dset_name, overwrite, attr_name=None):
     with h5py.File(h5file, "a") as f:
         if attr_name is not None:
             if attr_name in f.get(dset_name, {}):
-                logger.info(f"{dset_name}:{attr_name} already exists in {h5file},")
+                msg = f"{dset_name}:{attr_name} already exists in {h5file}, "
                 if overwrite:
-                    logger.info("Overwrite true: Deleting.")
                     del f[dset_name].attrs[attr_name]
+                    msg += "overwrite true: Deleting."
+                    logger.info(msg)
                 else:
-                    logger.info("Skipping.")
+                    msg += "skipping"
+                    logger.info(msg)
                     return False
         else:
             if dset_name in f:
-                logger.info(f"{dset_name} already exists in {h5file},")
+                msg = f"{dset_name} already exists in {h5file}, "
                 if overwrite:
-                    logger.info("Overwrite true: Deleting.")
+                    msg += "overwrite true: Deleting."
+                    logger.info(msg)
                     del f[dset_name]
                 else:
-                    logger.info("Skipping.")
+                    msg += "skipping"
+                    logger.info(msg)
                     return False
 
         return True
