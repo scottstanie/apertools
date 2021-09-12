@@ -17,6 +17,7 @@ def geocode(
     lat_step=0.0005,
     resampling="nearest",
     dtype="float32",
+    nodata=0,
     cleanup=False,
 ):
     import rasterio.errors
@@ -94,7 +95,7 @@ def geocode(
         # Add ENVI header suffix, not replace (.unw.geo.hdr, not .unw.hdr)
         f" -of {driver} -co SUFFIX=ADD"
         # set nodata values on source and destination
-        " -srcnodata 0 -dstnodata 0 "
+        f" -srcnodata {nodata} -dstnodata {nodata} "
         f" {tmp_vrt_in_file} {outfile}"
     )
     _log_and_run(cmd)

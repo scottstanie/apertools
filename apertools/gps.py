@@ -242,7 +242,7 @@ class InsarGPSCompare:
                     station_name=row.name,
                     start_date=start_date,
                     end_date=end_date,
-                    coordinates=self.coordinates,
+                    # coordinates=self.coordinates,
                 )
             elif kind.lower() == "enu":
                 df_los = load_station_enu(
@@ -809,6 +809,7 @@ def load_gps_los(
     enu_coeffs=None,
     force_download=False,
     coordinates="geo",
+    geom_dir="geom_reference",
     days_smooth=0,
 ):
     """Load the GPS timeseries of a station name projected onto InSAR LOS
@@ -839,7 +840,6 @@ def load_gps_los(
     enu_data = df_enu[["east", "north", "up"]].values.T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
     los_gps_data = los_gps_data.reshape(-1)
-    breakpoint()
 
     if zero_start:
         logger.debug("Resetting GPS data start to 0")

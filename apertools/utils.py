@@ -645,7 +645,10 @@ def window_stack_xr(
             from apertools import latlon
 
             row, col = latlon.latlon_to_rowcol_rdr(
-                lat, lon, lat_arr=getattr(da, lat_name).data, lon_arr=getattr(da, lon_name).data
+                lat,
+                lon,
+                lat_arr=getattr(da, lat_name).data,
+                lon_arr=getattr(da, lon_name).data,
             )
             if col is None or row is None:
                 # out of bounds (could be on a diagonal corner of the bbox)
@@ -780,10 +783,29 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
     return path
 
 
-def az_inc_to_enu(infile, outfile="los_enu.tif"):
-    """azimuth/inclination to ENU
+def az_inc_to_enu(
+    infile="los.rdr",
+    outfile="los_enu.tif",
+    do_geocode=True,
+    latlon_step=0.001,
+    invert=True,
+    nodata=0,
+):
+    """Convert a 2 band azimuth/inclindation line of sight file to 3 band east/north/up
 
     Source: http://earthdef.caltech.edu/boards/4/topics/327
+    Args:
+        infile (str, optional): 2-band los file. Defaults to "los.rdr".
+        outfile (str, optional): output ENU file. Defaults to "los_enu.tif".
+        do_geocode (bool, optional): If the `infile` is in radar coordinates (e.g.
+            ISCE's geometry folder has "los.rdr"). Defaults to True.
+        latlon_step (float, optional): if geocoding, lat/lon spacing. Defaults to 0.001.
+        invert (bool, optional): Reverse the LOS convention in the output. Defaults to True.
+            E.g. ISCE uses "from ground toward satellite" line of sight vector convention,
+            so the "up" component is positive".
+            `invert=True` makes the output use "satellite-to-ground" convention, and "up" is
+            negative.
+        nodata (float): value to use for nodata if geocoding. Defaults to 0.
     """
     cmd = f'gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile tmp_los_east.tif --calc="sin(deg2rad(A)) * cos(deg2rad(B+90))" '
     print(cmd)
@@ -805,6 +827,35 @@ def az_inc_to_enu(infile, outfile="los_enu.tif"):
         shell=True,
         check=True,
     )
+    temp_enu = "temp_los_enu.tif"
+    if do_geocode:
+        from apertools import geocode
+
+        logger.info("Geocoding LOS file")
+        os.rename(outfile, temp_enu)
+        # Assume the infile is in a geom dir...
+        geom_dir = os.path.dirname(infile)
+        lon_file = os.path.join(geom_dir, "lon.rdr")
+        lat_file = os.path.join(geom_dir, "lat.rdr")
+        geocode.geocode(
+            infile=temp_enu,
+            outfile=outfile,
+            lat=lat_file,
+            lon=lon_file,
+            lat_step=latlon_step,
+            lon_step=latlon_step,
+            nodata=nodata,
+        )
+        os.remove(temp_enu)
+    if invert:
+        logger.info("Inverting LOS direction")
+        cmd = (
+            f"gdal_calc.py --quiet --NoDataValue={nodata} --allBands=A -A {outfile} "
+            f' --outfile={temp_enu} --calc "-1 * A" '
+        )
+        logger.info(cmd)
+        subprocess.run(cmd, check=True, shell=True)
+        os.rename(temp_enu, outfile)
 
 
 def enu_to_az_inc(infile, outfile="los_az_inc.tif"):
