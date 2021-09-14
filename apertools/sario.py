@@ -51,6 +51,7 @@ UAVSAR_EXTS = [
 ]
 ALOS_EXTS = [".slc", ".cc", ".int", ".amp", ".unw", ".unwflat"]  # TODO: check these
 BOOL_EXTS = [".mask", ".msk", ".wbd"]
+UINT_EXTS = [".conncomp"]
 ROI_PAC_EXTS = [".phs"]
 GDAL_FORMATS = [".vrt", ".tif"]
 IMAGE_EXTS = [".png", ".tif", ".tiff", ".jpg"]
@@ -268,7 +269,26 @@ def load(
 
     if ext in BOOL_EXTS:
         return _take_looks(
-            load_bool(filename, arr=arr, rsc_data=rsc_data, rows=rows, cols=cols),
+            load_binary_img(
+                filename,
+                arr=arr,
+                rsc_data=rsc_data,
+                rows=rows,
+                cols=cols,
+                dtype=np.bool,
+            ),
+            *looks,
+        )
+    if ext in UINT_EXTS:
+        return _take_looks(
+            load_binary_img(
+                filename,
+                arr=arr,
+                rows=rows,
+                cols=cols,
+                rsc_data=rsc_data,
+                dtype=np.uint8,
+            ),
             *looks,
         )
     # Note on UAVSAR loading: they dont seem to do any stacked files
@@ -285,27 +305,30 @@ def load(
         )
         return stacked[..., ::downsample, ::downsample]
     elif is_complex(filename=filename, ext=ext):
+        # Complex64
         return _take_looks(
-            load_complex(
+            load_binary_img(
                 filename,
                 arr=arr,
-                ann_info=ann_info,
-                rsc_data=rsc_data,
                 rows=rows,
                 cols=cols,
+                ann_info=ann_info,
+                rsc_data=rsc_data,
+                dtype=COMPLEX_64_LE,
             ),
             *looks,
-            **kwargs,
         )
     else:
+        # Real float32
         return _take_looks(
-            load_real(
+            load_binary_img(
                 filename,
                 arr=arr,
-                ann_info=ann_info,
-                rsc_data=rsc_data,
                 rows=rows,
                 cols=cols,
+                ann_info=ann_info,
+                rsc_data=rsc_data,
+                dtype=FLOAT_32_LE,
             ),
             *looks,
         )
@@ -420,6 +443,23 @@ def _load_binary1d(
 def load_binary_img(
     filename, arr=None, rows=None, cols=None, ann_info=None, rsc_data=None, dtype=None
 ):
+    """Loads a binary image into a numpy array
+
+    Size given preference to `rows` and `cols`, or will parse from rsc_data/ann_info
+
+    Args:
+        filename (str): path to the file to open
+        arr (ndarray): pre-allocated array of the correct size/dtype
+        rows (int): manually pass number of rows (overrides rsc/ann data)
+        cols (int): manually pass number of cols (overrides rsc/ann data)
+        rsc_data (dict): output from load_dem_rsc, gives width of file
+        ann_info (dict): data parsed from UAVSAR annotation file
+        dtype (str, np.dtype): data type for array
+
+    Returns:
+        ndarray: values for the real 2D matrix with datatype `dtype`
+
+    """
     data, rows, cols = _load_binary1d(
         filename,
         dtype=dtype,
@@ -430,87 +470,6 @@ def load_binary_img(
         rsc_data=rsc_data,
     )
     return data.reshape([-1, cols])
-
-
-def load_real(filename, arr=None, rows=None, cols=None, ann_info=None, rsc_data=None):
-    """Reads in real 4-byte per pixel files
-
-    Valid filetypes: See sario.REAL_EXTS
-
-    Args:
-        filename (str): path to the file to open
-        arr (ndarray): pre-allocated array of the correct size/dtype
-        rows (int): manually pass number of rows (overrides rsc/ann data)
-        cols (int): manually pass number of cols (overrides rsc/ann data)
-        rsc_data (dict): output from load_dem_rsc, gives width of file
-        ann_info (dict): data parsed from UAVSAR annotation file
-
-    Returns:
-        ndarray: float32 values for the real 2D matrix
-
-    """
-    return load_binary_img(
-        filename,
-        arr=arr,
-        rows=rows,
-        cols=cols,
-        ann_info=ann_info,
-        rsc_data=rsc_data,
-        dtype=FLOAT_32_LE,
-    )
-
-
-def load_bool(filename, arr=None, rows=None, cols=None, ann_info=None, rsc_data=None):
-    """Load binary boolean image
-
-    Args:
-        filename (str): path to the file to open
-        arr (ndarray): pre-allocated array of the correct size/dtype
-        rows (int): manually pass number of rows (overrides rsc/ann data)
-        cols (int): manually pass number of cols (overrides rsc/ann data)
-        rsc_data (dict): output from load_dem_rsc, gives width of file
-        ann_info (dict): data parsed from UAVSAR annotation file
-
-    Returns:
-        ndarray: imaginary numbers of the combined floats (dtype('complex64'))
-    """
-    return load_binary_img(
-        filename,
-        arr=arr,
-        rows=rows,
-        cols=cols,
-        ann_info=ann_info,
-        rsc_data=rsc_data,
-        dtype=np.bool,
-    )
-
-
-def load_complex(
-    filename, arr=None, rows=None, cols=None, ann_info=None, rsc_data=None
-):
-    """Loads a Complex64 binary image
-
-    Args:
-        filename (str): path to the file to open
-        arr (ndarray): pre-allocated array of the correct size/dtype
-        rows (int): manually pass number of rows (overrides rsc/ann data)
-        cols (int): manually pass number of cols (overrides rsc/ann data)
-        rsc_data (dict): output from load_dem_rsc, gives width of file
-        ann_info (dict): data parsed from UAVSAR annotation file
-
-    Returns:
-        ndarray: complex64 values for the real 2D matrix
-
-    """
-    return load_binary_img(
-        filename,
-        arr=arr,
-        rows=rows,
-        cols=cols,
-        ann_info=ann_info,
-        rsc_data=rsc_data,
-        dtype=COMPLEX_64_LE,
-    )
 
 
 def load_stacked_img(
