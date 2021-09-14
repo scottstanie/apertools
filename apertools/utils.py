@@ -259,11 +259,10 @@ def filter_slclist_ifglist(
         )
 
     # Now just use the ones remaining to reform the unique SAR dates
-    valid_sar_date = list(sorted(set(itertools.chain.from_iterable(valid_ifg_pairs))))
-    # breakpoint()
+    valid_sar_dates = list(sorted(set(itertools.chain.from_iterable(valid_ifg_pairs))))
     # Does the same as np.searchsorted, but works on a list[tuple]
     valid_ifg_idxs = [ifg_date_list.index(tup) for tup in valid_ifg_pairs]
-    return valid_sar_date, valid_ifg_pairs, valid_ifg_idxs
+    return valid_sar_dates, valid_ifg_pairs, valid_ifg_idxs
 
 
 def ignore_slc_dates(

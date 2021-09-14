@@ -660,7 +660,7 @@ def bbox_from_latlon_arrs(lon_arr, lat_arr):
     return left, bot, right, top
 
 
-def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None, warn_oob=True):
+def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None, warn_oob=True, looks=None):
     """Find the row/col in radar coordinates (azimuth/range index) for a lat/lon point
 
     Args:
@@ -698,7 +698,13 @@ def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None, wa
         if warn_oob:
             logger.warning(f"{lat = }, {lon = } is outside latitude array bounds")
         return None, None
-    return round(np.mean(rows)), round(np.mean(cols))
+    row, col = round(np.mean(rows)), round(np.mean(cols))
+    # If we only had the looked geometry files, multiply for the SLC version:
+    if looks is not None:
+        row_looks, col_looks = looks
+        row *= row_looks
+        col *= col_looks
+    return row, col
 
 
 def rowcol_to_latlon_rdr(row, col, lat_arr=None, lon_arr=None, geom_dir=None):
