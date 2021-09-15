@@ -660,7 +660,9 @@ def bbox_from_latlon_arrs(lon_arr, lat_arr):
     return left, bot, right, top
 
 
-def latlon_to_rowcol_rdr(lat, lon, lat_arr=None, lon_arr=None, geom_dir=None, warn_oob=True, looks=None):
+def latlon_to_rowcol_rdr(
+    lat, lon, lat_arr=None, lon_arr=None, geom_dir=None, warn_oob=True, looks=None
+):
     """Find the row/col in radar coordinates (azimuth/range index) for a lat/lon point
 
     Args:
@@ -733,24 +735,44 @@ def rowcol_to_latlon_rdr(row, col, lat_arr=None, lon_arr=None, geom_dir=None):
     return lat_arr[row, col], lon_arr[row, col]
 
 
-def crop_by_bbox(rdr_image, lat, lon, bbox):
+def crop_rdr_by_bbox(
+    bbox,
+    rdr_image=None,
+    rdr_file=None,
+    lat_arr=None,
+    lon_arr=None,
+    geom_dir=None,
+    **kwargs,
+):
     """Crop an image in radar coordinates by a lat/lon bbox"""
     import numpy as np
+    import apertools.sario
+
+    if rdr_image is None:
+        rdr_image = apertools.sario.load(rdr_file, use_gdal=True, **kwargs)
+
+    if lat_arr is None or lon_arr is None:
+        if geom_dir is None:
+            raise ValueError("need either lat/lon geomaetry arrays or geom_dir")
+        lat_arr, lon_arr = apertools.sario.load_rdr_latlon(geom_dir=geom_dir)
 
     left, bot, right, top = bbox
-    mlon = np.logical_and(lon < right, lon > left)
-    mlat = np.logical_and(lat < top, lat > bot)
+    mlon = np.logical_and(lon_arr < right, lon_arr > left)
+    mlat = np.logical_and(lat_arr < top, lat_arr > bot)
     mask = mlon & mlat
     rows, cols = np.where(mask)
     rmin, rmax = np.min(rows), np.max(rows)
     cmin, cmax = np.min(cols), np.max(cols)
+
     img_crop = rdr_image.copy()
-    img_crop[~mask] = np.nan
-    img_crop = img_crop[rmin:rmax, cmin:cmax]
-    lat_crop = lat.copy()
+    img_crop[..., ~mask] = np.nan
+    img_crop = img_crop[..., rmin:rmax, cmin:cmax]
+
+    lat_crop = lat_arr.copy()
     lat_crop[~mask] = np.nan
     lat_crop = lat_crop[rmin:rmax, cmin:cmax]
-    lon_crop = lon.copy()
+
+    lon_crop = lon_arr.copy()
     lon_crop[~mask] = np.nan
     lon_crop = lon_crop[rmin:rmax, cmin:cmax]
     return img_crop, lat_crop, lon_crop

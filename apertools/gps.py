@@ -521,7 +521,7 @@ def load_station_enu(
                 "{gps_data_file} does not exist, download_if_missing = False"
             )
 
-    df = pd.read_csv(gps_data_file, header=0, sep=r"\s+", engine="python")
+    df = pd.read_csv(gps_data_file, header=0, sep=r"\s+", engine="c")
     clean_df = _clean_gps_df(df, start_date, end_date)
     if to_cm:
         # logger.info("Converting %s GPS to cm" % station_name)
@@ -637,11 +637,11 @@ def read_station_llas(filename=None, to_geodataframe=False, force_download=True)
     logger.debug("Searching %s for gps data" % filename)
 
     try:
-        df = pd.read_csv(lla_path, sep=r"\s+", engine="python", header=None)
+        df = pd.read_csv(lla_path, sep=r"\s+", engine="c", header=None)
     except FileNotFoundError:
         logger.info("Downloading from %s to %s", STATION_LLH_URL, lla_path)
         download_station_locations(lla_path, STATION_LLH_URL)
-        df = pd.read_csv(lla_path, sep=r"\s+", engine="python", header=None)
+        df = pd.read_csv(lla_path, sep=r"\s+", engine="c", header=None)
 
     df.columns = ["name", "lat", "lon", "alt"]
     if to_geodataframe:
@@ -673,7 +673,7 @@ def read_station_xyzs(filename=None):
         df = pd.read_csv(
             filename,
             sep=r"\s+",
-            engine="python",
+            engine="c",
             warn_bad_lines=True,
             error_bad_lines=False,
         )
@@ -683,7 +683,7 @@ def read_station_xyzs(filename=None):
         df = pd.read_csv(
             filename,
             sep=r"\s+",
-            engine="python",
+            engine="c",
             warn_bad_lines=True,
             error_bad_lines=False,
         )

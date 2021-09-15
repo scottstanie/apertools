@@ -125,6 +125,7 @@ STACK_FLAT_DSET = "stack_flat"
 LOS_FILENAME = "los_enu.tif"
 ISCE_GEOM_DIR = "geom_reference"
 ISCE_SLC_DIR = "merged/SLC"
+ISCE_MASK_FILES = ["waterMask.rdr", "shadowMask.rdr"]
 
 # List of platforms where i've set up loading for their files
 PLATFORMS = ("sentinel", "uavsar")
@@ -614,11 +615,7 @@ def save(
 
         _force_float32(data).tofile(filename)
     elif ext in STACKED_FILES:
-        if data.ndim != 3:
-            raise ValueError("Need 3D stack ([amp, data]) to save.")
-        # first = data.reshape((rows, 2 * cols))[:, :cols]
-        # second = data.reshape((rows, 2 * cols))[:, cols:]
-        np.hstack((data[0], data[1])).astype(FLOAT_32_LE).tofile(filename)
+        save_bil(filename, data, dtype=FLOAT_32_LE)
 
     else:
         raise NotImplementedError("{} saving not implemented.".format(ext))
@@ -626,6 +623,24 @@ def save(
 
 def save_hgt(filename, amp_data, height_data):
     save(filename, np.stack((amp_data, height_data), axis=0))
+
+
+def save_bil(filename, data, dtype=np.float32):
+    """Save a Band interleaves (BIL) array
+
+    also known as "ALT_LINE_DATA" in SNAPHU's documentation.
+    If data is a 2D array (only 1 band given), will save the
+    first band with all zeros of same size
+    """
+    if data.ndim != 3:
+        # raise ValueError("Need 3D stack ([amp, data]) to save.")
+        band1 = np.zeros(data.shape, dtype=dtype)
+        band2 = data
+    else:
+        band1, band2 = data
+    # first = data.reshape((rows, 2 * cols))[:, :cols]
+    # second = data.reshape((rows, 2 * cols))[:, cols:]
+    np.hstack((band1, band2)).astype(dtype).tofile(filename)
 
 
 def load_stack(file_list=None, directory=None, file_ext=None, **kwargs):
@@ -1150,10 +1165,11 @@ def get_datenum_units():
 
 def ifglist_to_filenames(ifg_date_list, ext=".int"):
     """Convert date pairs to list of string filenames"""
-    return [
-        "{}_{}{ext}".format(a.strftime(DATE_FMT), b.strftime(DATE_FMT), ext=ext)
-        for a, b in ifg_date_list
-    ]
+    if isinstance(ifg_date_list[0], datetime.date):
+        a, b = ifg_date_list
+        return "{}_{}{ext}".format(a.strftime(DATE_FMT), b.strftime(DATE_FMT), ext=ext)
+    else:
+        return [ifglist_to_filenames(p, ext=ext) for p in ifg_date_list]
 
 
 def load_slclist_ifglist(
@@ -1281,6 +1297,19 @@ def load_single_mask(
         dset = f[IFG_MASK_DSET]
         with dset.astype(bool):
             return dset[idx]
+
+
+def load_isce_combined_mask(geom_dir=ISCE_GEOM_DIR, mask_files=ISCE_MASK_FILES):
+
+    masks = []
+    for mf in ISCE_MASK_FILES:
+        m = load(os.path.join(geom_dir, mf), use_gdal=True, band=1).astype(bool)
+        if "water" in mf.lower():
+            # water has 1s on good pixels
+            masks.append(~m)
+        else:
+            masks.append(m)
+    return np.any(np.stack(masks), axis=0)
 
 
 # ######### GDAL FUNCTIONS ##############

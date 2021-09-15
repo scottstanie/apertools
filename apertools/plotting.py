@@ -83,6 +83,7 @@ def plot_ifg(
     max_pct=99,
     subplot_layout=None,
     figsize=None,
+    zero_mean_phase=False,
     **kwargs,
 ):
     ifg = np.nan_to_num(ifg, copy=True, nan=0)
@@ -104,6 +105,8 @@ def plot_ifg(
     fig.colorbar(axim, ax=ax, extend="max")
 
     phase = phase_to_2pi(ifg)
+    if zero_mean_phase:
+        phase -= phase.mean()
     ax = axes[1]
     # Note: other interpolations (besides nearest/None) make dismph colorscheme look weird
     axim = ax.imshow(phase, cmap=phase_cmap, interpolation="nearest")
@@ -114,18 +117,19 @@ def plot_ifg(
     axim = ax.imshow(dismph_img)
 
     if title:
-        axes.set_title(title)
+        fig.suptitle(title)
+        # axes[0].set_title(title)
     fig.tight_layout()
     return axes
 
 
-def plot_rewrapped(unw, ax=None, cmap="dismph", show_cbar=True):
+def plot_rewrapped(unw, ax=None, cmap="dismph", show_cbar=True, wrap_level=3 * np.pi):
     # Rewrap the unwrapped for easiest visual of differences
     if ax is None:
         fig, ax = plt.subplots()
-    vmax, vmin = 3 * np.pi, 0
+    vmax, vmin = wrap_level, 0
     axim = ax.imshow(
-        np.mod(unw, 3 * np.pi),
+        np.mod(unw, wrap_level),
         cmap=cmap,
         vmax=vmax,
         vmin=vmin,
@@ -560,6 +564,7 @@ def plot_img_diff(
     figsize=None,
     interpolation=None,
     aspect=None,
+    share=True,
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
@@ -573,7 +578,7 @@ def plot_img_diff(
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
     fig, axes = plt.subplots(
-        1, ncols, sharex=True, sharey=True, figsize=figsize, squeeze=False
+        1, ncols, sharex=share, sharey=share, figsize=figsize, squeeze=False
     )
     axes = axes.ravel()
     for ii in range(n):

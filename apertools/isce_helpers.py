@@ -50,14 +50,14 @@ def multilook(infile, outname=None, alks=5, rlks=15):
     return outname
 
 
-def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
+def generateIgram(slcFile1, slcFile2, ifgFile, azLooks, rgLooks, compute_cor=True):
     imageSlc1 = isceobj.createImage()
-    f1 = file1 + ".xml" if not file1.endswith(".xml") else file1
+    f1 = slcFile1 + ".xml" if not slcFile1.endswith(".xml") else slcFile1
     print(f"Loading {f1}")
     imageSlc1.load(f1)
 
     imageSlc2 = isceobj.createImage()
-    f2 = file2 + ".xml" if not file2.endswith(".xml") else file2
+    f2 = slcFile2 + ".xml" if not slcFile2.endswith(".xml") else slcFile2
     print(f"Loading {f2}")
     imageSlc2.load(f2)
 
@@ -77,14 +77,14 @@ def generateIgram(file1, file2, resampName, azLooks, rgLooks, compute_cor=True):
 
     lines = min(imageSlc1.getLength(), imageSlc2.getLength())
 
-    if ".flat" in resampName:
-        resampAmp = resampName.replace(".flat", ".amp")
-    elif ".int" in resampName:
-        resampAmp = resampName.replace(".int", ".amp")
+    if ".flat" in ifgFile:
+        resampAmp = ifgFile.replace(".flat", ".amp")
+    elif ".int" in ifgFile:
+        resampAmp = ifgFile.replace(".int", ".amp")
     else:
-        resampAmp = resampName + ".amp"
+        resampAmp = ifgFile + ".amp"
 
-    resampInt = resampName
+    resampInt = ifgFile
 
     objInt = isceobj.createIntImage()
     objInt.setFilename(resampInt)
@@ -396,7 +396,7 @@ def create_unfiltered_phsig_for_project(project_dir, search_term="Igrams/**/2*.i
             create_phsig(fname)
 
 
-def create_cor_from_int_amp(fname, verbose=False):
+def create_cor_from_int_amp(fname, verbose=False, mask=None):
     with rio.open(fname) as src1:
         shape = src1.shape
 
@@ -414,6 +414,8 @@ def create_cor_from_int_amp(fname, verbose=False):
         meta["count"] = 1
 
     cor = np.abs(ifg) / (amp1 * amp2 + 1e-7)
+    if mask is not None:
+        cor[mask] = 0
     # calulate and save (not sure how to just save an array in isce)
     with rio.open(cor_filename, "w", **meta) as dst:
         dst.write(cor, 1)
@@ -527,6 +529,12 @@ def multilook_geom(looks=(15, 9), geom_dir="geom_reference", overwrite=False):
     utils.mkdir_p(geom_dir_new)
 
     for f in tqdm(geom_files):
+        try:
+            src = rio.open(f)
+            src.close()
+        except rio.errors.RasterioIOError:
+            logger.warning("Cant open %s, skipping", f)
+            continue
         f_out = f.replace(geom_dir, geom_dir_new)
         if os.path.exists(f_out) and not overwrite:
             continue
