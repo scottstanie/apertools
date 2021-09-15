@@ -15,6 +15,7 @@ def geocode(
     bbox=None,
     lon_step=0.0005,
     lat_step=0.0005,
+    looks=None,
     resampling="nearest",
     dtype="float32",
     nodata=0,
@@ -35,7 +36,7 @@ def geocode(
             logger.info("Using lat/lon files: %s, %s", lat, lon)
 
     logger.info("Creating temp lat/lon VRT files.")
-    tmp_lat_file, tmp_lon_file = prepare_lat_lon(lat, lon)
+    tmp_lat_file, tmp_lon_file = prepare_lat_lon(lat, lon, looks=looks)
     if not bbox:
         logger.info("Finding bbox from lat/lon file")
         bbox = _get_bbox_from_files(tmp_lat_file, tmp_lon_file)
@@ -192,10 +193,13 @@ def _form_outfile(infile):
     return outfile
 
 
-def prepare_lat_lon(lat_file, lon_file):
+def prepare_lat_lon(lat_file, lon_file, looks=None):
     dirname, lat_file, _ = _abs_path_hdf5_string(lat_file)
     dirname, lon_file, _ = _abs_path_hdf5_string(lon_file)
-    row_looks, col_looks = get_looks_rdr(lat_file)
+    if looks is None:
+        row_looks, col_looks = get_looks_rdr(lat_file)
+    else:
+        row_looks, col_looks = looks
     print(f"{row_looks = } {col_looks = }")
 
     # temp_lat = lat_file + ".temp_geoloc.vrt"

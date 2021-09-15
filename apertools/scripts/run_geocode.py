@@ -68,6 +68,12 @@ def get_cli_args():
         help="output pixel size (latitude) in degrees (default = %(default)s)",
     )
     parser.add_argument(
+        "--looks",
+        type=int,
+        nargs=2,
+        help="Looks for input file, beyond with the --lat-file' and '--lon-file' show.",
+    )
+    parser.add_argument(
         "-r",
         "--resampling",
         default=RESAMPLE_CHOICES[0],
@@ -87,6 +93,7 @@ def get_cli_args():
 
 def main():
     args = get_cli_args()
+    print(args.looks)
     arg_dict = vars(args)
     logger.info("Input arguments:")
     logger.info(arg_dict)
