@@ -53,9 +53,10 @@ def form_url(
     bbox=None,
     dem=None,
     # geojson=None,
+    wkt_file=None,
     start=None,
     end=None,
-    processingLevel="RAW",
+    processingLevel="SLC",
     relativeOrbit=None,
     absoluteOrbit=None,
     flightLine=None,
@@ -77,6 +78,8 @@ def form_url(
     """
     if dem is not None:
         bbox = get_dem_bbox(dem)
+    elif wkt_file is not None:
+        bbox = get_wkt_bbox(wkt_file)
 
     # if bbox is None and absoluteOrbit is None:
     # raise ValueError("Need either bbox or dem options without absoluteOrbit")
@@ -132,6 +135,13 @@ def get_dem_bbox(fname):
     with rio.open(fname) as ds:
         # left, bottom, right, top = ds.bounds
         return ds.bounds
+
+
+def get_wkt_bbox(fname):
+    from shapely import wkt
+
+    with open(fname) as f:
+        return wkt.load(f).bounds
 
 
 def parse_query_results(fname="asfquery.geojson"):
@@ -222,6 +232,10 @@ def cli():
         help="Filename of a (gdal-readable) DEM",
     )
     p.add_argument(
+        "--wkt-file",
+        help="Filename of a WKT polygon to search within",
+    )
+    p.add_argument(
         "--start",
         help="Starting date for query (recommended: YYYY-MM-DD)",
     )
@@ -236,13 +250,13 @@ def cli():
     )
     p.add_argument(
         "--processingLevel",
-        # default="RAW",
+        default="SLC",
         help="Level or product to download (default=%(default)s)",
     )
     p.add_argument(
         "--beamMode",
         help="Type of acquisition mode for data (default=%(default)s)",
-        # default="IW",
+        default="IW",
     )
     p.add_argument(
         "--relativeOrbit",
