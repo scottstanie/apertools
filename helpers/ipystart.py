@@ -1,7 +1,22 @@
 get_ipython().run_line_magic("load_ext", "autoreload")
 get_ipython().run_line_magic("autoreload", "2")
 import os
+from collections import Counter
+import sys
+import glob
+import requests
+import datetime
+import itertools
+import subprocess
 
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import hdf5plugin
+import h5py
+import rasterio as rio
+import xarray as xr
 
 def in_screen():
     """Checks if we are currently running in a screen
@@ -12,12 +27,9 @@ def in_screen():
     return os.environ.get("STY") is not None
 
 
-import matplotlib
-
 if in_screen():
     print("Currently in screen, using agg backend")
     matplotlib.use("agg")
-import matplotlib.pyplot as plt
 
 plt.ion()
 
@@ -28,21 +40,6 @@ import apertools.sario as sario
 import apertools.plotting as plotting
 import apertools.utils as utils
 import apertools.parsers as parsers
-
 # import apertools.gps as gps
 # import apertools.latlon as latlon
-
 # from apertools.scripts import *
-import numpy as np
-import pandas as pd
-import sys
-import os
-import glob
-import requests
-import datetime
-import hdf5plugin
-import h5py
-import rasterio as rio
-import xarray as xr
-import itertools
-import subprocess

@@ -1097,6 +1097,8 @@ def save_slclist_to_h5(
     )
     if alt_name:
         with h5py.File(out_file, "a") as hf:
+            if alt_name in hf:
+                del hf[alt_name] 
             hf[alt_name] = hf[SLCLIST_DSET]
 
     return dl
@@ -1549,20 +1551,24 @@ def save_vrt(
     return outfile
 
 
-def shift_by_pixel(in_f, out_f, half_pixel=True):
-    """Shift a raster down and to the right by 1 (or 1/2 if `half_pixel`=True
+def shift_by_pixel(in_f, out_f, full_pixel=True, down_right=False):
+    """Shift a raster up and to the left by 1/2 (or 1 if `full_pixel`=True)
+
+    if `down_right` is True, shifts in the opposite direction.
 
     Can fix problem of pixel center vs pixel edge convention differences
     """
     import copy
     import rasterio as rio
 
-    n = 2 if half_pixel else 1
+    denom = 1 if full_pixel else 2
+    if down_right:
+        denom *= -1
     with rio.open(in_f) as src:
         meta2 = copy.deepcopy(src.meta)
         tsl = list(src.meta["transform"])
-        tsl[2] += tsl[0] / n
-        tsl[5] += tsl[4] / n
+        tsl[2] -= tsl[0] / denom
+        tsl[5] -= tsl[4] / denom
         a2 = rio.transform.Affine(*tsl[:6])
         meta2["transform"] = a2
         with rio.open(out_f, "w", **meta2) as dst:
@@ -1711,15 +1717,21 @@ def rsc_to_geotransform(rsc_data, half_shift=True):
     return (X0, x_step, 0.0, Y0, 0.0, y_step)
 
 
-def set_unit(filename, unit="cm"):
+def set_unit(filename, unit="cm", band=None):
     from osgeo import gdalconst
     from osgeo import gdal
 
-    go = gdal.Open(filename, gdalconst.GA_Update)
-    b1 = go.GetRasterBand(1)
-    b1.SetUnitType(unit)
-    b1 = None
-    go = None
+    ds = gdal.Open(filename, gdalconst.GA_Update)
+    if band is not None:
+        b = ds.GetRasterBand(band)
+        b.SetUnitType(unit)
+        b = None
+    else:
+        for band in range(1, ds.RasterCount + 1):
+            b = ds.GetRasterBand(band)
+            b.SetUnitType(unit)
+            b = None
+    ds = None
 
 
 def cmy_colors():

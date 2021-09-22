@@ -149,6 +149,7 @@ def plot_corr(
 
         # row 2: plot the phase vs elevation plot for one
         max_idx = np.abs(trendvals).argmax().item()
+        breakpoint()
         max_rho = trendvals[max_idx].item()
         ax = axes[1, idx]
         max_idx = np.abs(trendvals).argmax().item()

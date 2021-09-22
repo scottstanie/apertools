@@ -3,7 +3,6 @@
 from __future__ import division, print_function
 import numpy as np
 from numpy import sin, cos
-import h5py
 
 # from scipy import interpolate
 from apertools import subset
@@ -12,7 +11,9 @@ from apertools.log import get_log
 logger = get_log()
 
 
-def find_enu_coeffs(lon, lat, los_map_file=None, coordinates=None, geom_dir="geom_reference"):
+def find_enu_coeffs(
+    lon, lat, los_map_file=None, coordinates=None, geom_dir="geom_reference"
+):
     """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
 
     Args:
@@ -55,6 +56,8 @@ def solve_east_up(
     asc_band=1,
     desc_band=1,
     outfile=None,
+    asc_shift=0.0,
+    desc_shift=0.0
     # asc_dset="velos/1",
     # desc_dset="velos/1",
 ):
@@ -65,6 +68,8 @@ def solve_east_up(
     asc_img, desc_img = subset.read_intersections(
         asc_img_fname, desc_img_fname, asc_band, desc_band
     )
+    asc_img += asc_shift
+    desc_img += desc_shift
 
     if asc_img.shape != desc_img.shape:
         raise ValueError("asc_img not same shape as desc_img")

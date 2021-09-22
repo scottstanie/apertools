@@ -683,12 +683,13 @@ def geotiff(
 @cli.command("set-unit")
 @click.argument("filenames", nargs=-1)
 @click.option("--unit", "-u", default="cm", help="unit for file", show_default=True)
-def set_unit(filenames, unit):
+@click.option("--band", "-b", help="Specify only 1 band to set unit")
+def set_unit(filenames, unit, band):
     """Alter the metadata of gdal-readable file to add units"""
     import apertools.sario
 
     for f in filenames:
-        apertools.sario.set_unit(f, unit)
+        apertools.sario.set_unit(f, unit=unit, band=band)
 
 
 @cli.command("az-inc-to-enu")
@@ -848,24 +849,30 @@ cli.add_command(run_hdf5_to_netcdf)
 @click.argument("in_filename")
 @click.argument("out_filename")
 @click.option(
-    "--half-pixel",
+    "--full-pixel",
     default=False,
-    help="Shift by only half a pixel, instead of full",
+    help="Shift by a full pixel, instead of half",
     is_flag=True,
 )
-def shift_by_pixel(in_filename, out_filename, half_pixel):
-    """Shift an image by a full (or half) pixel down and right"""
+@click.option(
+    "--down-right",
+    default=False,
+    help="Shift image down and right, instead of up/left",
+    is_flag=True,
+)
+def shift_by_pixel(in_filename, out_filename, full_pixel, down_right):
+    """Shift an image by a full (or half) pixel up and to the left (or down/right)"""
     import apertools.sario
 
-    apertools.sario.shift_by_pixel(in_filename, out_filename, half_pixel=half_pixel)
+    apertools.sario.shift_by_pixel(
+        in_filename, out_filename, full_pixel=full_pixel, down_right=down_right
+    )
+
 
 @cli.command("nc-to-tif")
 @click.argument("in_filename")
 @click.argument("out_filename")
-@click.option(
-    "--dset",
-    help="dataset within the netcdf to write out."
-)
+@click.option("--dset", help="dataset within the netcdf to write out.")
 @click.option(
     "--crs",
     default="epsg:4326",
@@ -874,6 +881,7 @@ def shift_by_pixel(in_filename, out_filename, half_pixel):
 )
 def nc_to_tif(in_filename, out_filename, dset, crs):
     import xarray as xr
+
     # import rioxarray
     # xds = rioxarray.open_rasterio
     xds = xr.open_dataset(in_filename)
