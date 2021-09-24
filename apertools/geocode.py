@@ -25,7 +25,11 @@ def geocode(
 
     if not infile:
         raise ValueError("infile is required")
+    
+
     is_hdf5_dset = infile.startswith("HDF5")
+    if not is_hdf5_dset and not os.path.exists(infile):
+        raise ValueError(f"{infile} does not exist.")
     if lat is None or lon is None:
         if not is_hdf5_dset:
             raise ValueError("lat, lon are required if `infile` is not HDF5")
