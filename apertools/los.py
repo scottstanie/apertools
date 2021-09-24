@@ -5,7 +5,7 @@ import numpy as np
 from numpy import sin, cos
 
 # from scipy import interpolate
-from apertools import subset
+from apertools import subset, deramp
 from apertools.log import get_log
 
 logger = get_log()
@@ -57,7 +57,9 @@ def solve_east_up(
     desc_band=1,
     outfile=None,
     asc_shift=0.0,
-    desc_shift=0.0
+    desc_shift=0.0,
+    deramp_order=0,
+    deramp_mask_thresh=3,
     # asc_dset="velos/1",
     # desc_dset="velos/1",
 ):
@@ -68,6 +70,10 @@ def solve_east_up(
     asc_img, desc_img = subset.read_intersections(
         asc_img_fname, desc_img_fname, asc_band, desc_band
     )
+    if deramp_order:
+        asc_img = _deramp(asc_img, deramp_order, deramp_mask_thresh)
+        desc_img = _deramp(desc_img, deramp_order, deramp_mask_thresh)
+
     asc_img += asc_shift
     desc_img += desc_shift
 
@@ -105,6 +111,16 @@ def solve_east_up(
         )
 
     return east, up
+
+
+def _deramp(img, deramp_order, thresh):
+    mask = np.logical_or(img == 0, np.isnan(img))
+    maskbig = np.abs(img) > thresh
+    m = np.logical_or(mask, maskbig)
+
+    out = deramp.remove_ramp(img, deramp_order=deramp_order, mask=m, copy=True)
+    out[mask] = np.nan
+    return out
 
 
 # TODO: fix this for having premade map
