@@ -718,7 +718,7 @@ def map_img(img, bbox, ax=None, crs=None, cmap="gray"):
     ax.imshow(img, transform=crs, extent=extent, origin="upper", cmap=cmap)
 
 
-def set_style(size=15, nolatex=True, grid_on=False):
+def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis"):
     style_dict = {
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
@@ -731,6 +731,7 @@ def set_style(size=15, nolatex=True, grid_on=False):
         "xtick.labelsize": size * 0.75,
         "ytick.labelsize": size * 0.75,
         "axes.grid": grid_on,
+        "image.cmap": cmap,
     }
     plt.rcParams.update(style_dict)
     style = ["science", "no-latex"] if nolatex else "science"
