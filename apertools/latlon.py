@@ -110,8 +110,25 @@ def latlon_to_dist(lat_lon_start, lat_lon_end):
     return WGS84.line_length((lon1, lon2), (lat1, lat2))
 
 
-def pixel_spacing(y_step=None, x_step=None, y_first=None, x_first=None, **kwargs):
+def pixel_spacing(
+    y_step=None,
+    x_step=None,
+    y_first=None,
+    x_first=None,
+    img_xr=None,
+    lat_arr=None,
+    lon_arr=None,
+    **kwargs,
+):
     """Return the (x_spacing, y_spacing) pixel spacing in meters, given degrees"""
+    if img_xr is not None:
+        lon_arr = img_xr.lon
+        lat_arr = img_xr.lat
+    if lat_arr is not None and lon_arr is not None:
+        x_first, y_first = lon_arr[0], lat_arr[0]
+        x_step = lon_arr[1] - lon_arr[0]
+        y_step = lat_arr[1] - lat_arr[0]
+
     start_latlon = (y_first, x_first)
     end_x = (y_first, x_first + x_step)
     x_spacing = latlon_to_dist(start_latlon, end_x)
@@ -119,6 +136,17 @@ def pixel_spacing(y_step=None, x_step=None, y_first=None, x_first=None, **kwargs
     end_y = (y_first + y_step, x_first)
     y_spacing = latlon_to_dist(start_latlon, end_y)
     return x_spacing, y_spacing
+
+
+def get_res_reproject(img):
+    """TODO: why is this 50 m off from the geoid distance?"""
+    test = img[:3, :3]
+    test.rio.write_crs("EPSG:4326", inplace=True)
+    test_xy = test.rio.set_spatial_dims(x_dim="lon", y_dim="lat").rio.reproject(
+        "EPSG:3857"
+    )
+    x_res, y_res = test_xy.x.diff("x")[0].item(), -test_xy.y.diff("y")[0].item()
+    return x_res, y_res
 
 
 def km_to_deg(km, R=6378):
