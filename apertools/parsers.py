@@ -253,8 +253,16 @@ class Sentinel(Base):
         return self.start_time.date()
 
     def get_overlay_extent(self):
-        """Get the extent of the Sentinel L1 frame from the preview/map-overlay.kml file"""
+        """Get the extent of the Sentinel L1 frame from the preview/map-overlay.kml file
+
+        Raises:
+            ValueError: If `self.filename` SAFE folder has no preview/map-overlay.kml
+
+        Returns:
+            list[tuple[float]]: 4 coordinates of frame corners as [(lon1, lat1), ...]
+        """
         from xml.etree import ElementTree
+
         # The name of the unzipped .SAFE directory (with .zip stripped)
         # Strip '/' from end to start in case they pass "blahblah.SAFE/", or splitext[1] is ''
         fname = str(self.filename).rstrip("/").replace(".zip", "").replace(".geo", "")
@@ -277,6 +285,14 @@ class Sentinel(Base):
             for lon, lat in [p.split(",") for p in point_str.split()]
         ]
 
+    def get_swath_bbox(self):
+        """Get the outer bounding box of Sentinel frame
+
+        Returns:
+            tuple[float]: (left, bottom, right, top) of bounding box
+        """
+        lons, lats = zip(*self.get_overlay_extent())
+        return (min(lons), min(lats), max(lons), max(lats))
 
 class SentinelOrbit(Base):
     """
