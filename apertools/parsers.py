@@ -294,6 +294,7 @@ class Sentinel(Base):
         lons, lats = zip(*self.get_overlay_extent())
         return (min(lons), min(lats), max(lons), max(lats))
 
+
 class SentinelOrbit(Base):
     """
     Sentinel 1 orbit reference:
