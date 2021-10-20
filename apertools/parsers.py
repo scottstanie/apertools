@@ -3,6 +3,7 @@ Utilities for parsing file names of SAR products for relevant info.
 
 """
 
+from genericpath import exists
 import re
 from datetime import datetime
 import os
@@ -250,6 +251,31 @@ class Sentinel(Base):
     def date(self):
         """Date of acquisition: shortcut for start_time.date()"""
         return self.start_time.date()
+
+    def get_overlay_extent(self):
+        """Get the extent of the Sentinel L1 frame from the preview/map-overlay.kml file"""
+        from xml.etree import ElementTree
+        # The name of the unzipped .SAFE directory (with .zip stripped)
+        # Strip '/' from end to start in case they pass "blahblah.SAFE/", or splitext[1] is ''
+        fname = str(self.filename).rstrip("/").replace(".zip", "").replace(".geo", "")
+        root, _ = os.path.splitext(fname)
+        _safe_dir = root + ".SAFE"
+        _preview_folder = os.path.join(_safe_dir, "preview")
+        map_overlay_kml = os.path.join(_preview_folder, "map-overlay.kml")
+        # Check that they have all the necessary kmls
+        if not os.path.exists(map_overlay_kml):
+            raise ValueError(f"{map_overlay_kml} does not exist to get extent")
+
+        etree = ElementTree.parse(map_overlay_kml)
+
+        root = etree.getroot()
+        # point_str looks like:
+        # <coordinates>-102.552971,31.482372 -105.191353,31.887299...
+        point_str = list(elem.text for elem in root.iter("coordinates"))[0]
+        return [
+            (float(lon), float(lat))
+            for lon, lat in [p.split(",") for p in point_str.split()]
+        ]
 
 
 class SentinelOrbit(Base):
