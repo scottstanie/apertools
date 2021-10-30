@@ -294,6 +294,15 @@ class Sentinel(Base):
         lons, lats = zip(*self.get_overlay_extent())
         return (min(lons), min(lats), max(lons), max(lats))
 
+    def overlaps(self, filename):
+        from shapely import geometry
+        import rasterio as rio
+        self_extent = geometry.Polygon(self.get_overlay_extent())
+        with rio.open(filename) as src:
+            file_bbox = geometry.box(*src.bounds)
+        return file_bbox.intersects(self_extent)
+
+
 
 class SentinelOrbit(Base):
     """

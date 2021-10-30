@@ -421,7 +421,7 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
         aper overlaps --filename box.geojson > overlap_files.txt
     """
     import apertools.parsers
-    import apertools.sario
+    # import apertools.sario
 
     def _parse(date_string):
         return datetime.strptime(date_string, "%Y%m%d").date()
@@ -459,8 +459,17 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
 
     if filename:
         logger.info("Searching %s for .rsc or .geojson file" % filename)
-        area = apertools.sario.load(filename)
-        sent_list = [s for s in sent_list if s.overlaps(area)]
+        # area = apertools.sario.load(filename)
+        sent_overlaps = []
+        for s in sent_list:
+            try:
+                if s.overlaps(filename):
+                    sent_overlaps.append(s)
+            except ValueError as e:
+                logger.warning(e)
+                continue
+            # sent_list = [s for s in sent_list if s.overlaps(filename)]
+        sent_list = sent_overlaps
         logger.info("%d Sentinel .SAFE files overlap with area" % len(sent_list))
 
     logger.info("Final path count:")

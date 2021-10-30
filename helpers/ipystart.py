@@ -13,7 +13,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import hdf5plugin
+# import hdf5plugin
 import h5py
 import rasterio as rio
 import xarray as xr
