@@ -146,7 +146,7 @@ def matrix_indices(shape, flatten=True):
 
 
 def remove_lowpass(
-    z, lowpass_sigma_pct=0.4, mask=np.ma.nomask, copy=True, dtype=np.float32, dem=None
+    z, lowpass_sigma_pct=0.25, mask=np.ma.nomask, copy=True, dtype=np.float32, dem=None
 ):
     """Subtracts the output of a low-pass filter (aka: performs high pass filter)
 
@@ -162,21 +162,28 @@ def remove_lowpass(
     """
     import scipy.ndimage as ndi
     from scipy.fft import fft2, ifft2
+    from scipy.interpolate import NearestNDInterpolator
 
-    # if z.ndim > 2:
-    #     return np.stack(
-    #         [remove_lowpass(layer, lowpass_sigma_pct, mask, copy, dtype) for layer in z]
-    #     )
+    if z.ndim > 2:
+        return np.stack(
+            [remove_lowpass(layer, lowpass_sigma_pct, mask, copy, dtype) for layer in z]
+        )
 
     z_masked = z.copy() if copy else z
     # For FFT filtering, need 0s instead of nans (or all become nans)
     z_masked[..., mask] = 0
+
+    # z_masked[..., mask] = np.nan
+    # nomask = np.where(~mask)
+    # interp = NearestNDInterpolator(np.transpose(nomask), z_masked[nomask])
+    # z_masked = interp(*np.indices(z_masked.shape))
+
     # Create the sigma as a percentage of the image size
     sigma = lowpass_sigma_pct * min(z.shape[-2:])
 
-    input_ = fft2(z, workers=-1)
+    input_ = fft2(z_masked, workers=-1)
     result = ndi.fourier_gaussian(input_, sigma=sigma)
-    z_fit = ifft2(result, workers=-1)
+    z_fit = ifft2(result, workers=-1).real
     z_fit[..., mask] = np.nan
 
     # Then use the non-masked as return value
