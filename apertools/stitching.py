@@ -35,7 +35,7 @@ def stitch_same_dates(
     return grouped_geos
 
 
-def group_geos_by_date(geo_path, reverse=True):
+def group_geos_by_date(geo_path, reverse=True, ext=".geo"):
     def _make_groupby(slclist):
         """Groups into sub-lists sharing dates
         example input:
@@ -60,7 +60,7 @@ def group_geos_by_date(geo_path, reverse=True):
 
     # Assuming only IW products are used (included IW to differentiate from my date-only naming)
     geos = [
-        parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, "S1*IW*.geo"))
+        parsers.Sentinel(g) for g in glob.glob(os.path.join(geo_path, f"S1*IW*{ext}"))
     ]
     # Find the dates that have multiple frames/.geos
     date_counts = collections.Counter([g.date for g in geos])
@@ -183,6 +183,10 @@ def find_rows(ftop, fbot):
         return rowcol_of_toplast_in_bottom, rowcol_of_botfirst_in_top
 
 
+def rewrap_to_2pi(phase):
+    return np.mod(phase + np.pi, 2 * np.pi) - np.pi
+
+
 def stitch_topstrip(ftop, fbot, colshift=1):
     # This worked:
     # Out[14]: ((540, 32400), (2160, 0))
@@ -190,16 +194,33 @@ def stitch_topstrip(ftop, fbot, colshift=1):
     # In [30]: out[:len(gtop), 1:] = gtop[:, 1:]
     # In [31]: out[-len(gbot):] = gbot
 
+    print(f"Stitching {ftop} and {fbot}")
     (toplast_in_bot, _), (botfirst_in_top, _) = find_rows(ftop, fbot)
     print(f"{toplast_in_bot = }")
     # (botfirst_in_top, _), (toplast_in_bot, _) = find_rows(ftop, fbot)
     # breakpoint()
-    imgtop, imgbot = sario.load(ftop, band=1), sario.load(fbot, band=1)
+    imgtop = sario.load(ftop, band=1)
+    # print("redo shift", imgtop[:5, -5:])
+    imgbot = sario.load(fbot, band=1)
+
+    if np.iscomplexobj(imgtop):
+        # Find any constant phase offset in overlap
+        # np.abs(gbot[:361, -499:]), np.abs(gtop[1440:, -500:-1])
+        bot_slice = imgbot[: toplast_in_bot + 1, colshift:]
+        top_slice = imgtop[botfirst_in_top:, :-colshift]
+
+        phase_diff = rewrap_to_2pi(np.angle(top_slice) - np.angle(bot_slice))
+        # phase_shift = phase_diff.mean(axis=0)
+        phase_shift = phase_diff.mean()
+        imgtop[:, :-colshift] = imgtop[:, :-colshift] * np.exp(1j * phase_shift)
+
     total_rows = imgbot.shape[0] + imgtop.shape[0] - toplast_in_bot
 
     out = np.zeros((total_rows, imgbot.shape[1]), dtype=imgbot.dtype)
-    out[:len(imgtop), colshift:] = imgtop[:, colshift:]
     out[-len(imgbot) :] = imgbot
+    # out[:len(imgtop), colshift:] = imgtop[:, colshift:]
+    # out[:len(imgtop), colshift:] = imgtop[:, :-colshift]
+    out[: len(imgtop), :-colshift] = imgtop[:, colshift:]
     return out
 
     # botrows = imgbot.shape[0]
@@ -209,3 +230,11 @@ def stitch_topstrip(ftop, fbot, colshift=1):
     # out[:toprows] = imgtop[:toprows]
     # out[-botrows:] = imgbot
     # return out
+
+
+def test_ifg(d1, d2, looks=30):
+    import apertools.utils
+    g1 = stitch_topstrip(f'../top_strip/S1A_{d1}.geo.vrt', f'../S1A_{d1}.geo.vrt')
+    g2 = stitch_topstrip(f'../top_strip/S1A_{d2}.geo.vrt', f'../S1A_{d2}.geo.vrt')
+    nr = 3000
+    return apertools.utils.take_looks(g1[:nr] * g2[:nr].conj(), looks, looks)
