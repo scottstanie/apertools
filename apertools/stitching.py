@@ -36,27 +36,22 @@ def stitch_same_dates(
 
 
 def group_geos_by_date(geo_path, reverse=True, ext=".geo"):
-    def _make_groupby(slclist):
-        """Groups into sub-lists sharing dates
-        example input:
-        [Sentinel S1B, path 78 from 2017-10-13,
-         Sentinel S1B, path 78 from 2017-10-13,
-         Sentinel S1B, path 78 from 2017-10-25,
-         Sentinel S1B, path 78 from 2017-10-25]
+    """Combine Sentinel objects by date
 
-        Output:
+    Args:
+        geo_path (str, Path): path to folder containing Sentinel files
+        reverse (bool, optional): order by date descending. Defaults to True.
+        ext (str, optional): extension to search for Sentinel files. Defaults to ".geo".
+
+    Returns:
+        list (tuple): leach tuple has a date first, and list of Sentinel objects 2nd
         [(datetime.date(2017, 10, 13),
           [Sentinel S1B, path 78 from 2017-10-13,
            Sentinel S1B, path 78 from 2017-10-13]),
          (datetime.date(2017, 10, 25),
           [Sentinel S1B, path 78 from 2017-10-25,
            Sentinel S1B, path 78 from 2017-10-25])]
-
-        """
-        return [
-            (date, list(g))
-            for date, g in itertools.groupby(slclist, key=lambda x: x.date)
-        ]
+    """
 
     # Assuming only IW products are used (included IW to differentiate from my date-only naming)
     geos = [
@@ -75,6 +70,28 @@ def group_geos_by_date(geo_path, reverse=True, ext=".geo"):
     # Now collapse into groups, sorted by the date
     grouped_geos = _make_groupby(double_geo_files)
     return grouped_geos
+
+
+def _make_groupby(slclist):
+    """Groups into sub-lists sharing dates
+    example input:
+    [Sentinel S1B, path 78 from 2017-10-13,
+        Sentinel S1B, path 78 from 2017-10-13,
+        Sentinel S1B, path 78 from 2017-10-25,
+        Sentinel S1B, path 78 from 2017-10-25]
+
+    example output:
+    [(datetime.date(2017, 10, 13),
+        [Sentinel S1B, path 78 from 2017-10-13,
+        Sentinel S1B, path 78 from 2017-10-13]),
+        (datetime.date(2017, 10, 25),
+        [Sentinel S1B, path 78 from 2017-10-25,
+        Sentinel S1B, path 78 from 2017-10-25])]
+
+    """
+    return [
+        (date, list(g)) for date, g in itertools.groupby(slclist, key=lambda x: x.date)
+    ]
 
 
 def stitch_geos(slclist, reverse, output_path, overwrite=False, verbose=True):
@@ -232,9 +249,87 @@ def stitch_topstrip(ftop, fbot, colshift=1):
     # return out
 
 
+def get_boundary_polygons(safe_path, dem_path=None):
+    """Get the boundary of a list of Sentinel SAFE files"""
+    from shapely import geometry
+    from shapely.ops import cascaded_union
+    import rasterio as rio
+
+    if dem_path is not None:
+        with rio.open(dem_path) as src:
+            dem_poly = geometry.box(*src.bounds)
+    else:
+        dem_poly = None
+
+    safe_groups = group_geos_by_date(safe_path, ext=".SAFE")
+    date_to_poly = {}
+    for date, safe_list in safe_groups:
+        polygons = [geometry.Polygon(f.get_overlay_extent()) for f in safe_list]
+        merged = cascaded_union(polygons)
+        date_to_poly[date] = merged
+
+    if dem_poly is not None:
+        date_to_poly = {k: v.intersection(dem_poly) for k, v in date_to_poly.items()}
+    return date_to_poly
+
+
+def get_area_mask(safe_path, dem_path):
+    """Get the area mask of a list of Sentinel SAFE files"""
+    import rasterio as rio
+
+    date_to_poly = get_boundary_polygons(safe_path, dem_path=dem_path)
+
+    # `geometry_mask` seems to union the polygons to make the mask
+    with rio.open("elevation.dem") as src:
+        mask = rio.features.geometry_mask(
+            list(date_to_poly.values()), out_shape=src.shape, transform=src.transform
+        )
+        return mask
+
+
+def find_safes_with_missing_data(
+    safe_path, dem_path, pct_area_tol=0.05, simplify_tol=1e-1
+):
+    """Find SAFEs that have missing data
+
+    Args:
+        safe_path (str, Path): path to folder containing Sentinel files
+        dem_path (str, Path): path to a DEM covering the valid area
+        pct_area_tol (float, optional): percentage of valid area that needs to be
+            covered to be considered good. Defaults to 0.05.
+
+    Returns:
+        list[datetime.date]: dates which did not cover sufficient area of the total
+    """
+    from shapely.ops import cascaded_union
+
+    date_to_poly = get_boundary_polygons(safe_path, dem_path=dem_path)
+    poly_union_all = cascaded_union(date_to_poly.values())
+    # The union will have small difference: we mainly care about the simplified hull
+    poly_union_all = poly_union_all.convex_hull.simplify(1e-2)
+    missing_data_dates = []
+    # return [(date, poly_union_all.difference(poly)) for date, poly in date_to_poly.items()]
+
+    area_all = poly_union_all.area
+    for date, poly in date_to_poly.items():
+        diff_geom = poly_union_all.difference(poly)
+        if diff_geom.geometryType() == "Polygon":
+            geoms = [diff_geom]
+        else:
+            geoms = list(diff_geom.geoms)
+        pct_diff = 0
+        for g in geoms:
+            pct_diff += g.simplify(simplify_tol).area / area_all
+
+        if pct_diff > pct_area_tol:
+            missing_data_dates.append(date)
+    return missing_data_dates
+
+
 def test_ifg(d1, d2, looks=30):
     import apertools.utils
-    g1 = stitch_topstrip(f'../top_strip/S1A_{d1}.geo.vrt', f'../S1A_{d1}.geo.vrt')
-    g2 = stitch_topstrip(f'../top_strip/S1A_{d2}.geo.vrt', f'../S1A_{d2}.geo.vrt')
+
+    g1 = stitch_topstrip(f"../top_strip/S1A_{d1}.geo.vrt", f"../S1A_{d1}.geo.vrt")
+    g2 = stitch_topstrip(f"../top_strip/S1A_{d2}.geo.vrt", f"../S1A_{d2}.geo.vrt")
     nr = 3000
     return apertools.utils.take_looks(g1[:nr] * g2[:nr].conj(), looks, looks)
