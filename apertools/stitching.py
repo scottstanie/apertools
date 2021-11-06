@@ -9,6 +9,7 @@ import os
 import numpy as np
 
 from apertools import parsers, sario
+from apertools.utils import filter_min_max_date
 
 
 def stitch_same_dates(
@@ -152,3 +153,59 @@ def combine_complex(img_list, verbose=True):
         # img_out[overlap_idxs] = next_img[overlap_idxs]
 
     return img_out
+
+
+def find_row_overlaps(ftop, fbot):
+    import rasterio as rio
+
+    with rio.open(ftop) as srctop, rio.open(fbot) as srcbot:
+        xstep, _, xfirst, _, ystep, yfirst = srctop.transform[:6]
+        xstep0, _, xfirst0, _, ystep0, yfirst0 = srcbot.transform[:6]
+
+        topfirst_mid = yfirst + ystep / 2
+        toplast_mid = topfirst_mid + (srctop.shape[0] - 1) * ystep
+
+        botfirst_mid = yfirst0 + ystep0 / 2
+
+        row_of_toplast_in_bottom = (toplast_mid - botfirst_mid) / ystep0
+        row_of_botfirst_in_top = (botfirst_mid - topfirst_mid) / ystep0
+        return row_of_toplast_in_bottom, row_of_botfirst_in_top
+
+
+def find_rows(ftop, fbot):
+    import rasterio as rio
+
+    with rio.open(ftop) as srctop, rio.open(fbot) as srcbot:
+        top_lastrow_xy = srctop.xy(*(np.array(srctop.shape) - 1))
+        rowcol_of_toplast_in_bottom = srcbot.index(*top_lastrow_xy)
+
+        rowcol_of_botfirst_in_top = srctop.index(*srcbot.xy(0, 0))
+        return rowcol_of_toplast_in_bottom, rowcol_of_botfirst_in_top
+
+
+def stitch_topstrip(ftop, fbot, colshift=1):
+    # This worked:
+    # Out[14]: ((540, 32400), (2160, 0))
+    # In [29]: out = np.zeros((len(gbot) + len(gtop) - 540, gtop.shape[1]), dtype=gtop.dtype)
+    # In [30]: out[:len(gtop), 1:] = gtop[:, 1:]
+    # In [31]: out[-len(gbot):] = gbot
+
+    (toplast_in_bot, _), (botfirst_in_top, _) = find_rows(ftop, fbot)
+    print(f"{toplast_in_bot = }")
+    # (botfirst_in_top, _), (toplast_in_bot, _) = find_rows(ftop, fbot)
+    # breakpoint()
+    imgtop, imgbot = sario.load(ftop, band=1), sario.load(fbot, band=1)
+    total_rows = imgbot.shape[0] + imgtop.shape[0] - toplast_in_bot
+
+    out = np.zeros((total_rows, imgbot.shape[1]), dtype=imgbot.dtype)
+    out[:len(imgtop), colshift:] = imgtop[:, colshift:]
+    out[-len(imgbot) :] = imgbot
+    return out
+
+    # botrows = imgbot.shape[0]
+    # toprows = imgtop.shape[0]
+    # # out[:botfirst_in_top + 1] = imgtop[:botfirst_in_top + 1]
+    # # out[:toplast_in_bot] = imgtop[:toplast_in_bot]
+    # out[:toprows] = imgtop[:toprows]
+    # out[-botrows:] = imgbot
+    # return out
