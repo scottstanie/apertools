@@ -9,6 +9,7 @@ import datetime
 import itertools
 import subprocess
 
+from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np

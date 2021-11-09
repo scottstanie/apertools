@@ -587,22 +587,28 @@ def smallslc(
     List as many filenames with the same rsc as necessary
     """
     import apertools.sario
+    if not filenames:
+        return
 
     x_uprate, y_uprate = apertools.sario.calc_upsample_rate(rsc_filename=rsc_file)
     pct_x = int(100 / x_uprate / downrate)
     pct_y = int(100 / y_uprate / downrate)
     for f in filenames:
+        ext = os.path.splitext(f)[1]
         dest_name = os.path.split(f)[1]
         # For ROI_PAC driver, it only recognizes .slc, not .geo
-        dest_path = os.path.join(out_dir, "small_" + dest_name.replace(".geo", ".slc"))
+        dest_path = os.path.join(out_dir, "small_" + dest_name.replace(ext, ".slc"))
         if os.path.exists(dest_path) and not overwrite:
             print(f"{dest_path} exists, overwrite={overwrite}: skipping.")
             continue
 
-        apertools.sario.save_vrt(
-            filename=f,
-            rsc_file=rsc_file,
-        )
+        if ext != ".vrt":
+            apertools.sario.save_vrt(
+                filename=f,
+                rsc_file=rsc_file,
+            )
+        vrt_name = f + ".vrt" if ext != ".vrt" else f
+
         if resample == "average":
             col_looks = round(downrate * x_uprate)
             row_looks = round(downrate * y_uprate)
@@ -621,7 +627,7 @@ def smallslc(
             )
         else:
             cmd = (
-                f"gdal_translate -of ROI_PAC {f + '.vrt'} {dest_path}"
+                f"gdal_translate -of ROI_PAC {vrt_name} {dest_path}"
                 f" -r {resample} -outsize {pct_x}% {pct_y}% "
             )
             _log_and_run(cmd)
