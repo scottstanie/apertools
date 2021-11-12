@@ -17,8 +17,17 @@ def remove_ramp(
         ndarray: flattened 2D array with estimated surface removed
     """
     if z.ndim > 2:
+        if mask.ndim > 2:
+            assert len(mask) == len(
+                z
+            ), f"mask and z must have same length, but {len(mask) = } and {len(z) = }"
+        else:
+            mask = [mask] * len(z)
         return np.stack(
-            [remove_ramp(layer, deramp_order, mask, copy, dtype) for layer in z]
+            [
+                remove_ramp(layer, deramp_order, m, copy, dtype)
+                for layer, m in zip(z, mask)
+            ]
         )
 
     z_masked = z.copy() if copy else z
