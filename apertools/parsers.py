@@ -5,7 +5,7 @@ Utilities for parsing file names of SAR products for relevant info.
 
 from genericpath import exists
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import pprint
 
@@ -154,7 +154,8 @@ class Sentinel(Base):
             2018-04-08 04:30:25
         """
         start_time_str = self._get_field("start_datetime")
-        return datetime.strptime(start_time_str, self.TIME_FMT)
+        dt = datetime.strptime(start_time_str, self.TIME_FMT)
+        return dt.replace(tzinfo=timezone.utc)
 
     @property
     def stop_time(self):
@@ -166,7 +167,8 @@ class Sentinel(Base):
             2018-04-08 04:30:53
         """
         stop_time_str = self._get_field("stop_datetime")
-        return datetime.strptime(stop_time_str, self.TIME_FMT)
+        dt = datetime.strptime(stop_time_str, self.TIME_FMT)
+        return dt.replace(tzinfo=timezone.utc)
 
     @property
     def polarization(self):
@@ -297,11 +299,11 @@ class Sentinel(Base):
     def overlaps(self, filename):
         from shapely import geometry
         import rasterio as rio
+
         self_extent = geometry.Polygon(self.get_overlay_extent())
         with rio.open(filename) as src:
             file_bbox = geometry.box(*src.bounds)
         return file_bbox.intersects(self_extent)
-
 
 
 class SentinelOrbit(Base):
@@ -393,7 +395,8 @@ class SentinelOrbit(Base):
             2019-12-31 22:59:42
         """
         start_time_str = self._get_field("start_datetime")
-        return datetime.strptime(start_time_str, self.TIME_FMT)
+        dt = datetime.strptime(start_time_str, self.TIME_FMT)
+        return dt.replace(tzinfo=timezone.utc)
 
     @property
     def stop_time(self):
@@ -405,7 +408,8 @@ class SentinelOrbit(Base):
             2020-01-02 00:59:42
         """
         stop_time_str = self._get_field("stop_datetime")
-        return datetime.strptime(stop_time_str, self.TIME_FMT)
+        dt = datetime.strptime(stop_time_str, self.TIME_FMT)
+        return dt.replace(tzinfo=timezone.utc)
 
     @property
     def created_time(self):
@@ -417,7 +421,8 @@ class SentinelOrbit(Base):
             2020-01-21 12:06:54
         """
         stop_time_str = self._get_field("created_datetime")
-        return datetime.strptime(stop_time_str, self.TIME_FMT)
+        dt = datetime.strptime(stop_time_str, self.TIME_FMT)
+        return dt.replace(tzinfo=timezone.utc)
 
     @property
     def orbit_type(self):
