@@ -56,10 +56,13 @@ def _lowess(y, x, f=2.0 / 3.0, n_iter=3):  # pragma: no cover
     """Lowess smoother requiring native endian datatype (for numba)."""
     n = len(x)
     r = int(np.ceil(f * n))
+    # Find the distance to the rth furthest point from each x value
     h = np.array([np.sort(np.abs(x - x[i]))[r] for i in range(n)])
-    w = np.minimum(
-        1.0, np.maximum(np.abs((x.reshape((-1, 1)) - x.reshape((1, -1))) / h), 0.0)
-    )
+    xc = x.copy()  # make contiguous (necessary for `reshape` for numba)
+    # Get the relative distance to the rth furthest point
+    w = np.abs((xc.reshape((-1, 1)) - xc.reshape((1, -1))) / h)
+    # Clip to 0, 1 (`clip` not available in numba)
+    w = np.minimum(1.0, np.maximum(w, 0.0))
     w = (1 - w ** 3) ** 3
     yest = np.zeros(n)
     delta = np.ones(n)
@@ -82,6 +85,82 @@ def _lowess(y, x, f=2.0 / 3.0, n_iter=3):  # pragma: no cover
         s = np.median(np.abs(residuals))
         # delta = np.clip(residuals / (6.0 * s), -1.0, 1.0)
         delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
+        delta = (1 - delta ** 2) ** 2
+
+    return yest
+
+
+import pymp
+
+def lowess_stack(stack, x, f=2.0 / 3.0, n_iter=3):
+    if not stack.dtype.isnative:
+        stack = stack.astype(stack.dtype.type)
+    ns, nrows, ncols = stack.shape
+    stack_cols = stack.reshape((ns, -1))
+    stack_out = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
+
+    with pymp.Parallel(12) as p:
+        for index in p.range(0, stack_cols.shape[1]):
+            y = stack_cols[:, index]
+            if np.any(np.isnan(y)) or np.all(y == 0):
+                continue
+            stack_out[:, index] = _lowess(y, x, f, n_iter)
+            # p.print('Yay! {} done!'.format(index))
+    return stack_out.reshape((ns, nrows, ncols))
+
+
+import cupy as cp
+
+# @njit(cache=True, nogil=True)
+def lowess_cp(yarr, x, f=2.0 / 3.0, n_iter=3):  # pragma: no cover
+    """Cupy version of Lowess smoother"""
+    xp = cp.get_array_module(x)
+    if yarr.ndim == 1:
+        # for 1D, k = 1
+        yarr = yarr.reshape(-1, 1)
+    n = len(x)
+    k = yarr.shape[1]
+
+    r = int(xp.ceil(f * n))
+    # Find the distance to the rth furthest point from each x value
+    h = xp.array([xp.sort(xp.abs(x - x[i]))[r] for i in range(n)])
+    # xc = x.copy()  # make contiguous (necessary for `reshape` for numba)
+    # Get the relative distance to the rth furthest point
+    w = xp.abs((x.reshape((-1, 1)) - x.reshape((1, -1))) / h)
+    # Clip to 0, 1 (`clip` not available in numba)
+    w = xp.minimum(1.0, xp.maximum(w, 0.0))
+    w = (1 - w ** 3) ** 3
+    yest = xp.zeros(n, k)
+    delta = xp.ones(n)
+
+    for _ in range(n_iter):
+        for i in range(n):
+            weights = delta[i, :] * w[:, i]
+            # b = xp.array([xp.sum(weights * y), xp.sum(weights * y * x)])
+            # make b into (2, k) array
+            b = np.array(
+                [
+                    np.sum(weights * yarr, axis=0),
+                    np.sum(weights * x[:, None] * yarr, axis=0),
+                ]
+            )
+            A = xp.array(
+                [
+                    [xp.sum(weights), xp.sum(weights * x)],
+                    [xp.sum(weights * x), xp.sum(weights * x * x)],
+                ]
+            )
+
+            beta = xp.linalg.lstsq(A, b)[0]
+            # Evaluate the coeffs for all pixels
+            yest[:, i] = [1, x[i]] @ beta
+            # yest[i] = beta[0] + beta[1] * x[i]
+
+        residuals = yarr - yest
+        s = xp.median(xp.abs(residuals), axis=0)
+        assert s.shape == (k,)
+        delta = xp.clip(residuals / (6.0 * s), -1.0, 1.0)
+        # delta = xp.minimum(1.0, xp.maximum(residuals / (6.0 * s), -1.0))
         delta = (1 - delta ** 2) ** 2
 
     return yest
