@@ -168,6 +168,8 @@ def plot_image(
     twoway=True,
     vmin=None,
     vmax=None,
+    extent=None,
+    bbox=None,
     aspect="auto",
     perform_shift=False,
     colorbar=True,
@@ -203,10 +205,13 @@ def plot_image(
         rsc_data = sario.load_dem_from_h5(filename)
 
     nrows, ncols = img.shape
-    if rsc_data:
-        extent = latlon.grid_extent(**rsc_data)
-    else:
-        extent = (0, ncols, nrows, 0)
+    if not extent:
+        if bbox:
+            extent = [bbox[0], bbox[2], bbox[1], bbox[3]]
+        elif rsc_data:
+            extent = latlon.grid_extent(**rsc_data)
+        else:
+            extent = (0, ncols, nrows, 0)
 
     fig, ax = get_fig_ax(fig, ax, **figkwargs)
 
