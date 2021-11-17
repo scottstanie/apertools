@@ -17,8 +17,55 @@ from apertools import geojson
 logger = get_log()
 
 
+def read_intersections(
+    fname1, fname2, band1=None, band2=None, nodata=0, mask_intersection=True
+):
+    """Read in the intersection of 2 files as an array"""
+    bounds = get_intersection_bounds(fname1, fname2)
+    print(f"bounds: {bounds}")
+    im1 = copy_vrt(fname1, out_fname="", bbox=bounds, band=band1)
+    im2 = copy_vrt(fname2, out_fname="", bbox=bounds, band=band2)
+    if mask_intersection:
+        nodata1 = get_nodata(fname1)
+        nodata2 = get_nodata(fname2)
+        for nd in [nodata, nodata1, nodata2]:
+            cur_mask = np.logical_or(im1 == nd, im2 == nd)
+            im1[cur_mask] = nodata
+            im2[cur_mask] = nodata
+    return im1, im2
+
+
+def read_unions(fname1, fname2, band1=None, band2=None):
+    """Read in the union of 2 files as an array"""
+    bounds = get_union_bounds(fname1, fname2)
+    print(f"bounds: {bounds}")
+    im1 = copy_vrt(fname1, out_fname="", bbox=bounds, band=band1)
+    im2 = copy_vrt(fname2, out_fname="", bbox=bounds, band=band2)
+    return im1, im2
+
+
+def write_intersections(
+    fname1, fname2, outname1, outname2, driver=None, nodata=0, mask_intersection=True
+):
+    """Write the intersection of 2 files to out_fname"""
+
+    im1, im2 = read_intersections(
+        fname1, fname2, nodata=nodata, mask_intersection=mask_intersection
+    )
+    transform = get_intersect_transform(fname1, fname2)
+    crs = get_crs(fname1)
+    if crs != get_crs(fname2):
+        raise ValueError(f"CRS mismatch: {crs} != {get_crs(fname2)}")
+    write_outfile(
+        outname1, im1, crs=crs, transform=transform, driver=driver, nodata=nodata
+    )
+    write_outfile(
+        outname2, im2, crs=crs, transform=transform, driver=driver, nodata=nodata
+    )
+
+
 # TODO: this is basically the same as copy_subset... def merge these
-def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True):
+def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True, band=None):
     """Create a VRT for (a subset of) a gdal-readable file
 
     bbox format: (left, bottom, right, top)"""
@@ -46,6 +93,8 @@ def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True):
     # ds_in = gdal.Open(in_fname)
     out_ds = gdal.Warp(out_fname, in_fname, outputBounds=bbox, format="VRT")
     out_arr = out_ds.ReadAsArray()
+    if band:
+        out_arr = out_arr[band]
     # ds_in, out_ds = None, None
     return out_arr
 
@@ -183,24 +232,6 @@ def get_nodata(fname):
         return src.nodata
 
 
-def read_intersections(fname1, fname2, band1=None, band2=None):
-    """Read in the intersection of 2 files as an array"""
-    bounds = get_intersection_bounds(fname1, fname2)
-    print(f"bounds: {bounds}")
-    im1 = copy_vrt(fname1, out_fname="", bbox=bounds)
-    im2 = copy_vrt(fname2, out_fname="", bbox=bounds)
-    return im1, im2
-
-
-def read_unions(fname1, fname2, band1=None, band2=None):
-    """Read in the union of 2 files as an array"""
-    bounds = get_union_bounds(fname1, fname2)
-    print(f"bounds: {bounds}")
-    im1 = copy_vrt(fname1, out_fname="", bbox=bounds)
-    im2 = copy_vrt(fname2, out_fname="", bbox=bounds)
-    return im1, im2
-
-
 def bbox_around_point(lons, lats, side_km=25):
     """Finds (left, bot, right top) in deg around arrays of lons, lats
 
@@ -215,7 +246,7 @@ def bbox_around_point(lons, lats, side_km=25):
     )
 
 
-def merge_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
+def read_merged_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
     """Create a merged version of two files, bounded by their union bounds"""
 
     img1, img2 = read_unions(file1, file2)
@@ -488,7 +519,7 @@ def crop_stacks_by_date(
         output_dir (str): path to save the output subsetted dataset
     """
     import xarray as xr
-    from apertools import sario,utils
+    from apertools import sario, utils
 
     fmt = "%Y%m%d"
     out_str = ""
