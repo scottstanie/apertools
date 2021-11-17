@@ -48,7 +48,7 @@ def rowcol_to_latlon(row, col, rsc_data=None, filename=None):
     return lat, lon
 
 
-def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None):
+def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None, image_xr=None):
     """Takes latitude, longitude and finds pixel location.
 
     Inverse of rowcol_to_latlon function
@@ -58,6 +58,7 @@ def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None):
         lon (float): longitude
         rsc_data (dict): data output from load_dem_rsc
         filename (str): gdal-readable file with geographic coordinates
+        image_xr (xarray.Dataset): xarray dataset with geographic coordinates
 
     Returns:
         tuple[int, int]: row, col for the pixel
@@ -69,8 +70,8 @@ def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None):
         >>> latlon_to_rowcol(2.0, 1.0, rsc_data)
         (0, 0)
     """
-    if rsc_data is None and filename is None:
-        raise ValueError("Need either rsc_data or filename to locate station")
+    if rsc_data is None and filename is None and image_xr is None:
+        raise ValueError("Need either rsc_data, filename, image_xr to locate station")
 
     if rsc_data is not None:
         start_lon = rsc_data["x_first"]
@@ -80,11 +81,20 @@ def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None):
         col = (lon - start_lon) / lon_step
 
         row, col = int(round(row)), int(round(col))
-    else:
+    elif filename is not None:
         import rasterio as rio
 
         with rio.open(filename) as src:
             row, col = src.index(lon, lat)
+    elif image_xr is not None:
+        try:
+            latidx = image_xr.indexes["y"]
+            lonidx = image_xr.indexes["x"]
+        except:
+            latidx = image_xr.indexes["lat"]
+            lonidx = image_xr.indexes["lon"]
+        row = latidx.get_loc(lat, method="nearest")
+        col = lonidx.get_loc(lon, method="nearest")
     return row, col
 
 
