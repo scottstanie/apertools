@@ -29,16 +29,18 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, n_iter=2, n_jobs=-1):
 
     Args:
         stack (ndarray): stack with shape (ns, nrows, ncols)
-        x (ndarray): x values with shape
+        x (ndarray): x values with shape (ns,)
         frac ([type], optional): fraction of data to use for each smoothing
             Defaults to 2/3
         n_iter (int, optional): Number of iterations to rerun fit after
             reweighting by residuals.
             Defaults to 2.
-        n_jobs (int, optional): [description]. Defaults to -1.
+        n_jobs (int, optional): Number of parallel processes to use.
+            Defaults to -1 (all CPU cores).
 
     Returns:
-        [type]: [description]
+        ndarray: stack smoothed with shape (ns, nrows, ncols), smoothed along
+            the first dimension.
     """
     if not stack.dtype.isnative:
         stack = stack.astype(stack.dtype.type)
@@ -50,6 +52,7 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, n_iter=2, n_jobs=-1):
         raise ValueError("stack must be 1D or 3D")
 
     ns, nrows, ncols = stack.shape
+    # Make each depth-wise pixel into a column (so there's only 1 OMP loop)
     stack_cols = stack.reshape((ns, -1))
 
     stack_out = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
@@ -64,8 +67,10 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, n_iter=2, n_jobs=-1):
 
 
 @njit(cache=True, nogil=True)
-def _lowess(y, x, frac=2.0 / 3.0, n_iter=2):  # pragma: no cover
-    """Lowess smoother requiring native endian datatype (for numba)."""
+def _lowess(y, x, frac=2.0 / 3.0, n_iter=2):
+    """Lowess smoother requiring native endian datatype (for numba).
+    Performs multiple iterations for robust fitting, downweighting
+    by the residuals of the previous fit."""
     n = len(x)
     r = int(np.ceil(frac * n))
     # Find the distance to the rth furthest point from each x value
@@ -73,7 +78,7 @@ def _lowess(y, x, frac=2.0 / 3.0, n_iter=2):  # pragma: no cover
     xc = x.copy()  # make contiguous (necessary for `reshape` for numba)
     # Get the relative distance to the rth furthest point
     w = np.abs((xc.reshape((-1, 1)) - xc.reshape((1, -1))) / h)
-    # Clip to 0, 1 (`clip` not available in numba)
+    # Clip to 0, 1 (`np.clip` not available in numba)
     w = np.minimum(1.0, np.maximum(w, 0.0))
     w = (1 - w ** 3) ** 3
     yest = np.zeros(n)
@@ -112,7 +117,8 @@ def lowess_xr(da, x_dset="date", frac=0.7, n_iter=2):
     # Now return as a DataArray
     return xr.DataArray(out_stack, coords=da.coords, dims=da.dims)
 
-    # TODO: what does  this mean
+    # Failed to make this work in parallel...
+    # TODO: what does this even mean??
     # ValueError: Dimension `'__loopdim1__'` with different lengths in arrays
     # return xr.apply_ufunc(
     #     _run_pixel,
