@@ -80,13 +80,18 @@ def _lowess(y, x, frac=2.0 / 3.0, n_iter=2):
     w = np.abs((xc.reshape((-1, 1)) - xc.reshape((1, -1))) / h)
     # Clip to 0, 1 (`np.clip` not available in numba)
     w = np.minimum(1.0, np.maximum(w, 0.0))
+    # tricube weighting
     w = (1 - w ** 3) ** 3
-    yest = np.zeros(n)
+
+    # Initialize the residual-weights to 1
     delta = np.ones(n)
+    yest = np.zeros(n)
 
     for _ in range(n_iter):
         for i in range(n):
             weights = delta * w[:, i]
+            # Form the linear system as the reduced-size version of the Ax=b:
+            # A^T A x = A^T b
             b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
             A = np.array(
                 [
