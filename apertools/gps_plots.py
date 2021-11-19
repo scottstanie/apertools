@@ -24,11 +24,13 @@ def plot_gps_los(
     start_date=date(2014, 11, 1),
     end_date=None,
     days_smooth=0,
+    ax=None,
     ylim=(-3, 3),
     yticks=[-2, 0, 2],
     ylabel="[cm]",
     title="",
-    bigfont=False,
+    zero_start=False,
+    zero_mean=True,
     offset=True,
     lw=5,
     rasterized=True,
@@ -48,15 +50,17 @@ def plot_gps_los(
         reference_station=ref,
         start_date=start_date,
         end_date=end_date,
+        zero_start=zero_start,
+        zero_mean=zero_mean,
     )
     dts = df.index
     day_nums = (dts - dts[0]).days
     # day_nums = _get_day_nums(dts)
 
-    fig, ax = plt.subplots()
-    if bigfont:
-        plt.rcParams["font.size"] = 20
-        plt.rcParams["font.weight"] = "bold"
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
 
     ax.plot(
         df.index,
