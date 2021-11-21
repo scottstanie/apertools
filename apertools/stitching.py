@@ -189,20 +189,6 @@ def find_row_overlaps(ftop, fbot):
         return row_of_toplast_in_bottom, row_of_botfirst_in_top
 
 
-def find_rows(ftop, fbot):
-    import rasterio as rio
-
-    with rio.open(ftop) as srctop, rio.open(fbot) as srcbot:
-        top_lastrow_xy = srctop.xy(*(np.array(srctop.shape) - 1))
-        rowcol_of_toplast_in_bottom = srcbot.index(*top_lastrow_xy)
-
-        rowcol_of_botfirst_in_top = srctop.index(*srcbot.xy(0, 0))
-        return rowcol_of_toplast_in_bottom, rowcol_of_botfirst_in_top
-
-
-def rewrap_to_2pi(phase):
-    return np.mod(phase + np.pi, 2 * np.pi) - np.pi
-
 
 def stitch_topstrip(ftop, fbot, colshift=1):
     # This worked:
@@ -247,6 +233,20 @@ def stitch_topstrip(ftop, fbot, colshift=1):
     # out[:toprows] = imgtop[:toprows]
     # out[-botrows:] = imgbot
     # return out
+
+def find_rows(ftop, fbot):
+    import rasterio as rio
+
+    with rio.open(ftop) as srctop, rio.open(fbot) as srcbot:
+        top_lastrow_xy = srctop.xy(*(np.array(srctop.shape) - 1))
+        rowcol_of_toplast_in_bottom = srcbot.index(*top_lastrow_xy)
+
+        rowcol_of_botfirst_in_top = srctop.index(*srcbot.xy(0, 0))
+        return rowcol_of_toplast_in_bottom, rowcol_of_botfirst_in_top
+
+
+def rewrap_to_2pi(phase):
+    return np.mod(phase + np.pi, 2 * np.pi) - np.pi
 
 
 def get_boundary_polygons(safe_path, dem_path=None):

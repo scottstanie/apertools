@@ -814,3 +814,19 @@ def crop_rdr_by_bbox(
     lon_crop[~mask] = np.nan
     lon_crop = lon_crop[rmin:rmax, cmin:cmax]
     return img_crop, lat_crop, lon_crop
+
+
+def utm_from_lon(lon):
+    """
+    utm_from_lon - UTM zone for a longitude
+
+    Not right for some polar regions (Norway, Svalbard, Antartica)
+
+    Args:
+        lon (float): longitude
+    Returns:
+        UTM zone number (int)
+    """
+    import math
+
+    return math.floor((lon + 180) / 6) + 1
