@@ -17,6 +17,10 @@ from apertools import geojson
 logger = get_log()
 
 
+COMP_DICT_BLOSC = {"compression": 32001, "compression_opts": (0, 0, 0, 0, 5, 1, 1)}
+COMP_DICT_LZF = {"compressions": "LZF"}
+
+
 def read_intersections(
     fname1, fname2, band1=None, band2=None, nodata=0, mask_intersection=True
 ):
@@ -493,7 +497,7 @@ def subset_h5(
     ds = xr.open_dataset(
         os.path.join(full_path, fname), engine="h5netcdf", phony_dims="sort"
     )
-    compressions = {ds: {"zlib": True} for ds in dsets_to_compress}
+    compressions = {ds: COMP_DICT_BLOSC for ds in dsets_to_compress}
     ds_sub = ds.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
     logger.info("Input dimensions: %s", ds.dims)
     logger.info("Output dimensions: %s", ds_sub.dims)
@@ -506,7 +510,9 @@ def crop_stacks_by_date(
     max_date=None,
     max_temporal_baseline=None,
     max_temporal_bandwidth=None,
+    bbox=None,
     project_dir=".",
+    out_dir=".",
     files_to_crop=list(COMP_DSETS.keys()),
 ):
     """Subset all important data stacks for geocoded project by bounding box
@@ -549,7 +555,8 @@ def crop_stacks_by_date(
     else:
         max_date = datetime.datetime(2100, 1, 1, tzinfo=datetime.timezone.utc)
 
-    ifglist = sario.load_ifglist_from_h5(files_to_crop[0])
+    input_files = [os.path.join(project_dir, f) for f in files_to_crop]
+    ifglist = sario.load_ifglist_from_h5(input_files[0])
     # dc2 = datetime.datetime(2019, 1, 1, tzinfo=datetime.timezone.utc)
     # ifglist2019 = [
     #     ifg
@@ -565,28 +572,34 @@ def crop_stacks_by_date(
         max_bandwidth=max_temporal_bandwidth,
     )
 
-    # slclist = sario.load_slclist_from_h5(files_to_crop[0])
+    # slclist = sario.load_slclist_from_h5(input_files[0])
     # slclist2019 = [slc for slc in slclist if min_date <= slc <= max_date]
     # idxs_slc = [slclist.index(ifg) for ifg in slclist2019]
 
-    for fname in files_to_crop:
+    for fname in input_files:
+        if not os.path.exists(fname):
+            logger.warning(f"{fname} doesn't exist: skipping")
+            continue
         logger.info("Subsetting %s", fname)
-        filepath = os.path.join(project_dir, fname)
-        ext = os.path.splitext(filepath)[1]
-        f_out = filepath.replace(ext, out_str + ext)
+        name_only = os.path.split(fname)[-1]
+        # filepath = os.path.join(project_dir, fname)
+        ext = os.path.splitext(fname)[1]
+        f_out = os.path.join(out_dir, name_only.replace(ext, out_str + ext))
         if os.path.exists(f_out):
             logger.info("%s exists: skipping", f_out)
             continue
 
-        ds = xr.open_dataset(filepath, engine="h5netcdf", phony_dims="sort")
+        ds = xr.open_dataset(fname, engine="h5netcdf", phony_dims="sort")
         # ds_sub = ds.sel(ifg_idx=ifg_idxs, phony_dim_4=idxs_slc)
         ds_sub = ds.sel(ifg_idx=ifg_idxs)
+        if bbox is not None:
+            ds_sub = ds_sub.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
         logger.info("Input dimensions: %s", ds.dims)
         logger.info("Output dimensions: %s", ds_sub.dims)
 
         ###
         ###
-        dsets_to_compress = COMP_DSETS[fname]
-        compressions = {ds: {"zlib": True} for ds in dsets_to_compress}
+        dsets_to_compress = COMP_DSETS[name_only]
+        compressions = {ds: COMP_DICT_BLOSC for ds in dsets_to_compress}
         logger.info("Writing to %s, compressing with: %s", f_out, compressions)
         ds_sub.to_netcdf(f_out, engine="h5netcdf", encoding=compressions, mode="a")
