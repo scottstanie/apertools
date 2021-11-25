@@ -180,27 +180,42 @@ def write_outfile(
             dst.write(layer, band)
 
 
-def _get_img_bounds(fname1, fname2):
+def _get_img_bounds(
+    fname1=None, fname2=None, ds1=None, ds2=None, xdim="lon", ydim="lat"
+):
     """Read 2 arrays and make sure they are on the same projection"""
-    with rio.open(fname1) as src1, rio.open(fname2) as src2:
-        if src1.crs != src2.crs:
-            raise ValueError(
-                f"{fname1} has crs {src1.crs}, but {fname2} has csr {src2.crs}"
-            )
-        b1 = geometry.box(*src1.bounds)
-        b2 = geometry.box(*src2.bounds)
+    if fname1 is not None and fname2 is not None:
+        with rio.open(fname1) as src1, rio.open(fname2) as src2:
+            if src1.crs != src2.crs:
+                raise ValueError(
+                    f"{fname1} has crs {src1.crs}, but {fname2} has csr {src2.crs}"
+                )
+            b1 = geometry.box(*src1.bounds)
+            b2 = geometry.box(*src2.bounds)
+            return b1, b2
+    elif ds1 is not None and ds2 is not None:
+        s1 = ds1.rio.set_spatial_dims(xdim, ydim)
+        s2 = ds2.rio.set_spatial_dims(xdim, ydim)
+        b1 = geometry.box(*s1.rio.bounds())
+        b2 = geometry.box(*s2.rio.bounds())
         return b1, b2
+    else:
+        raise ValueError("Must provide either fname or ds")
 
 
-def get_intersection_bounds(fname1, fname2):
+def get_intersection_bounds(
+    fname1=None, fname2=None, ds1=None, ds2=None, xdim="lon", ydim="lat"
+):
     """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2"""
-    b1, b2 = _get_img_bounds(fname1, fname2)
+    b1, b2 = _get_img_bounds(fname1, fname2, ds1, ds2, xdim, ydim)
     return b1.intersection(b2).bounds
 
 
-def get_union_bounds(fname1, fname2):
+def get_union_bounds(
+    fname1=None, fname2=None, ds1=None, ds2=None, xdim="lon", ydim="lat"
+):
     """Find the (left, bot, right, top) bounds of union of fname1 and fname2"""
-    b1, b2 = _get_img_bounds(fname1, fname2)
+    b1, b2 = _get_img_bounds(fname1, fname2, ds1, ds2, xdim, ydim)
     return b1.union(b2).bounds
 
 
@@ -210,10 +225,13 @@ def get_transform(in_fname, driver=None, bbox=None):
         return transform
 
 
-def get_bounds(fname):
+def get_bounds(fname=None, ds=None, xdim="lon", ydim="lat"):
     """Find the (left, bot, right, top) bounds 1 file `fname`"""
-    with rio.open(fname) as src:
-        return src.bounds
+    if fname is not None:
+        with rio.open(fname) as src:
+            return src.bounds
+    elif ds is not None:
+        return ds.rio.set_spatial_dims(xdim, ydim).rio.bounds()
 
 
 def get_intersect_transform(fname1, fname2):
@@ -234,6 +252,18 @@ def get_driver(fname):
 def get_nodata(fname):
     with rio.open(fname) as src:
         return src.nodata
+
+
+def get_intersection_bounds(fname1, fname2):
+    """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2"""
+    b1, b2 = _get_img_bounds(fname1, fname2)
+    return b1.intersection(b2).bounds
+
+
+def get_union_bounds(fname1, fname2):
+    """Find the (left, bot, right, top) bounds of union of fname1 and fname2"""
+    b1, b2 = _get_img_bounds(fname1, fname2)
+    return b1.union(b2).bounds
 
 
 def bbox_around_point(lons, lats, side_km=25):
@@ -593,7 +623,9 @@ def crop_stacks_by_date(
         # ds_sub = ds.sel(ifg_idx=ifg_idxs, phony_dim_4=idxs_slc)
         ds_sub = ds.sel(ifg_idx=ifg_idxs)
         if bbox is not None:
-            ds_sub = ds_sub.sel(lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1]))
+            ds_sub = ds_sub.sel(
+                lon=slice(bbox[0], bbox[2]), lat=slice(bbox[3], bbox[1])
+            )
         logger.info("Input dimensions: %s", ds.dims)
         logger.info("Output dimensions: %s", ds_sub.dims)
 

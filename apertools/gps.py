@@ -75,6 +75,7 @@ class InsarGPSCompare:
     insar_filename: str = "deformation.h5"
     dset: str = "linear_velocity"
     los_map_file: str = LOS_FILENAME
+    los_dset: str = LOS_FILENAME.replace(".tif", "")
     # to measure GPS relative to some other station, set the reference station
     reference_station: str = None
     # Used to average InSAR values in a box around the stations
@@ -87,7 +88,7 @@ class InsarGPSCompare:
     max_nan_pct: float = 0.4
     # To smooth the GPS or insar timeseries, set the number of smoothing days
     days_smooth_insar: int = None
-    days_smooth_gps: int = None
+    days_smooth_gps: int = None  # TODO: not using this right now
     # Create an extra column the the output with the difference
     # of (GPS - InSAR) for each station
     create_diffs: bool = True
@@ -134,6 +135,9 @@ class InsarGPSCompare:
                 df[f"{stat}_diff"] = df[f"{stat}_gps"] - df[f"{stat}_insar"]
 
         self.df = self._remove_bad_cols(df)
+        # TODO: any time this won't be true?
+        self.df.attrs["units"] = "cm"
+
         return self.df
 
     def compare_velocities(self, median=None, to_mm_year=True, print_summary=True):
@@ -167,9 +171,12 @@ class InsarGPSCompare:
         df_velo_diffs["v_insar"] = v_insar_list
         if to_mm_year:  # as opposed to cm/day
             df_velo_diffs[["velo_diff", "v_gps", "v_insar"]] *= 365.25 * 10
+            units = "mm/year"
+        else:
+            units = "cm/day"
+        df_velo_diffs.attrs["units"] = units
         df_velo_diffs.set_index("name", inplace=True)
         if print_summary:
-            units = "mm/year" if to_mm_year else "cm/day"
             print("RMS Difference:")
             print(f"{self.rms(df_velo_diffs['velo_diff']):.3f} {units}")
         self.df_velo_diffs = df_velo_diffs
@@ -234,11 +241,13 @@ class InsarGPSCompare:
         if end_date is None:
             end_date = self.end_date
         df_list = []
+        self.los_da = self._get_los_da()
         # df_locations = get_stations_within_image(filename=los_map_file)
         for row in df_gps_locations.itertuples():
             if kind.lower() == "los":
                 df_los = load_gps_los(
                     los_map_file=self.los_map_file,
+                    los_da=self.los_da,
                     station_name=row.name,
                     start_date=start_date,
                     end_date=end_date,
@@ -263,6 +272,14 @@ class InsarGPSCompare:
         df_gps.columns = df_gps_locations.name.values
         self.df_gps = df_gps
         return df_gps
+
+    def _get_los_da(self):
+        with xr.open_dataset(self.insar_filename) as ds:
+            if self.los_dset in ds:
+                los_da = ds[self.los_dset]
+            else:
+                los_da = None
+        return los_da
 
     def _set_start_end_date(self, df_insar):
         # constrain the date range to just the InSAR min/max dates
@@ -801,6 +818,7 @@ def station_std(station, to_cm=True, start_date=None, end_date=None):
 def load_gps_los(
     station_name=None,
     los_map_file=LOS_FILENAME,
+    los_da=None,
     to_cm=True,
     zero_mean=True,
     zero_start=False,
@@ -827,6 +845,7 @@ def load_gps_los(
             lon,
             lat,
             los_map_file=los_map_file,
+            los_da=los_da,
             coordinates=coordinates,
             geom_dir=geom_dir,
         )
@@ -857,6 +876,7 @@ def load_gps_los(
         df_ref = load_gps_los(
             station_name=station_name,
             los_map_file=los_map_file,
+            los_da=los_da,
             to_cm=to_cm,
             zero_mean=zero_mean,
             zero_start=zero_start,

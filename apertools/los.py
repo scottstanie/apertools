@@ -12,7 +12,12 @@ logger = get_log()
 
 
 def find_enu_coeffs(
-    lon, lat, los_map_file=None, coordinates=None, geom_dir="geom_reference"
+    lon,
+    lat,
+    los_map_file=None,
+    los_da=None,
+    coordinates=None,
+    geom_dir="geom_reference",
 ):
     """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
 
@@ -20,6 +25,7 @@ def find_enu_coeffs(
         lon (float): longitude of point to get LOS vector
         lat (float): latitude of point
         los_map_file (str): name of 3-band image with E,N,U as bands.
+        los_array (xr.DataArray): 3-band DataArray with E,N,U as bands, 'lat', 'lon' coords
         coordinates (str): ['geo', 'rdr']. Pass 'rdr' if `los_map_file` is in
             radar coordinates
         geom_dir (str): if `los_map_file` is in radar coordinates, directory
@@ -31,6 +37,18 @@ def find_enu_coeffs(
         Can be used to project an ENU vector into the line of sight direction
     """
     import rasterio as rio
+
+    # Prefer to use the DataArray if it's passed in
+    if los_da is not None:
+        # Check that lat/lon is inbounds:
+        if (lat < los_da.lat.min()) or (lat > los_da.lat.max()):
+            raise ValueError("lat out of bounds")
+        if (lon < los_da.lon.min()) or (lon > los_da.lon.max()):
+            raise ValueError("lon out of bounds")
+        return los_da.sel(lat=lat, lon=lon, method="nearest").values.ravel()
+
+    if los_map_file is None:
+        raise ValueError("los_map_file or los_da is required")
 
     with rio.open(los_map_file) as src:
 

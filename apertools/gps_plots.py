@@ -120,7 +120,7 @@ def plot_gps_enu(
     fig, axes = plt.subplots(3, 1)
     axes[0].plot(dts, east_cm, "b.")
     axes[0].set_ylabel("east (cm)")
-    axes[0].plot(dts, gps.moving_average(east_cm, days_smooth), 'r-')
+    axes[0].plot(dts, gps.moving_average(east_cm, days_smooth), "r-")
     axes[0].grid(True)
     remove_xticks(axes[0])
 
@@ -267,7 +267,14 @@ def _plot_slope_df(df, **kwargs):
 
 
 def _plot_line_df(
-    df, ylim=None, share=True, days_smooth_gps=None, days_smooth_insar=None, **kwargs
+    df,
+    ylim=None,
+    share=True,
+    days_smooth_gps=None,
+    days_smooth_insar=None,
+    figsize=(10, 5),
+    show_grid=True,
+    **kwargs,
 ):
     """share is used to indicate that GPS and insar will be on same axes"""
 
@@ -282,7 +289,7 @@ def _plot_line_df(
 
     columns = df.columns
     nrows = 1 if share else 2
-    fig, axes = plt.subplots(nrows, len(columns) // 2, figsize=(16, 5), squeeze=False)
+    fig, axes = plt.subplots(nrows, len(columns) // 2, figsize=figsize, squeeze=False)
 
     gps_idxs = np.where(["gps" in col for col in columns])[0]
     insar_idxs = np.where(["insar" in col for col in columns])[0]
@@ -290,14 +297,22 @@ def _plot_line_df(
     for idx, column in enumerate(columns):
         if "insar" in column:
             marker = "rx"
+            alpha = 1.0
             ax_idx = np.where(insar_idxs == idx)[0][0] if share else idx
         else:
             marker = "b."
+            alpha = 0.5
             ax_idx = np.where(gps_idxs == idx)[0][0] if share else idx
 
         ax = axes.ravel()[ax_idx]
-        # axes[idx].plot(df.index, df[column].fillna(method='ffill'), marker)
-        ax.plot(df.index, df[column], marker, label=column)
+        ax.plot(
+            df.index,
+            df[column].fillna(method="ffill"),
+            marker,
+            label=column,
+            alpha=alpha,
+        )
+        # ax.plot(df.index, df[column], marker, label=column, alpha=0.5)
 
         ax.set_title(column)
         if ylim is not None:
@@ -309,10 +324,11 @@ def _plot_line_df(
         if days_smooth_insar and "insar" in column:
             _plot_smoothed(ax, df, column, days_smooth_insar, "r-")
 
-        ax.set_ylabel("InSAR cumulative CM")
+        ax.set_ylabel("Cum. Defo. [cm]")
         ax.legend()
+        ax.grid(show_grid)
 
-    axes.ravel()[-1].set_xlabel("Date")
+    # axes.ravel()[-1].set_xlabel("Date")
     fig.autofmt_xdate()
     return fig, axes
 
