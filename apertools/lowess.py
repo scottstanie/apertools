@@ -18,6 +18,7 @@ Statistical Association, September 1988, volume 83, number 403, pp. 596-610.
 import os
 import numpy as np
 from numba import njit
+from matplotlib.dates import date2num
 import pymp
 
 
@@ -61,13 +62,13 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, n_iter=2, n_jobs=-1):
             y = stack_cols[:, index]
             if np.any(np.isnan(y)) or np.all(y == 0):
                 continue
-            stack_out[:, index] = _lowess(y, x, frac, n_iter)
+            stack_out[:, index] = lowess_pixel(y, x, frac, n_iter)
 
     return stack_out.reshape((ns, nrows, ncols))
 
 
 @njit(cache=True, nogil=True)
-def _lowess(y, x, frac=2.0 / 3.0, n_iter=2):
+def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
     """Lowess smoother requiring native endian datatype (for numba).
     Performs multiple iterations for robust fitting, downweighting
     by the residuals of the previous fit."""
@@ -111,16 +112,56 @@ def _lowess(y, x, frac=2.0 / 3.0, n_iter=2):
 
     return yest
 
+    # """Run lowess on a DataArray stack"""
 
-def lowess_xr(da, x_dset="date", frac=0.7, n_iter=2):
-    """Run lowess on a DataArray stack"""
-    from matplotlib.dates import date2num
+
+def lowess_xr(da, x_dset="date", min_days_weighted=3 * 365.25, frac=0.7, n_iter=2):
+    """Run lowess on a DataArray stack.
+
+    Args:
+        da (xr.DataArray): 3D xarray containing data to be smoothed along dimension `x_dset`.
+        x_dset (str, optional): Name of the time dimension. Defaults to "date".
+        min_days_weighted (float, optional): Minimum time period of data to include in smoothing.
+            See notes. Defaults to 365.25*3 (3 years of data).
+        n_iter (int, optional): Number of LOWESS iterations to run to exclude outliers.
+            Defaults to 2.
+
+    Returns:
+        xr.DataArray: stack from `da` smoothed along the dimension `x_dset`.
+
+    Notes:
+        When sampling is irregular, specifying one fraction of data for lowess will lead to parts
+        of the smoothing using longer time intervals. `min_days_weighted` is used to specify the
+        minimum time desired for the smoothing. For example, if the data starts as sampled every
+        month, but then switches to sampling every 2-weeks, the fraction will be use the proportion
+        of data that is needed to include at least `min_days_weighted` days of data during the
+        2-week sampling time.
+    """
     import xarray as xr
 
     x = date2num(da[x_dset].values)
+    if min_days_weighted:
+        frac = _find_frac(x, min_days_weighted)
     out_stack = lowess_stack(da.values, x, frac, n_iter)
     # Now return as a DataArray
     return xr.DataArray(out_stack, coords=da.coords, dims=da.dims)
+
+
+def _find_frac(x, min_days_weighted):
+    """Find fraction of data to use so all windows are at least `min_days_weighted` days
+
+    Args:
+        x (ndarray): array of days from date2num
+        min_days_weighted (int, float): Minimum number of days to include in lowess fit
+    """
+    n = len(x)
+    day_diffs = np.abs(x.reshape((-1, 1)) - x.reshape((1, -1)))
+    # The `kk`th diagonal will contain the time differences when using points `kk` indices apart
+    # (e.g. the 2nd diagonal contains how many days apart are x[2]-x[0], x[3]-x[1],...)
+    smallest_diffs = np.array([np.min(np.diag(day_diffs, k=kk)) for kk in range(n)])
+    # Get the first diagonal where it crosses the min_days_weighted threshold
+    idx = np.where(smallest_diffs > min_days_weighted)[0][0]
+    return idx / n
 
     # Failed to make this work in parallel...
     # TODO: what does this even mean??
