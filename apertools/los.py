@@ -67,12 +67,14 @@ def find_enu_coeffs(
 
 
 def solve_east_up(
-    asc_enu_fname,
-    desc_enu_fname,
-    asc_img_fname,
-    desc_img_fname,
+    asc_enu_fname=None,
+    desc_enu_fname=None,
+    asc_img_fname=None,
+    desc_img_fname=None,
     asc_band=1,
     desc_band=1,
+    asc_xr=None,
+    desc_xr=None,
     outfile=None,
     asc_shift=0.0,
     desc_shift=0.0,
@@ -81,13 +83,36 @@ def solve_east_up(
     # asc_dset="velos/1",
     # desc_dset="velos/1",
 ):
+    if asc_xr is not None:
 
-    asc_enu_stack, desc_enu_stack = subset.read_intersections(
-        asc_enu_fname, desc_enu_fname
-    )
-    asc_img, desc_img = subset.read_intersections(
-        asc_img_fname, desc_img_fname, asc_band, desc_band
-    )
+        asc_enu_stack, desc_enu_stack = subset.read_intersections(
+            asc_enu_fname, desc_enu_fname
+        )
+        asc_img, desc_img = subset.read_intersections(
+            asc_img_fname, desc_img_fname, asc_band, desc_band
+        )
+    elif asc_img_fname is not None:
+        asc_enu_stack, desc_enu_stack = subset.read_intersections(
+            asc_enu_fname, desc_enu_fname
+        )
+        asc_img, desc_img = subset.read_intersections(
+            asc_img_fname, desc_img_fname, asc_band, desc_band
+        )
+        return solve_east_up_imgs()
+
+
+def solve_east_up_imgs(
+    asc_img,
+    desc_img,
+    asc_enu_stack,
+    desc_enu_stack,
+    outfile=None,
+    asc_shift=0.0,
+    desc_shift=0.0,
+    deramp_order=0,
+    deramp_mask_thresh=3,
+):
+
     if deramp_order:
         asc_img = _deramp(asc_img, deramp_order, deramp_mask_thresh)
         desc_img = _deramp(desc_img, deramp_order, deramp_mask_thresh)
@@ -277,17 +302,39 @@ def merge_slclists(slclist1, slclist2):
     return merged_slclist, indices1, indices2
 
 
-def plot_enu_maps(enu_ll, title=None, cmap="jet"):
-    import matplotlib.pyplot as plt
+def merge_datelist_xr(ds1, ds2, col="date"):
+    # los.merge_slclists(pd.to_datetime(ds85.date.values).values,
+    # pd.to_datetime(ds151.date.values).values)
+    import pandas as pd
 
-    fig, axes = plt.subplots(1, 3)
+    d = pd.merge(pd.Series(ds1.indexes[col]), pd.Series(ds2.indexes[col]), how="outer")
+    out_series = d.sort_values(["date"]).reset_index(drop=True)
+    return out_series.to_xarray().date
 
-    titles = ["east", "north", "up"]
-    for idx in range(3):
-        axim = axes[idx].imshow(np.abs(enu_ll[idx]), vmin=0, vmax=1, cmap=cmap)
-        axes[idx].set_title(titles[idx])
 
-    fig.subplots_adjust(right=0.8)
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-    fig.colorbar(axim, cax=cbar_ax)
-    fig.suptitle(title)
+def merge_xr(ds1, ds2, freq="6M", col="date", dset1="defo_lowess", dset2="defo_lowess"):
+    """Interpolate 2 datasets to a set of dates
+
+    Args:
+        ds1 (xr.Dataset): first dataset
+        ds2 (xr.Dataset): seconds dataset
+        freq (str, optional): Date frequency (passed to pandas). Defaults to "6M".
+        col (str, optional): name of time index in ds1/ds2. Defaults to "date".
+        dset1 (str, optional): name of data variable for ds1. Defaults to "defo_lowess".
+        dset2 (str, optional): name of data variable for ds2. Defaults to "defo_lowess".
+
+    Returns:
+        tuple[xr.DataArray]: two data arrays, interpolated to the dates specified
+    """
+    import pandas as pd
+    if freq is not None:
+        dmax = max(np.max(ds1[col]), np.max(ds2[col])).to_pandas()
+        dmin = min(np.min(ds1[col]), np.min(ds2[col])).to_pandas()
+        dd = date_range = pd.date_range(dmin, dmax, freq='6M')
+        date_range = dd.to_series().to_xarray().rename(index="date")
+        # return date_range
+    else:
+        date_range = merge_datelist_xr(ds1, ds2, col=col)
+    out1 = ds1[dset1].interp(date=date_range, kwargs={"fill_value": "extrapolate"})
+    out2 = ds2[dset2].interp(date=date_range, kwargs={"fill_value": "extrapolate"})
+    return out1, out2

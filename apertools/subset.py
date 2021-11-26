@@ -22,7 +22,12 @@ COMP_DICT_LZF = {"compressions": "LZF"}
 
 
 def read_intersections(
-    fname1, fname2, band1=None, band2=None, nodata=0, mask_intersection=True
+    fname1=None,
+    fname2=None,
+    band1=None,
+    band2=None,
+    nodata=0,
+    mask_intersection=True,
 ):
     """Read in the intersection of 2 files as an array"""
     bounds = get_intersection_bounds(fname1, fname2)
@@ -37,6 +42,10 @@ def read_intersections(
             im1[cur_mask] = nodata
             im2[cur_mask] = nodata
     return im1, im2
+
+
+def read_intersections_xr(ds1, ds2, xdim="lon", ydim="lat"):
+    bounds = get_intersection_bounds(ds1=ds1, ds2=ds2, xdim=xdim, ydim=ydim)
 
 
 def read_unions(fname1, fname2, band1=None, band2=None):
@@ -206,7 +215,8 @@ def _get_img_bounds(
 def get_intersection_bounds(
     fname1=None, fname2=None, ds1=None, ds2=None, xdim="lon", ydim="lat"
 ):
-    """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2"""
+    """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2
+    or 2 xarray.Datasets ds1 and ds1"""
     b1, b2 = _get_img_bounds(fname1, fname2, ds1, ds2, xdim, ydim)
     return b1.intersection(b2).bounds
 
@@ -252,18 +262,6 @@ def get_driver(fname):
 def get_nodata(fname):
     with rio.open(fname) as src:
         return src.nodata
-
-
-def get_intersection_bounds(fname1, fname2):
-    """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2"""
-    b1, b2 = _get_img_bounds(fname1, fname2)
-    return b1.intersection(b2).bounds
-
-
-def get_union_bounds(fname1, fname2):
-    """Find the (left, bot, right, top) bounds of union of fname1 and fname2"""
-    b1, b2 = _get_img_bounds(fname1, fname2)
-    return b1.union(b2).bounds
 
 
 def bbox_around_point(lons, lats, side_km=25):
