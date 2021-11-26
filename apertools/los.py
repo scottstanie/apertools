@@ -1,6 +1,6 @@
 """Functions to deal with Line of sight vector computation
 """
-from __future__ import division, print_function
+import os
 import numpy as np
 from numpy import sin, cos
 
@@ -75,22 +75,41 @@ def solve_east_up(
     desc_band=1,
     asc_xr=None,
     desc_xr=None,
+    xdim="lon",
+    ydim="lat",
+    asc_dset="defo_lowess",
+    desc_dset="defo_lowess",
+    date=None,
+    los_dset="los_enu",
+    crs="EPSG:4326",
     outfile=None,
     asc_shift=0.0,
     desc_shift=0.0,
     deramp_order=0,
     deramp_mask_thresh=3,
-    # asc_dset="velos/1",
-    # desc_dset="velos/1",
 ):
     if asc_xr is not None:
+        # Save and read in the overlapping region of ascending/descending
+        asc_img_fname, desc_img_fname = "tmp_asc.tif", "tmp_desc.tif"
+        asc_da = asc_xr[asc_dset]
+        desc_da = desc_xr[desc_dset]
+        if date is not None:
+            asc_da = asc_da.sel(date=date)
+            desc_da = desc_da.sel(date=date)
+        asc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(asc_img_fname)
+        desc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(desc_img_fname)
+        asc_img, desc_img = subset.read_intersections(asc_img_fname, desc_img_fname)
 
-        asc_enu_stack, desc_enu_stack = subset.read_intersections(
-            asc_enu_fname, desc_enu_fname
-        )
-        asc_img, desc_img = subset.read_intersections(
-            asc_img_fname, desc_img_fname, asc_band, desc_band
-        )
+        # Save and read in the LOS stack overlap
+        name_asc2, name_desc2 = "tmp_asc_los.tif", "tmp_desc_los.tif"
+        asc_xr[los_dset].rio.set_spatial_dims(xdim, ydim).rio.set_crs(
+            crs
+        ).rio.to_raster(name_asc2)
+        desc_xr[los_dset].rio.set_spatial_dims(xdim, ydim).rio.set_crs(
+            crs
+        ).rio.to_raster(name_desc2)
+        asc_enu_stack, desc_enu_stack = subset.read_intersections(name_asc2, name_desc2)
+
     elif asc_img_fname is not None:
         asc_enu_stack, desc_enu_stack = subset.read_intersections(
             asc_enu_fname, desc_enu_fname
@@ -98,7 +117,35 @@ def solve_east_up(
         asc_img, desc_img = subset.read_intersections(
             asc_img_fname, desc_img_fname, asc_band, desc_band
         )
-        return solve_east_up_imgs()
+
+    east, up = solve_east_up_imgs(
+        asc_img,
+        desc_img,
+        asc_enu_stack,
+        desc_enu_stack,
+        asc_shift=asc_shift,
+        desc_shift=desc_shift,
+        deramp_order=deramp_order,
+        deramp_mask_thresh=deramp_mask_thresh,
+    )
+
+    if outfile:
+        transform = subset.get_intersect_transform(asc_img_fname, desc_img_fname)
+        crs = subset.get_crs(asc_img_fname)
+        nodata = subset.get_nodata(asc_img_fname)
+        out_stack = np.stack([east, up], axis=0)
+        subset.write_outfile(
+            outfile, out_stack, transform=transform, crs=crs, nodata=nodata
+        )
+    # Finally remove the temporary files for xarray
+    if asc_xr is not None:
+        # import xarray as xr
+        for f in [asc_img_fname, desc_img_fname, name_asc2, name_desc2]:
+            os.remove(f)
+        # Need the intersection coords... maybe from using rioxarray
+        # east = xr.DataArray(east, coords=asc_xr[asc_dset].coords)
+        # up = xr.DataArray(up, coords=asc_xr[asc_dset].coords)
+    return east, up
 
 
 def solve_east_up_imgs(
@@ -106,7 +153,6 @@ def solve_east_up_imgs(
     desc_img,
     asc_enu_stack,
     desc_enu_stack,
-    outfile=None,
     asc_shift=0.0,
     desc_shift=0.0,
     deramp_order=0,
@@ -144,14 +190,6 @@ def solve_east_up_imgs(
     mask = np.logical_or(asc_img == 0, desc_img == 0)
     east[mask] = 0
     up[mask] = 0
-    if outfile:
-        transform = subset.get_intersect_transform(asc_img_fname, desc_img_fname)
-        crs = subset.get_crs(asc_img_fname)
-        nodata = subset.get_nodata(asc_img_fname)
-        out_stack = np.stack([east, up], axis=0)
-        subset.write_outfile(
-            outfile, out_stack, transform=transform, crs=crs, nodata=nodata
-        )
 
     return east, up
 
@@ -303,12 +341,14 @@ def merge_slclists(slclist1, slclist2):
 
 
 def merge_datelist_xr(ds1, ds2, col="date"):
+    """Find the outer join of ds1[col] and ds2[col]"""
+    # Equivalent to...
     # los.merge_slclists(pd.to_datetime(ds85.date.values).values,
     # pd.to_datetime(ds151.date.values).values)
     import pandas as pd
 
     d = pd.merge(pd.Series(ds1.indexes[col]), pd.Series(ds2.indexes[col]), how="outer")
-    out_series = d.sort_values(["date"]).reset_index(drop=True)
+    out_series = d.sort_values([col]).reset_index(drop=True)
     return out_series.to_xarray().date
 
 
@@ -324,17 +364,20 @@ def merge_xr(ds1, ds2, freq="6M", col="date", dset1="defo_lowess", dset2="defo_l
         dset2 (str, optional): name of data variable for ds2. Defaults to "defo_lowess".
 
     Returns:
-        tuple[xr.DataArray]: two data arrays, interpolated to the dates specified
+        tuple[xr.Dataset]: two Datasets, interpolated to the dates specified 
+        in the data variable `dset1`, `dset2`
     """
     import pandas as pd
+
     if freq is not None:
         dmax = max(np.max(ds1[col]), np.max(ds2[col])).to_pandas()
         dmin = min(np.min(ds1[col]), np.min(ds2[col])).to_pandas()
-        dd = date_range = pd.date_range(dmin, dmax, freq='6M')
+        dd = date_range = pd.date_range(dmin, dmax, freq="6M")
+        # kinda convoluted... maybe there's a simpler way to get back to DataArray
         date_range = dd.to_series().to_xarray().rename(index="date")
-        # return date_range
     else:
+        # Otherwise use all the possible dates, outer joined
         date_range = merge_datelist_xr(ds1, ds2, col=col)
     out1 = ds1[dset1].interp(date=date_range, kwargs={"fill_value": "extrapolate"})
     out2 = ds2[dset2].interp(date=date_range, kwargs={"fill_value": "extrapolate"})
-    return out1, out2
+    return out1.to_dataset(), out2.to_dataset()
