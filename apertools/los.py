@@ -83,6 +83,7 @@ def solve_east_up(
     los_dset="los_enu",
     crs="EPSG:4326",
     outfile=None,
+    unit="centimeters",
     asc_shift=0.0,
     desc_shift=0.0,
     deramp_order=0,
@@ -96,8 +97,12 @@ def solve_east_up(
         if date is not None:
             asc_da = asc_da.sel(date=date)
             desc_da = desc_da.sel(date=date)
-        asc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(asc_img_fname)
-        desc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(desc_img_fname)
+        asc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(
+            asc_img_fname
+        )
+        desc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(
+            desc_img_fname
+        )
         asc_img, desc_img = subset.read_intersections(asc_img_fname, desc_img_fname)
 
         # Save and read in the LOS stack overlap
@@ -135,7 +140,12 @@ def solve_east_up(
         nodata = subset.get_nodata(asc_img_fname)
         out_stack = np.stack([east, up], axis=0)
         subset.write_outfile(
-            outfile, out_stack, transform=transform, crs=crs, nodata=nodata
+            outfile,
+            out_stack,
+            transform=transform,
+            crs=crs,
+            nodata=nodata,
+            unit=unit,
         )
     # Finally remove the temporary files for xarray
     if asc_xr is not None:
@@ -364,14 +374,20 @@ def merge_xr(ds1, ds2, freq="6M", col="date", dset1="defo_lowess", dset2="defo_l
         dset2 (str, optional): name of data variable for ds2. Defaults to "defo_lowess".
 
     Returns:
-        tuple[xr.Dataset]: two Datasets, interpolated to the dates specified 
+        tuple[xr.Dataset]: two Datasets, interpolated to the dates specified
         in the data variable `dset1`, `dset2`
     """
     import pandas as pd
 
     if freq is not None:
-        dmax = max(np.max(ds1[col]), np.max(ds2[col])).to_pandas()
-        dmin = min(np.min(ds1[col]), np.min(ds2[col])).to_pandas()
+        # Take the later of the start dates
+        dmin = max(np.min(ds1[col]), np.min(ds2[col])).to_pandas()
+        # Take the earlier of the end dates
+        dmax = min(np.max(ds1[col]), np.max(ds2[col])).to_pandas()
+        # Round to nearest quarters
+        dmin = pd.to_datetime(dmin) + pd.tseries.offsets.QuarterBegin()
+        dmax = pd.to_datetime(dmax) + pd.tseries.offsets.QuarterEnd()
+
         dd = date_range = pd.date_range(dmin, dmax, freq="6M")
         # kinda convoluted... maybe there's a simpler way to get back to DataArray
         date_range = dd.to_series().to_xarray().rename(index="date")

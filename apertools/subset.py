@@ -28,10 +28,12 @@ def read_intersections(
     band2=None,
     nodata=0,
     mask_intersection=True,
+    verbose=False,
 ):
     """Read in the intersection of 2 files as an array"""
     bounds = get_intersection_bounds(fname1, fname2)
-    print(f"bounds: {bounds}")
+    if verbose:
+        logger.info(f"bounds: {bounds}")
     im1 = copy_vrt(fname1, out_fname="", bbox=bounds, band=band1)
     im2 = copy_vrt(fname2, out_fname="", bbox=bounds, band=band2)
     if mask_intersection:
@@ -44,8 +46,8 @@ def read_intersections(
     return im1, im2
 
 
-def read_intersections_xr(ds1, ds2, xdim="lon", ydim="lat"):
-    bounds = get_intersection_bounds(ds1=ds1, ds2=ds2, xdim=xdim, ydim=ydim)
+# def read_intersections_xr(ds1, ds2, xdim="lon", ydim="lat"):
+# bounds = get_intersection_bounds(ds1=ds1, ds2=ds2, xdim=xdim, ydim=ydim)
 
 
 def read_unions(fname1, fname2, band1=None, band2=None):
@@ -78,7 +80,7 @@ def write_intersections(
 
 
 # TODO: this is basically the same as copy_subset... def merge these
-def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True, band=None):
+def copy_vrt(in_fname, out_fname="", bbox=None, verbose=False, band=None):
     """Create a VRT for (a subset of) a gdal-readable file
 
     bbox format: (left, bottom, right, top)"""
@@ -107,7 +109,7 @@ def copy_vrt(in_fname, out_fname="", bbox=None, verbose=True, band=None):
     out_ds = gdal.Warp(out_fname, in_fname, outputBounds=bbox, format="VRT")
     out_arr = out_ds.ReadAsArray()
     if band:
-        out_arr = out_arr[band]
+        out_arr = out_arr[band - 1]
     # ds_in, out_ds = None, None
     return out_arr
 
@@ -161,6 +163,7 @@ def write_outfile(
     driver=None,
     nodata=None,
     dtype=None,
+    unit=None,
 ):
     if driver is None and out_fname.endswith(".tif"):
         driver = "GTiff"
@@ -187,6 +190,8 @@ def write_outfile(
     ) as dst:
         for band, layer in enumerate(img, start=1):
             dst.write(layer, band)
+            if unit:
+                dst.set_band_unit(band, unit)
 
 
 def _get_img_bounds(
@@ -212,6 +217,15 @@ def _get_img_bounds(
         raise ValueError("Must provide either fname or ds")
 
 
+def get_bounds(fname=None, ds=None, xdim="lon", ydim="lat"):
+    """Find the (left, bot, right, top) bounds 1 file `fname`"""
+    if fname is not None:
+        with rio.open(fname) as src:
+            return src.bounds
+    elif ds is not None:
+        return ds.rio.set_spatial_dims(xdim, ydim).rio.bounds()
+
+
 def get_intersection_bounds(
     fname1=None, fname2=None, ds1=None, ds2=None, xdim="lon", ydim="lat"
 ):
@@ -235,18 +249,14 @@ def get_transform(in_fname, driver=None, bbox=None):
         return transform
 
 
-def get_bounds(fname=None, ds=None, xdim="lon", ydim="lat"):
-    """Find the (left, bot, right, top) bounds 1 file `fname`"""
-    if fname is not None:
-        with rio.open(fname) as src:
-            return src.bounds
-    elif ds is not None:
-        return ds.rio.set_spatial_dims(xdim, ydim).rio.bounds()
-
-
 def get_intersect_transform(fname1, fname2):
-    int_bnds = get_intersection_bounds(fname1, fname2)
-    return get_transform(fname1, bbox=int_bnds)
+    bbox = get_intersection_bounds(fname1, fname2)
+    return get_transform(fname1, bbox=bbox)
+
+
+def get_union_transform(fname1, fname2):
+    bbox = get_union_bounds(fname1, fname2)
+    return get_transform(fname1, bbox=bbox)
 
 
 def get_crs(fname, driver=None):
@@ -278,10 +288,12 @@ def bbox_around_point(lons, lats, side_km=25):
     )
 
 
-def read_merged_files(file1, file2, deramp1=False, deramp2=False, deramp_order=2):
+def read_merged_files(
+    file1, file2, deramp1=False, deramp2=False, deramp_order=1, band1=None, band2=None
+):
     """Create a merged version of two files, bounded by their union bounds"""
 
-    img1, img2 = read_unions(file1, file2)
+    img1, img2 = read_unions(file1, file2, band1=band1, band2=band2)
     if deramp1:
         mask1 = img1 == 0
         img1 = np.nan_to_num(remove_ramp(img1, deramp_order=deramp_order, mask=mask1))
@@ -370,7 +382,7 @@ def crop_isce_project(
             if verbose:
                 tqdm.write("Subsetting %s to %s" % (f, outname))
 
-            ulx, uly, lrx, lry = _get_bounds(bbox_rdr, fname=f, transform=transform)
+            ulx, uly, lrx, lry = get_bounds_rdr(bbox_rdr, fname=f, transform=transform)
             cmd = cmd_base.format(
                 inp=f,
                 out=outname,
@@ -400,7 +412,7 @@ def crop_isce_project(
     return failures
 
 
-def _get_bounds(bbox_rdr, fname=None, transform=None):
+def get_bounds_rdr(bbox_rdr, fname=None, transform=None):
     """Convert the multilooked radar coords, using the Affine transform, to full sized coords
 
     https://github.com/sgillies/affine

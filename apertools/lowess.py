@@ -22,7 +22,7 @@ from matplotlib.dates import date2num
 import pymp
 
 
-def lowess_stack(stack, x, frac=2.0 / 3.0, n_iter=2, n_jobs=-1):
+def lowess_stack(stack, x, frac=2.0 / 3.0, min_x_weighted=None, n_iter=2, n_jobs=-1):
     """Smooth a stack of images using linear lowess.
 
     When n_iter > 1, will rerun each regression, reweighting by residuals
@@ -32,7 +32,10 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, n_iter=2, n_jobs=-1):
         stack (ndarray): stack with shape (ns, nrows, ncols)
         x (ndarray): x values with shape (ns,)
         frac ([type], optional): fraction of data to use for each smoothing
-            Defaults to 2/3
+            Defaults to 2/3. Alternative to `min_x_weighted`.
+        min_x_weighted (float, optional): Minimum time period of data to include in smoothing
+            in the units of x.
+            Alternative to `frac`. Defaults to None.
         n_iter (int, optional): Number of iterations to rerun fit after
             reweighting by residuals.
             Defaults to 2.
@@ -55,6 +58,9 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, n_iter=2, n_jobs=-1):
     ns, nrows, ncols = stack.shape
     # Make each depth-wise pixel into a column (so there's only 1 OMP loop)
     stack_cols = stack.reshape((ns, -1))
+
+    if min_x_weighted:
+        frac = _find_frac(x, min_x_weighted)
 
     stack_out = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
     with pymp.Parallel(n_jobs) as p:
@@ -147,20 +153,20 @@ def lowess_xr(da, x_dset="date", min_days_weighted=3 * 365.25, frac=0.7, n_iter=
     return xr.DataArray(out_stack, coords=da.coords, dims=da.dims)
 
 
-def _find_frac(x, min_days_weighted):
-    """Find fraction of data to use so all windows are at least `min_days_weighted` days
+def _find_frac(x, min_x_weighted):
+    """Find fraction of data to use so all windows are at least `min_x_weighted` days
 
     Args:
         x (ndarray): array of days from date2num
-        min_days_weighted (int, float): Minimum number of days to include in lowess fit
+        min_x_weighted (int, float): Minimum time period (in units of `x`) to include in lowess fit
     """
     n = len(x)
     day_diffs = np.abs(x.reshape((-1, 1)) - x.reshape((1, -1)))
     # The `kk`th diagonal will contain the time differences when using points `kk` indices apart
     # (e.g. the 2nd diagonal contains how many days apart are x[2]-x[0], x[3]-x[1],...)
     smallest_diffs = np.array([np.min(np.diag(day_diffs, k=kk)) for kk in range(n)])
-    # Get the first diagonal where it crosses the min_days_weighted threshold
-    idx = np.where(smallest_diffs > min_days_weighted)[0][0]
+    # Get the first diagonal where it crosses the min_x_weighted threshold
+    idx = np.where(smallest_diffs > min_x_weighted)[0][0]
     return idx / n
 
     # Failed to make this work in parallel...
