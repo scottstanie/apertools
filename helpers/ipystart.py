@@ -1,3 +1,6 @@
+import os
+
+
 def in_screen():
     """Checks if we are currently running in a screen
     If so, just use agg backend for matplotlib
@@ -17,7 +20,6 @@ if in_screen():
     print("Currently in screen, using agg backend")
     matplotlib.use("agg")
 
-import os
 from collections import Counter
 import sys
 import glob
