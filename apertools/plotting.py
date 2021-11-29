@@ -32,9 +32,7 @@ class DateSlider(Slider):
             return mdates.num2date(val).strftime("%Y-%m-%d")
 
 
-def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis"):
-    style = ["science", "no-latex"] if nolatex else "science"
-    plt.style.use(style)
+def get_style(size=15, grid_on=False, cmap="viridis"):
     style_dict = {
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
@@ -50,6 +48,13 @@ def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis"):
         "axes.grid": grid_on,
         "image.cmap": cmap,
     }
+    return style_dict
+
+
+def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis"):
+    style = ["science", "no-latex"] if nolatex else "science"
+    plt.style.use(style)
+    style_dict = get_style(size, grid_on=grid_on, cmap=cmap)
     plt.rcParams.update(style_dict)
     try:
         import xarray as xr
@@ -755,8 +760,8 @@ def map_background(
     import cartopy.crs as ccrs
     from cartopy.io import img_tiles
 
-    # tiler = img_tiles.Stamen("terrain-background")
-    # tiler = img_tiles.GoogleTiles(style="satellite")
+    tiler = img_tiles.Stamen("terrain-background")
+    tiler = img_tiles.GoogleTiles(style="satellite")
     mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
     tiler = img_tiles.MapboxTiles(mykey, "satellite")
     crs = tiler.crs
@@ -774,7 +779,7 @@ def map_background(
     extent = _padded_extent(bbox, pad_pct)
     ax.set_extent(extent, crs=ccrs.PlateCarree())
 
-    # ax.add_image(tiler, zoom_level)
+    ax.add_image(tiler, zoom_level)
     if image is not None:
         if bbox_image is None:
             bbox_image = _get_rio_bbox(image)
@@ -817,11 +822,22 @@ def add_ticks(ax, side="right"):
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
     ax.yaxis.set_major_formatter(lat_formatter)
-    if side == "right":
-        ax.yaxis.tick_right()
-    elif side == "left":
-        ax.yaxis.tick_left()
+    ax.yaxis.tick_left()
+    print("added ticks")
     ax.xaxis.tick_bottom()
+
+    # TODO: start of zebra frame?
+    # https://stackoverflow.com/questions/44273365/color-axis-spine-with-multiple-colors-using-matplotlib
+    # colors=["b","r","lightgreen","gold"]
+    # x=[0,.25,.5,.75,1]
+    # y=[0,0,0,0,0]
+    # points = np.array([x, y]).T.reshape(-1, 1, 2)
+    # segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    # lc = LineCollection(segments,colors=colors, linewidth=2,
+    #                                transform=ax.get_xaxis_transform(), clip_on=False )
+    # ax.add_collection(lc)
+    # ax.spines["bottom"].set_visible(False)
+    # ax.set_xticks(x)
 
 
 def _get_rio_bbox(img):
