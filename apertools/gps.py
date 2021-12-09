@@ -75,6 +75,7 @@ class InsarGPSCompare:
     insar_filename: str = "deformation.h5"
     dset: str = "linear_velocity"
     los_map_file: str = LOS_FILENAME
+    insar_ds: xr.DataArray = None
     los_dset: str = LOS_FILENAME.replace(".tif", "")
     # to measure GPS relative to some other station, set the reference station
     reference_station: str = None
@@ -120,7 +121,7 @@ class InsarGPSCompare:
         that station's data
         """
         df_gps_locations = get_stations_within_image(
-            filename=self.insar_filename, dset=self.dset
+            filename=self.insar_filename, dset=self.dset, da=self.insar_ds[self.dset],
         )
 
         df_insar = self.create_insar_df(df_gps_locations)
@@ -193,20 +194,25 @@ class InsarGPSCompare:
 
     def create_insar_df(self, df_gps_locations):
         """Set days_smooth to None or 0 to avoid any data smoothing"""
-        with xr.open_dataset(self.insar_filename) as ds:
-            da = ds[self.dset]
-            if "date" in da.coords:
-                # 3D option
-                is_2d = False
-                dates = da.indexes["date"]
-            else:
-                # 2D: just the average ground velocity
-                is_2d = True
-                dates = ds.indexes["date"]
+        if self.insar_ds is None:
+            with xr.open_dataset(self.insar_filename) as insar_ds:
+                insar_da = insar_ds[self.dset]
+        else:
+            insar_da = self.insar_ds[self.dset]
+
+        if "date" in insar_da.coords:
+            # 3D option
+            is_2d = False
+            dates = insar_da.indexes["date"]
+        else:
+            # 2D: just the average ground velocity
+            is_2d = True
+            dates = insar_ds.indexes["date"]
+
         df_insar = pd.DataFrame({"date": dates})
         for row in df_gps_locations.itertuples():
             ts = apertools.utils.window_stack_xr(
-                da, lon=row.lon, lat=row.lat, window_size=self.window_size
+                insar_da, lon=row.lon, lat=row.lat, window_size=self.window_size
             )
             if is_2d:
                 # Make a cum_defo from the linear trend
@@ -274,12 +280,11 @@ class InsarGPSCompare:
         return df_gps
 
     def _get_los_da(self):
-        with xr.open_dataset(self.insar_filename) as ds:
-            if self.los_dset in ds:
-                los_da = ds[self.los_dset]
-            else:
-                los_da = None
-        return los_da
+        if self.insar_ds is not None:
+            return self.insar_ds.get(self.los_dset)
+
+        with xr.open_dataset(self.insar_filename) as insar_ds:
+            return insar_ds.get(self.los_dset)
 
     def _set_start_end_date(self, df_insar):
         # constrain the date range to just the InSAR min/max dates
