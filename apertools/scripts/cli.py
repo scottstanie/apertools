@@ -344,8 +344,8 @@ def animate(
 
 # COMMAND: dem-rate
 @cli.command("dem-rate")
-@click.option("--rsc-file", help="name of .rsc file")
-@click.option("--orig-rsc-file", help="name of original bigger (pre-looked) .rsc file")
+@click.argument("rsc-file")
+@click.option("--compare-to", help="name of original bigger (pre-looked) .rsc file")
 def dem_rate(rsc_file, orig_rsc_file):
     """Print the upsample rate of a dem
 
