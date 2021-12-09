@@ -637,11 +637,14 @@ def plot_img_diff(
     show_diff=True,
     vdiff=4,
     cmap=DEFAULT_CMAP,
+    axis_off=False,
     cbar_label="",
     show=True,
     figsize=None,
     interpolation=None,
     aspect=None,
+    bbox=None,
+    extent=None,
     share=True,
     **kwargs,
 ):
@@ -660,15 +663,24 @@ def plot_img_diff(
     )
     axes = axes.ravel()
     for ii in range(n):
+        if bbox:
+            extent = [bbox[0], bbox[2], bbox[1], bbox[3]]
+
         ax = axes[ii]
         axim = ax.imshow(
-            arrays[ii], cmap=cmap, vmax=vmax, vmin=vmin, interpolation=interpolation
+            arrays[ii],
+            cmap=cmap,
+            vmax=vmax,
+            vmin=vmin,
+            interpolation=interpolation,
+            extent=extent,
         )
         if titles:
             ax.set_title(titles[ii])
         cbar = fig.colorbar(axim, ax=ax)
         cbar.set_label(cbar_label)
-        ax.set_axis_off()
+        if axis_off:
+            ax.set_axis_off()
         if aspect:
             ax.set_aspect(aspect)
     # fig.colorbar(axim, ax=axes[n - 1])
@@ -679,10 +691,11 @@ def plot_img_diff(
         vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=True)
         ax = axes[-1]
         axim = ax.imshow(
-            diff_arr, cmap=cmap, vmax=vmin, vmin=vmax, interpolation=interpolation
+            diff_arr, cmap=cmap, vmax=vmin, vmin=vmax, interpolation=interpolation, extent=extent,
         )
         ax.set_title("left - middle")
-        ax.set_axis_off()
+        if axis_off:
+            ax.set_axis_off()
         if aspect:
             ax.set_aspect(aspect)
         cbar = fig.colorbar(axim, ax=ax)

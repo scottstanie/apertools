@@ -303,12 +303,12 @@ class InsarGPSCompare:
 
     def rms(self, errors=None):
         if errors is None:
-            errors = self.df_velo_diffs["velo_diffs"]
+            errors = self.df_velo_diffs["velo_diff"]
         return np.sqrt(np.mean(np.square(errors)))
 
     def total_abs_error(self, errors):
         if errors is None:
-            errors = self.df_velo_diffs["velo_diffs"]
+            errors = self.df_velo_diffs["velo_diff"]
         return np.sum(np.abs(errors))
 
     def _find_bad_cols(

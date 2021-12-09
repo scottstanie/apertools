@@ -96,6 +96,7 @@ def create_averages(
         for unwf, date_pair in cur_unws:
             with rio.open(unwf) as ds:
                 # phase band is #2, amplitde is 1
+                # ? wheres the -1 flip...
                 img = ds.read(2)
                 if normalize_time:
                     img /= (date_pair[1] - date_pair[0]).days

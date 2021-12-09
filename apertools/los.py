@@ -8,6 +8,9 @@ from numpy import sin, cos
 from apertools import subset, deramp
 from apertools.log import get_log
 
+# Default for now
+DEFO_DSET = "defo_lowess_shifted"
+
 logger = get_log()
 
 
@@ -77,8 +80,8 @@ def solve_east_up(
     desc_xr=None,
     xdim="lon",
     ydim="lat",
-    asc_dset="defo_lowess",
-    desc_dset="defo_lowess",
+    asc_dset=DEFO_DSET,
+    desc_dset=DEFO_DSET,
     date=None,
     los_dset="los_enu",
     crs="EPSG:4326",
@@ -362,7 +365,7 @@ def merge_datelist_xr(ds1, ds2, col="date"):
     return out_series.to_xarray().date
 
 
-def merge_xr(ds1, ds2, freq="6M", col="date", dset1="defo_lowess", dset2="defo_lowess"):
+def merge_xr(ds1, ds2, freq="6M", col="date", dset1=DEFO_DSET, dset2=DEFO_DSET):
     """Interpolate 2 datasets to a set of dates
 
     Args:
@@ -370,8 +373,8 @@ def merge_xr(ds1, ds2, freq="6M", col="date", dset1="defo_lowess", dset2="defo_l
         ds2 (xr.Dataset): seconds dataset
         freq (str, optional): Date frequency (passed to pandas). Defaults to "6M".
         col (str, optional): name of time index in ds1/ds2. Defaults to "date".
-        dset1 (str, optional): name of data variable for ds1. Defaults to "defo_lowess".
-        dset2 (str, optional): name of data variable for ds2. Defaults to "defo_lowess".
+        dset1 (str, optional): name of data variable for ds1. Defaults to DEFO_DSET.
+        dset2 (str, optional): name of data variable for ds2. Defaults to DEFO_DSET.
 
     Returns:
         tuple[xr.Dataset]: two Datasets, interpolated to the dates specified
@@ -396,4 +399,6 @@ def merge_xr(ds1, ds2, freq="6M", col="date", dset1="defo_lowess", dset2="defo_l
         date_range = merge_datelist_xr(ds1, ds2, col=col)
     out1 = ds1[dset1].interp(date=date_range, kwargs={"fill_value": "extrapolate"})
     out2 = ds2[dset2].interp(date=date_range, kwargs={"fill_value": "extrapolate"})
-    return out1.to_dataset(), out2.to_dataset()
+
+    out1, out2 = out1.to_dataset(), out2.to_dataset()
+    return out1, out2

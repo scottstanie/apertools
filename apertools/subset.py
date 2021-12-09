@@ -164,6 +164,7 @@ def write_outfile(
     nodata=None,
     dtype=None,
     unit=None,
+    **kwargs,
 ):
     if driver is None and out_fname.endswith(".tif"):
         driver = "GTiff"
@@ -288,12 +289,21 @@ def bbox_around_point(lons, lats, side_km=25):
     )
 
 
-def read_merged_files(
-    file1, file2, deramp1=False, deramp2=False, deramp_order=1, band1=None, band2=None
+def create_merged_files(
+    fname1,
+    fname2,
+    deramp1=False,
+    deramp2=False,
+    deramp_order=1,
+    band1=None,
+    band2=None,
+    outfile=None,
+    nodata=0,
+    unit="centimeters",
 ):
     """Create a merged version of two files, bounded by their union bounds"""
 
-    img1, img2 = read_unions(file1, file2, band1=band1, band2=band2)
+    img1, img2 = read_unions(fname1, fname2, band1=band1, band2=band2)
     if deramp1:
         mask1 = img1 == 0
         img1 = np.nan_to_num(remove_ramp(img1, deramp_order=deramp_order, mask=mask1))
@@ -303,7 +313,18 @@ def read_merged_files(
     valid1 = (img1 != 0).astype(int)
     valid2 = (img2 != 0).astype(int)
     valid_count = valid1 + valid2
-    return (img1 + img2) / valid_count
+
+    merged = (img1 + img2) / valid_count
+    if outfile:
+        transform = get_union_transform(fname1, fname2)
+        crs = get_crs(fname1)
+        if crs != get_crs(fname2):
+            raise ValueError(f"CRS mismatch: {crs} != {get_crs(fname2)}")
+        logger.info(f"Writing merged file to {outfile}")
+        write_outfile(
+            outfile, merged, crs=crs, transform=transform, nodata=nodata, unit=unit
+        )
+    return merged
 
 
 # ######## Project Wide subset functions (ISCE) ##############
