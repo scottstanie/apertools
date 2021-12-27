@@ -340,6 +340,10 @@ def view_stack(
     # If we don't have dates, use indices as the x-axis
     if slclist is None:
         slclist = np.arange(stack.shape[0])
+    try:
+        slclist = [s.date() for s in slclist]
+    except ValueError:
+        pass
     slclist = np.array(slclist)
 
     imagefig = plt.figure()

@@ -1119,3 +1119,67 @@ def chdir_then_revert(path):
         yield
     finally:
         os.chdir(orig_path)
+
+
+def get_corr_mask(
+    cor_image, cor_thresh, smooth=True, winfrac=10, return_smoothed=False, strel_size=3,
+):
+    """Get a mask of the correlation values in `cor_image`
+
+    Args:
+        cor_image (np.ndarray): 2D array of correlation values
+        cor_thresh (float): threshold for correlation values
+        smooth (bool, optional): whether to apply a gaussian filter before
+        masking. Removes any long-wavelength trend in correlation. Defaults to True.
+
+    Returns:
+        np.ndarray: 2D boolean array of same shape as `image`
+    """
+    import scipy.ndimage as ndi
+    from skimage.morphology import disk, closing, opening
+
+    if np.isscalar(cor_thresh):
+        cor_thresh = [cor_thresh]
+
+    cor_image = cor_image.copy()
+    cormask = np.logical_or(np.isnan(cor_image), cor_image == 0)
+    if smooth:
+        sigma = min(cor_image.shape) / winfrac
+        cor_smooth = np.fft.ifft2(
+            ndi.fourier_gaussian(
+                # cor_smooth = ndi.filters.gaussian_filter(
+                np.fft.fft2(cor_image),
+                # cor_image,
+                sigma=sigma,
+            )
+        ).real
+        cor_image -= cor_smooth
+    cor_image[cormask] = 0
+    cor_image -= np.min(cor_image)
+    cor_image[cormask] = 0
+    masks = []
+    for c in cor_thresh:
+        mask = cor_image < c
+        selem = disk(strel_size)
+        # mask = closing(mask, selem) # Makes the mask bigger
+        mask = opening(mask, selem)
+
+        masks.append(mask)
+    mask = np.stack(masks) if len(cor_thresh) > 1 else masks[0]
+
+
+
+    return (mask, cor_smooth) if return_smoothed else mask
+
+
+def fill_cvx(img, mask, max_iters=1500):
+    import cvxpy as cp
+
+    U = cp.Variable(shape=img.shape)
+    obj = cp.Minimize(cp.tv(U))
+    constraints = [cp.multiply(~mask, U) == cp.multiply(~mask, img)]
+    prob = cp.Problem(obj, constraints)
+    # Use SCS to solve the problem.
+    prob.solve(verbose=True, solver=cp.SCS, max_iters=max_iters)
+    print("optimal objective value: {}".format(obj.value))
+    return prob, U
