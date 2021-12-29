@@ -346,7 +346,7 @@ def animate(
 @cli.command("dem-rate")
 @click.argument("rsc-file")
 @click.option("--compare-to", help="name of original bigger (pre-looked) .rsc file")
-def dem_rate(rsc_file, orig_rsc_file):
+def dem_rate(rsc_file, compare_to):
     """Print the upsample rate of a dem
 
     aper dem-rate   # Looks in current folder for one .rsc file
@@ -373,16 +373,16 @@ def dem_rate(rsc_file, orig_rsc_file):
         "This is equal to (%.2f, %.2f) meter spacing between pixels"
         % (default_spacing / x_uprate, default_spacing / y_uprate)
     )
-    if orig_rsc_file is not None:
+    if compare_to is not None:
         orig_x_uprate, orig_y_uprate = apertools.sario.calc_upsample_rate(
-            rsc_filename=orig_rsc_file
+            rsc_filename=compare_to
         )
         click.echo(
             "(%.0f, %.0f) looks were taken on %s to get %s"
             % (
                 orig_x_uprate / x_uprate,
                 orig_y_uprate / y_uprate,
-                orig_rsc_file,
+                compare_to,
                 rsc_file,
             )
         )
