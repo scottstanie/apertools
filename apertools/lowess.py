@@ -62,12 +62,12 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, min_x_weighted=None, n_iter=2, n_jobs
     if min_x_weighted:
         frac = _find_frac(x, min_x_weighted)
 
+    # stack_out = np.zeros(stack_cols.shape, dtype=stack.dtype)
+    # for index in range(0, stack_cols.shape[1]):
     stack_out = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
     with pymp.Parallel(n_jobs) as p:
         for index in p.range(0, stack_cols.shape[1]):
             y = stack_cols[:, index]
-            if np.any(np.isnan(y)) or np.all(y == 0):
-                continue
             stack_out[:, index] = lowess_pixel(y, x, frac, n_iter)
 
     return stack_out.reshape((ns, nrows, ncols))
@@ -79,6 +79,10 @@ def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
     Performs multiple iterations for robust fitting, downweighting
     by the residuals of the previous fit."""
     n = len(x)
+    yest = np.zeros(n)
+    if np.any(np.isnan(y)) or np.allclose(y, 0.0):
+        return yest
+
     r = int(np.ceil(frac * n))
     # Find the distance to the rth furthest point from each x value
     h = np.array([np.sort(np.abs(x - x[i]))[r] for i in range(n)])
@@ -92,7 +96,6 @@ def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
 
     # Initialize the residual-weights to 1
     delta = np.ones(n)
-    yest = np.zeros(n)
 
     for _ in range(n_iter):
         for i in range(n):
@@ -112,6 +115,8 @@ def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
 
         residuals = y - yest
         s = np.median(np.abs(residuals))
+        if s < 1e-3:
+            break
         # delta = np.clip(residuals / (6.0 * s), -1.0, 1.0)
         delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
         delta = (1 - delta ** 2) ** 2

@@ -33,9 +33,9 @@ def get_file_ext(filename):
 
 
 def to_datetime(dates, tzinfo=datetime.timezone.utc):
-    """Convert a single (or list of) `datetime.date` to `datetime.datetime`"""
+    """Convert a single (or list of) `datetime.date` to timezone-aware `datetime.datetime`"""
     if isinstance(dates, datetime.datetime):
-        return dates
+        return datetime.datetime(*dates.timetuple()[:6], tzinfo=tzinfo)
     try:
         iter(dates)
         if len(dates) == 0:
