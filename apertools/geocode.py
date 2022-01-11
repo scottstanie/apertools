@@ -169,9 +169,8 @@ def _abs_path_hdf5_string(fname):
     Returns:
         dirname, full_path (loadable by gdal), sub-dataset
 
-    Example:
-        >>> _abs_path_hdf5_string('HDF5:file.h5://dataset_name')
-        "/path/to/", "HDF5:/path/to/file.h5://dataset_name", "datset_name"
+    Example: _abs_path_hdf5_string('HDF5:file.h5://dataset_name') should return
+    "/full/path/to/", "HDF5:/full/path/to/file.h5://dataset_name", "//datset_name"
 
     """
     if "HDF5" in fname:

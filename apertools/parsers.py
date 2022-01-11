@@ -151,7 +151,7 @@ class Sentinel(Base):
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
             >>> print(s.start_time)
-            2018-04-08 04:30:25
+            2018-04-08 04:30:25+00:00
         """
         start_time_str = self._get_field("start_datetime")
         dt = datetime.strptime(start_time_str, self.TIME_FMT)
@@ -164,7 +164,7 @@ class Sentinel(Base):
         Example:
             >>> s = Sentinel('S1A_IW_SLC__1SDV_20180408T043025_20180408T043053_021371_024C9B_1B70')
             >>> print(s.stop_time)
-            2018-04-08 04:30:53
+            2018-04-08 04:30:53+00:00
         """
         stop_time_str = self._get_field("stop_datetime")
         dt = datetime.strptime(stop_time_str, self.TIME_FMT)
@@ -392,7 +392,7 @@ class SentinelOrbit(Base):
         Example:
             >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
             >>> print(s.start_time)
-            2019-12-31 22:59:42
+            2019-12-31 22:59:42+00:00
         """
         start_time_str = self._get_field("start_datetime")
         dt = datetime.strptime(start_time_str, self.TIME_FMT)
@@ -405,7 +405,7 @@ class SentinelOrbit(Base):
         Example:
             >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
             >>> print(s.stop_time)
-            2020-01-02 00:59:42
+            2020-01-02 00:59:42+00:00
         """
         stop_time_str = self._get_field("stop_datetime")
         dt = datetime.strptime(stop_time_str, self.TIME_FMT)
@@ -418,7 +418,7 @@ class SentinelOrbit(Base):
         Example:
             >>> s = SentinelOrbit('S1A_OPER_AUX_POEORB_OPOD_20200121T120654_V20191231T225942_20200102T005942.EOF')
             >>> print(s.created_time)
-            2020-01-21 12:06:54
+            2020-01-21 12:06:54+00:00
         """
         stop_time_str = self._get_field("created_datetime")
         dt = datetime.strptime(stop_time_str, self.TIME_FMT)

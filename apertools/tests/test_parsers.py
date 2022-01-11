@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 from os.path import join, dirname
 
 from apertools.parsers import Sentinel, Uavsar
@@ -38,11 +38,11 @@ class TestSentinel(unittest.TestCase):
         self.assertEqual(Sentinel(path_filename).full_parse(), self.parser.full_parse())
 
     def test_start_time(self):
-        expected_start = datetime(2018, 4, 8, 4, 30, 25)
+        expected_start = datetime(2018, 4, 8, 4, 30, 25, tzinfo=timezone.utc)
         self.assertEqual(self.parser.start_time, expected_start)
 
     def test_stop_time(self):
-        expected_stop = datetime(2018, 4, 8, 4, 30, 53)
+        expected_stop = datetime(2018, 4, 8, 4, 30, 53, tzinfo=timezone.utc)
         self.assertEqual(self.parser.stop_time, expected_stop)
 
     def test_polarization(self):
