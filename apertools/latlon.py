@@ -65,9 +65,9 @@ def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None, image_xr=None):
 
     Example:
         >>> rsc_data = {"x_first": 1.0, "y_first": 2.0, "x_step": 0.2, "y_step": -0.1}
-        >>> latlon_to_rowcol(1.4, 1.4, rsc_data)
+        >>> latlon_to_rowcol(1.4, 1.4, rsc_data=rsc_data)
         (6, 2)
-        >>> latlon_to_rowcol(2.0, 1.0, rsc_data)
+        >>> latlon_to_rowcol(2.0, 1.0, rsc_data=rsc_data)
         (0, 0)
     """
     if rsc_data is None and filename is None and image_xr is None:

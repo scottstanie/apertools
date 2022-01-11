@@ -449,10 +449,10 @@ def get_bounds_rdr(bbox_rdr, fname=None, transform=None):
 
 
 GEOCODED_PROJECT_FILES = [
-    # "unw_stack.h5",
-    # "cor_stack.h5",
+    "unw_stack.h5",
+    "cor_stack.h5",
     "ifg_stack.h5",
-    # "masks.h5",
+    "masks.h5",
     "elevation_looked.dem",
     "los_enu.tif",
 ]

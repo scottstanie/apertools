@@ -80,7 +80,7 @@ def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
     by the residuals of the previous fit."""
     n = len(x)
     yest = np.zeros(n)
-    if np.any(np.isnan(y)) or np.allclose(y, 0.0):
+    if np.any(np.isnan(y)) or np.all(y == 0.0):
         return yest
 
     r = int(np.ceil(frac * n))

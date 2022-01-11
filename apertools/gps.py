@@ -120,9 +120,12 @@ class InsarGPSCompare:
         If refernce station is specified, all timeseries will subtract
         that station's data
         """
+        if self.insar_ds is None:
+            self.insar_ds = xr.open_dataset(self.insar_filename)
         df_gps_locations = get_stations_within_image(
             filename=self.insar_filename, dset=self.dset, da=self.insar_ds[self.dset],
         )
+        self.insar_ds.close()
 
         df_insar = self.create_insar_df(df_gps_locations)
         # Cap the GPS we use by the InSAR start/end dates

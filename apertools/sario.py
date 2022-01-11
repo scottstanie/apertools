@@ -1098,7 +1098,7 @@ def save_slclist_to_h5(
     if alt_name:
         with h5py.File(out_file, "a") as hf:
             if alt_name in hf:
-                del hf[alt_name] 
+                del hf[alt_name]
             hf[alt_name] = hf[SLCLIST_DSET]
 
     return dl
@@ -1915,3 +1915,8 @@ def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=
                 ),
                 end="",
             )
+
+
+def save_xr_tif(da, crs="EPSG:4326", spatial_dims=("lon", "lat"), outname="out.tif"):
+    """Save an xarray dataarray to a GeoTIFF, specifying the CRS and spatial dimensions"""
+    da.rio.write_crs(crs).rio.set_spatial_dims(*spatial_dims).rio.to_raster(outname)
