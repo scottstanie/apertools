@@ -81,20 +81,23 @@ def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None, image_xr=None):
         col = (lon - start_lon) / lon_step
 
         row, col = int(round(row)), int(round(col))
-    elif filename is not None:
-        import rasterio as rio
+        return row, col
 
-        with rio.open(filename) as src:
-            row, col = src.index(lon, lat)
-    elif image_xr is not None:
-        try:
-            latidx = image_xr.indexes["y"]
-            lonidx = image_xr.indexes["x"]
-        except:
-            latidx = image_xr.indexes["lat"]
-            lonidx = image_xr.indexes["lon"]
-        row = latidx.get_loc(lat, method="nearest")
-        col = lonidx.get_loc(lon, method="nearest")
+    if filename is not None:
+        # rasterio doesn't work for HDF5 files without the full GDAL path
+        import xarray as xr
+        image_xr = xr.open_dataset(filename)
+
+    try:
+        latidx = image_xr.indexes["y"]
+        lonidx = image_xr.indexes["x"]
+    except:
+        latidx = image_xr.indexes["lat"]
+        lonidx = image_xr.indexes["lon"]
+    row = latidx.get_loc(lat, method="nearest")
+    col = lonidx.get_loc(lon, method="nearest")
+    if filename is not None:
+        image_xr.close()
     return row, col
 
 
