@@ -294,6 +294,46 @@ def _get_vminmax(img, vm=None, vmin=None, vmax=None, twoway=True):
     return vmin, vmax
 
 
+def hvplot_stack(
+    da,
+    x="lon",
+    y="lat",
+    z="date",
+    vmin=None,
+    vmax=None,
+    cmap="seismic_wide_y_r",
+    twoway=True,
+    vm=None,
+    height=400,
+    width=600,
+):
+    """Make a 2-panel interactive plot with clickable timeseries"""
+    import panel as pn
+    import holoviews as hv
+
+    def get_timeseries(x, y):
+        return da.sel(lon=x, lat=y, method="nearest").hvplot("date")
+
+    # pn.extension()
+    vmin, vmax = _get_vminmax(da[-1], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
+
+    image, select = da.hvplot(
+        x,
+        y,
+        # widgets={z: pn.widgets.Select},
+        widgets={z: pn.widgets.DiscreteSlider},
+        cmap=cmap,
+        clim=(vmin, vmax),
+        height=height,
+        width=width,
+    )
+    stream = hv.streams.Tap(source=image.object, x=-103 + 360, y=32)
+
+    return pn.Column(
+        image, select, pn.bind(get_timeseries, x=stream.param.x, y=stream.param.y)
+    )
+
+
 def view_stack(
     stack,
     display_img,
@@ -695,7 +735,12 @@ def plot_img_diff(
         vmin, vmax = _get_vminmax(diff_arr, vm=vdiff, twoway=True)
         ax = axes[-1]
         axim = ax.imshow(
-            diff_arr, cmap=cmap, vmax=vmin, vmin=vmax, interpolation=interpolation, extent=extent,
+            diff_arr,
+            cmap=cmap,
+            vmax=vmin,
+            vmin=vmax,
+            interpolation=interpolation,
+            extent=extent,
         )
         ax.set_title("left - middle")
         if axis_off:
