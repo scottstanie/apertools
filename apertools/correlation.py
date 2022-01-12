@@ -1,5 +1,6 @@
 """Module for exploting the full coherence/correlation matrix per pixel
 """
+from datetime import datetime
 import itertools
 import numpy as np
 import xarray as xr
@@ -10,36 +11,71 @@ import matplotlib.pyplot as plt
 
 
 # TODO: lat, lon...
-def create_cor_matrix(row_col=None, lat_lon=None, filename="cor_stack.nc", window=3):
-    with xr.open_dataset(filename) as ds:
-        filenames = ds.filenames
-        win = window // 2
+def create_cor_matrix(
+    row_col=None,
+    lat_lon=None,
+    cor_filename="cor_stack.h5",
+    ifg_filename="ifg_stack.h5",
+    fill_val=0.0,
+    window=1,
+    dset="stack",
+    min_date=datetime(2014, 1, 1),
+    max_date=datetime(2022, 1, 1),
+    slclist_ignore_file="slclist_ignore.txt",
+    max_bandwidth=None,
+    max_temporal_baseline=None,
+    upper_triangle=False,
+):
+    with xr.open_dataset(cor_filename, engine="h5netcdf") as ds_cor, xr.open_dataset(
+        ifg_filename, engine="h5netcdf"
+    ) as ds_ifg:
         if row_col is not None:
             row, col = row_col
+            corr_values = utils.window_stack_xr(
+                ds_cor[dset], row=row, col=col, window_size=window
+            )
+            ifg_values = utils.window_stack_xr(
+                ds_ifg[dset], row=row, col=col, window_size=window
+            )
         elif lat_lon is not None:
             lat, lon = lat_lon
-            # corr_values = ds["stack"].sel(lat=lat, lon=lon, method="nearest")
-            latarr, lonarr = ds.lat, ds.lon
-            row = abs(latarr - lat).argmin()
-            col = abs(lonarr - lon).argmin()
-        cv_cube = ds["stack"][:, row - win : row + win + 1, col - win : col + win + 1]
-        corr_values = cv_cube.mean(dim=("lat", "lon"))
+            corr_values = utils.window_stack_xr(
+                ds_cor[dset], lon=lon, lat=lat, window_size=window
+            )
+            ifg_values = utils.window_stack_xr(
+                ds_ifg[dset], lon=lon, lat=lat, window_size=window
+            )
+        else:
+            raise ValueError("Must specify row_col or lat_lon")
 
-    ifglist = np.array(sario.parse_ifglist_strings(filenames))
-    slclist = np.array(utils.slclist_from_igrams(ifglist))
+    # ifglist = np.array(sario.parse_ifglist_strings(filenames))
+    # slclist = np.array(utils.slclist_from_igrams(ifglist))
+    # full_igram_list = np.array(utils.full_igram_list(slclist))
+
+    slclist, ifglist = sario.load_slclist_ifglist(h5file=cor_filename)
+    slclist, ifglist, valid_idxs = utils.filter_slclist_ifglist(
+        ifg_date_list=ifglist,
+        min_date=min_date,
+        max_date=max_date,
+        slclist_ignore_file=slclist_ignore_file,
+        max_bandwidth=max_bandwidth,
+        max_temporal_baseline=max_temporal_baseline,
+    )
+    corr_values = corr_values[valid_idxs]
+    ifg_values = ifg_values[valid_idxs]
+
     full_igram_list = np.array(utils.full_igram_list(slclist))
-
     valid_idxs = np.searchsorted(
         sario.ifglist_to_filenames(full_igram_list),
         sario.ifglist_to_filenames(ifglist),
     )
 
-    full_corr_values = np.nan * np.ones((len(full_igram_list),))
-    full_corr_values[valid_idxs] = corr_values
+    full_corr_values = fill_val * np.ones((len(full_igram_list),), dtype=np.complex64)
+    full_corr_values[valid_idxs] = corr_values * np.exp(1j * np.angle(ifg_values))
 
     # Now arange into a matrix: fill the upper triangle
     ngeos = len(slclist)
-    out = np.full((ngeos, ngeos), np.nan)
+    out = np.full((ngeos, ngeos), fill_val, dtype=np.complex64)
 
     # Diagonal is always 1
     rdiag, cdiag = np.diag_indices(ngeos)
@@ -47,21 +83,25 @@ def create_cor_matrix(row_col=None, lat_lon=None, filename="cor_stack.nc", windo
 
     rows, cols = np.triu_indices(ngeos, k=1)
     out[rows, cols] = full_corr_values
-    return out, slclist
+    if not upper_triangle:
+        out = out + out.conj().T
+        out[rdiag, cdiag] = 1
+    return out, slclist, ifglist, corr_values
 
 
 # TODO: plot with dates
 def plot_corr_matrix(corrmatrix, slclist, vmax=None, vmin=0):
+    coh = np.abs(corrmatrix)
     if vmax is None:
         # Make it slightly different color than the 1s on the diag
-        vmax = 1.05 * np.nanmax(np.triu(corrmatrix, k=1))
+        vmax = 1.05 * np.nanmax(np.triu(coh, k=1))
 
     # Source for plot: https://stackoverflow.com/a/23142190
     x_lims = y_lims = mdates.date2num(slclist)
 
     fig, ax = plt.subplots()
     axim = ax.imshow(
-        corrmatrix,
+        coh,
         # Note: limits on y are reversed since top row is earliest
         extent=[x_lims[0], x_lims[-1], y_lims[-1], y_lims[0]],
         aspect="auto",
@@ -115,7 +155,7 @@ def cov_matrix_tropo(ifg_date_list, sar_date_variances):
         ifg_date_list (Iterable[Tuple]): list of (early, late) dates for ifgs
         sar_date_variances (Iterable[Tuple]): list of variances per SAR date
             if a scalar is given, will use the same variance for all dates
-    
+
     Returns: sigma, the (M, M) covariance matrix, where M is the # of SAR dates
         (unique dates in `ifg_date_list`)
     """
@@ -158,3 +198,24 @@ def cov_matrix_tropo(ifg_date_list, sar_date_variances):
             # otherwise there's no match, leave as 0
 
     return sigma
+
+
+def get_corr_per_day(slclist, ifglist):
+    from insar import ts_utils
+
+    A = ts_utils.build_A_matrix(slclist, ifglist)
+
+    first_day_rows = np.sum(A, axis=1) == 1
+    AC = np.hstack((np.zeros((len(A), 1)), np.abs(A)))
+    AC[first_day_rows, 0] = 1.0
+    AC /= 2
+
+    # CC, slclist_C, ifglist_C, corr_values = create_cor_matrix(
+    #     lat_lon=(lat1, lon1),
+    #     cor_filename=cropped_dir + "cor_stack.h5",
+    #     ifg_filename=cropped_dir + "ifg_stack.h5",
+    #     slclist_ignore_file=cropped_dir + "slclist_ignore.txt",
+    # #     max_temporal_baseline=500,
+    #     upper_triangle=True,
+    # )
+    # corr_per_day = np.linalg.lstsq(AC, corr_values)[0]
