@@ -123,7 +123,9 @@ class InsarGPSCompare:
         if self.insar_ds is None:
             self.insar_ds = xr.open_dataset(self.insar_filename)
         df_gps_locations = get_stations_within_image(
-            filename=self.insar_filename, dset=self.dset, da=self.insar_ds[self.dset],
+            filename=self.insar_filename,
+            dset=self.dset,
+            da=self.insar_ds[self.dset],
         )
         self.insar_ds.close()
 
@@ -512,7 +514,6 @@ def load_station_enu(
     start_date=None,
     end_date=None,
     download_if_missing=True,
-    force_download=False,
     zero_by="mean",
     to_cm=True,
 ):
@@ -524,19 +525,16 @@ def load_station_enu(
         start_date (datetime or str): Optional. cutoff for beginning of GPS data
         end_date (datetime or str): Optional. cut off for end of GPS data
         download_if_missing (bool): default True
-        force_download (bool): default False
     """
-    # start_date, end_date = _parse_dates(start_date, end_date)
+    if end_date is None:
+        end_date = pd.to_datetime(pd.Timestamp.today())
+    else:
+        end_date = pd.to_datetime(end_date)
+
     if zero_by not in ("start", "mean"):
         raise ValueError("'zero_by' must be either 'start' or 'mean'")
     station_name = station_name.upper()
     gps_data_file = os.path.join(GPS_DIR, GPS_FILE.format(station=station_name))
-    if force_download:
-        try:
-            os.remove(gps_data_file)
-            logger.info(f"force removed {gps_data_file}")
-        except FileNotFoundError:
-            pass
     if not os.path.exists(gps_data_file):
         if download_if_missing:
             logger.info(f"Downloading {station_name} to {gps_data_file}")
@@ -548,6 +546,15 @@ def load_station_enu(
 
     df = pd.read_csv(gps_data_file, header=0, sep=r"\s+", engine="c")
     clean_df = _clean_gps_df(df, start_date, end_date)
+
+    # Check that we have up to date data
+    if (clean_df["date"].max() < end_date) and download_if_missing:
+        download_station_data(station_name)
+        df = pd.read_csv(gps_data_file, header=0, sep=r"\s+", engine="c")
+        clean_df = _clean_gps_df(df, start_date, end_date)
+        # os.remove(gps_data_file)
+        # logger.info(f"force removed {gps_data_file}")
+
     if to_cm:
         # logger.info("Converting %s GPS to cm" % station_name)
         clean_df[["east", "north", "up"]] = 100 * clean_df[["east", "north", "up"]]
@@ -649,7 +656,7 @@ def get_stations_within_image(
 
 
 @lru_cache()
-def read_station_llas(filename=None, to_geodataframe=False, force_download=True):
+def read_station_llas(filename=None, to_geodataframe=False):
     """Read in the name, lat, lon, alt list of gps stations
 
     Assumes file is a space-separated with "name,lat,lon,alt" as columns
@@ -834,7 +841,6 @@ def load_gps_los(
     end_date=None,
     reference_station=None,
     enu_coeffs=None,
-    force_download=False,
     coordinates="geo",
     geom_dir="geom_reference",
     days_smooth=0,
@@ -863,7 +869,6 @@ def load_gps_los(
         to_cm=to_cm,
         start_date=start_date,
         end_date=end_date,
-        force_download=force_download,
     )
     enu_data = df_enu[["east", "north", "up"]].values.T
     los_gps_data = apertools.los.project_enu_to_los(enu_data, enu_coeffs=enu_coeffs)
@@ -892,7 +897,6 @@ def load_gps_los(
             end_date=end_date,
             reference_station=None,
             enu_coeffs=enu_coeffs,
-            force_download=force_download,
             days_smooth=days_smooth,
         )
         dfm = pd.merge(

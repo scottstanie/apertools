@@ -94,7 +94,6 @@ def plot_gps_enu(
     days_smooth=12,
     start_date=None,
     end_date=None,
-    force_download=True,
 ):
     """Plot the east,north,up components of `station`"""
 
@@ -112,7 +111,6 @@ def plot_gps_enu(
         start_date=start_date,
         end_date=end_date,
         to_cm=True,
-        force_download=force_download,
     )
     dts = enu_df.index
     (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
