@@ -671,9 +671,9 @@ def plot_shapefile(filename, fig=None, ax=None, z=None):
 # def plotcompare(fnames, dset="velos", vmax=25, vmin=-25, cmap="seismic_wide", **kwargs):
 def plot_img_diff(
     arrays=None,
-    dset="velos/1",
+    dset="defo_lowess",
     fnames=[],
-    vm=20,
+    vm=6,
     vmax=None,
     vmin=None,
     twoway=True,

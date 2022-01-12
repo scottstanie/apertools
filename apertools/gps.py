@@ -644,6 +644,7 @@ def get_stations_within_image(
                 val = da[..., r, c]
             else:
                 val = da.sel(lat=row.lat, lon=row.lon, method="nearest")
+            # print(row.name, val.item())
 
             if np.any(np.isnan(val)) or np.any([np.all(val == v) for v in bad_vals]):
                 continue

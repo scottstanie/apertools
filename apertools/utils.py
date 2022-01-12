@@ -600,12 +600,17 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
     Raises:
         ValueError: if window_size is not a positive int, or if ref pixel out of bounds
     """
+    if func == "identity":
+
+        def func(arr, axis=None):
+            return arr
+
     window_size = window_size or 1
     if not isinstance(window_size, int) or window_size < 1:
         raise ValueError(
             "Invalid window_size %s: must be odd positive int" % window_size
         )
-    elif row > stack.shape[1] or col > stack.shape[2]:
+    elif row > stack.shape[-2] or col > stack.shape[1]:
         raise ValueError(
             "(%s, %s) out of bounds reference for stack size %s"
             % (row, col, stack.shape)
@@ -1122,7 +1127,12 @@ def chdir_then_revert(path):
 
 
 def get_corr_mask(
-    cor_image, cor_thresh, smooth=True, winfrac=10, return_smoothed=False, strel_size=3,
+    cor_image,
+    cor_thresh,
+    smooth=True,
+    winfrac=10,
+    return_smoothed=False,
+    strel_size=3,
 ):
     """Get a mask of the correlation values in `cor_image`
 
@@ -1166,8 +1176,6 @@ def get_corr_mask(
 
         masks.append(mask)
     mask = np.stack(masks) if len(cor_thresh) > 1 else masks[0]
-
-
 
     return (mask, cor_smooth) if return_smoothed else mask
 
