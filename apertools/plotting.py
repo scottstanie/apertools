@@ -679,7 +679,7 @@ def plot_img_diff(
     twoway=True,
     titles=[],
     show_diff=True,
-    vdiff=4,
+    vdiff=1,
     cmap=DEFAULT_CMAP,
     axis_off=False,
     cbar_label="",
