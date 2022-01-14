@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 
@@ -197,3 +198,59 @@ def remove_lowpass(
 
     # Then use the non-masked as return value
     return (z - z_fit).astype(dtype)
+
+
+def remove_ramp_xr(
+    ds,
+    dset_name,
+    outfile=None,
+    deramp_order=1,
+    mask=None,
+    mask_val=0,
+    overwrite=False,
+    max_abs_val=None,
+):
+    from numcodecs import Blosc
+
+    if outfile and os.path.exists(outfile):
+        print("Output file exists")
+        if overwrite:
+            print("Removing")
+            os.remove(outfile)
+        else:
+            import xarray as xr
+
+            print("Loading")
+            return xr.open_dataset(outfile)
+
+    print("running deramp")
+    if mask is None:
+        mask = ds[dset_name] == mask_val
+    if max_abs_val is not None and max_abs_val > 0:
+        mask_abs = np.abs(ds[dset_name]) > max_abs_val
+    else:
+        mask_abs = np.ma.nomask
+
+    outstack = remove_ramp(
+        ds[dset_name].data,
+        copy=True,
+        deramp_order=deramp_order,
+        mask=np.logical_or(mask, mask_abs),
+    )
+    if mask.ndim == 3:
+        outstack[mask] = mask_val
+    else:
+        outstack[:, mask] = mask_val
+
+    ds_out = ds.copy()
+    ds_out[dset_name].data = outstack
+
+    if outfile:
+        # ext = os.path.splitext(infile)[1]
+        # outfile = infile.replace(ext, "_ramp_removed" + out_format)
+        if outfile.endswith("zarr"):
+            compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
+            ds_out.to_zarr(outfile, encoding={"igrams": {"compressor": compressor}})
+        elif outfile.endswith("nc"):
+            ds_out.to_netcdf(outfile, engine="h5netcdf")
+    return ds_out

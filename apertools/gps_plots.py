@@ -264,6 +264,16 @@ def _plot_slope_df(df, **kwargs):
     return fig, axes
 
 
+def _plot_smoothed(ax, df, column, days_smooth, marker, lw=3):
+    ax.plot(
+        df[column].dropna().index,
+        df[column].dropna().rolling(days_smooth, min_periods=1, center=True).mean(),
+        marker,
+        linewidth=lw,
+        label="%s day smoothed %s" % (days_smooth, column),
+    )
+
+
 def _plot_line_df(
     df,
     ylim=None,
@@ -275,16 +285,6 @@ def _plot_line_df(
     **kwargs,
 ):
     """share is used to indicate that GPS and insar will be on same axes"""
-
-    def _plot_smoothed(ax, df, column, days_smooth, marker):
-        ax.plot(
-            df[column].dropna().index,
-            df[column].dropna().rolling(days_smooth_gps).mean(),
-            marker,
-            linewidth=3,
-            label="%s day smoothed %s" % (days_smooth, column),
-        )
-
     columns = df.columns
     nrows = 1 if share else 2
     fig, axes = plt.subplots(nrows, len(columns) // 2, figsize=figsize, squeeze=False)
@@ -328,6 +328,36 @@ def _plot_line_df(
 
     # axes.ravel()[-1].set_xlabel("Date")
     fig.autofmt_xdate()
+    return fig, axes
+
+
+def plot_all_stations(df, df_diff, ncols=2, days_smooth_gps=30, ylim=None, share=False):
+    import proplot as pplt
+
+    nplots = len(df_diff.index)
+    # fig, axes = plt.subplots(
+    fig, axes = pplt.subplots(
+        nrows=int(np.ceil(nplots / ncols)),
+        ncols=ncols,
+        refwidth=1,
+        refheight=1,
+        sharex=share,
+        sharey=share,
+        # figsize=(4 * ncols, nplots)
+    )
+    # axes = axes.ravel()
+    for idx, n in enumerate(df_diff.index):
+        # ax = axes.ravel()[idx]
+        ax = axes[idx]
+        gps_col, insar_col = f"{n}_gps", f"{n}_insar"
+        # curdf = df[[]]  # .dropna()
+        ax.plot(df.index, df[gps_col], marker="o", ms=1, alpha=0.3)
+        _plot_smoothed(ax, df, gps_col, days_smooth_gps, "-")
+        ax.plot(df.index, df[insar_col], marker="o", ms=1)
+        # ax.legend()
+        # ax.grid()
+        ax.set_title(n)
+    axes.format(grid=True, ylim=ylim, ylabel="cm")
     return fig, axes
 
 

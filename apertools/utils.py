@@ -610,7 +610,7 @@ def window_stack(stack, row, col, window_size=3, func=np.mean):
         raise ValueError(
             "Invalid window_size %s: must be odd positive int" % window_size
         )
-    elif row > stack.shape[-2] or col > stack.shape[1]:
+    elif row > stack.shape[-2] or col > stack.shape[-1]:
         raise ValueError(
             "(%s, %s) out of bounds reference for stack size %s"
             % (row, col, stack.shape)
