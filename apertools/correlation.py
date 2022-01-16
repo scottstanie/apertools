@@ -169,32 +169,35 @@ def cov_matrix_tropo(ifg_date_list, sar_date_variances):
         assert len(sar_date_list) == len(sar_date_variances)
 
     sigma = np.zeros((M, M))
-    for (jdx, ig2) in enumerate(ifg_date_list):
-        for (idx, ig1) in enumerate(ifg_date_list):
-            if jdx > idx:
-                sigma[idx, jdx] = sigma[jdx, idx]
+    for (colidx, ig2) in enumerate(ifg_date_list):
+        for (rowidx, ig1) in enumerate(ifg_date_list):
+            if colidx > rowidx:
+                sigma[rowidx, colidx] = sigma[colidx, rowidx]
                 continue  # symmetric, so just copy over
 
             d11, d12 = ig1
             d21, d22 = ig2
-            if idx == jdx:
+            if rowidx == colidx:
                 assert ig1 == ig2
                 sigma1 = sar_date_variances[sar_date_list.index(d11)]
                 sigma2 = sar_date_variances[sar_date_list.index(d12)]
-                sigma[idx, jdx] = sigma1 + sigma2
+                sigma[rowidx, colidx] = sigma1 + sigma2
                 continue
 
             # If there's a matching date with same sign -> positive variance
             if d11 == d21:
                 sigma1 = sar_date_variances[sar_date_list.index(d11)]
-                sigma[idx, jdx] = sigma1
+                sigma[rowidx, colidx] = sigma1
             elif d12 == d22:
                 sigma2 = sar_date_variances[sar_date_list.index(d12)]
-                sigma[idx, jdx] = sigma2
+                sigma[rowidx, colidx] = sigma2
             # reverse the sign case
-            elif d12 == d21 or d11 == d22:
+            elif d11 == d22:
+                sigma1 = sar_date_variances[sar_date_list.index(d11)]
+                sigma[rowidx, colidx] = -sigma1
+            elif d12 == d21:
                 sigma2 = sar_date_variances[sar_date_list.index(d12)]
-                sigma[idx, jdx] = -sigma2
+                sigma[rowidx, colidx] = -sigma2
             # otherwise there's no match, leave as 0
 
     return sigma
