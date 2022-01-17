@@ -1,8 +1,9 @@
 .PHONY: test upload
 
 test:
-	@echo "Running doctests and unittests: nose must be installed"
-	nosetests -v --logging-level=INFO --with-doctest --where apertools
+	@echo "Running doctests and unittests: pytest must be installed"
+	# nosetests -v --logging-level=INFO --with-doctest --where apertools
+	python -m pytest -v  --doctest-modules --ignore=helpers/ --ignore apertools/scripts/
 
 
 REPO?=pypi

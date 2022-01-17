@@ -55,22 +55,26 @@ def ks_2samp(data1, data2):
     >>> np.random.seed(12345678)  #fix random seed to get the same result
     >>> n1 = 200  # size of first sample
     >>> n2 = 300  # size of second sample
+
     For a different distribution, we can reject the null hypothesis since the
     pvalue is below 1%:
+
     >>> rvs1 = stats.norm.rvs(size=n1, loc=0., scale=1)
     >>> rvs2 = stats.norm.rvs(size=n2, loc=0.5, scale=1.5)
     >>> stats.ks_2samp(rvs1, rvs2)
-    (0.20833333333333334, 5.129279597781977e-05)
+    KstestResult(statistic=0.2083333333..., pvalue=5.12927959...)
+
     For a slightly different distribution, we cannot reject the null hypothesis
     at a 10% or lower alpha since the p-value at 0.144 is higher than 10%
     >>> rvs3 = stats.norm.rvs(size=n2, loc=0.01, scale=1.0)
     >>> stats.ks_2samp(rvs1, rvs3)
-    (0.10333333333333333, 0.14691437867433876)
+    KstestResult(statistic=0.10333333..., pvalue=0.1469143786...)
+
     For an identical distribution, we cannot reject the null hypothesis since
     the p-value is high, 41%:
     >>> rvs4 = stats.norm.rvs(size=n2, loc=0.0, scale=1.0)
     >>> stats.ks_2samp(rvs1, rvs4)
-    (0.07999999999999996, 0.41126949729859719)
+    KstestResult(statistic=0.08, pvalue=0.411543202...)
     """
     data1 = np.sort(data1)
     data2 = np.sort(data2)
