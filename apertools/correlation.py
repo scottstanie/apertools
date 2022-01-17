@@ -156,7 +156,7 @@ def cov_matrix_tropo(ifg_date_list, sar_date_variances):
         sar_date_variances (Iterable[Tuple]): list of variances per SAR date
             if a scalar is given, will use the same variance for all dates
 
-    Returns: sigma, the (M, M) covariance matrix, where M is the # of SAR dates
+    Returns: Sigma, the (M, M) covariance matrix, where M is the # of SAR dates
         (unique dates in `ifg_date_list`)
     """
     M = len(ifg_date_list)
@@ -168,39 +168,36 @@ def cov_matrix_tropo(ifg_date_list, sar_date_variances):
     else:
         assert len(sar_date_list) == len(sar_date_variances)
 
-    sigma = np.zeros((M, M))
+    Sigma = np.zeros((M, M))
     for (colidx, ig2) in enumerate(ifg_date_list):
         for (rowidx, ig1) in enumerate(ifg_date_list):
             if colidx > rowidx:
-                sigma[rowidx, colidx] = sigma[colidx, rowidx]
+                Sigma[rowidx, colidx] = Sigma[colidx, rowidx]
                 continue  # symmetric, so just copy over
 
             d11, d12 = ig1
             d21, d22 = ig2
+            # On the diagonal, the variances of the two sar dates are added
             if rowidx == colidx:
                 assert ig1 == ig2
                 sigma1 = sar_date_variances[sar_date_list.index(d11)]
                 sigma2 = sar_date_variances[sar_date_list.index(d12)]
-                sigma[rowidx, colidx] = sigma1 + sigma2
+                Sigma[rowidx, colidx] = sigma1 + sigma2
                 continue
 
             # If there's a matching date with same sign -> positive variance
             if d11 == d21:
-                sigma1 = sar_date_variances[sar_date_list.index(d11)]
-                sigma[rowidx, colidx] = sigma1
+                Sigma[rowidx, colidx] = sar_date_variances[sar_date_list.index(d11)]
             elif d12 == d22:
-                sigma2 = sar_date_variances[sar_date_list.index(d12)]
-                sigma[rowidx, colidx] = sigma2
+                Sigma[rowidx, colidx] = sar_date_variances[sar_date_list.index(d12)]
             # reverse the sign case
             elif d11 == d22:
-                sigma1 = sar_date_variances[sar_date_list.index(d11)]
-                sigma[rowidx, colidx] = -sigma1
+                Sigma[rowidx, colidx] = -sar_date_variances[sar_date_list.index(d11)]
             elif d12 == d21:
-                sigma2 = sar_date_variances[sar_date_list.index(d12)]
-                sigma[rowidx, colidx] = -sigma2
+                Sigma[rowidx, colidx] = -sar_date_variances[sar_date_list.index(d12)]
             # otherwise there's no match, leave as 0
 
-    return sigma
+    return Sigma
 
 
 def get_corr_per_day(slclist, ifglist):
