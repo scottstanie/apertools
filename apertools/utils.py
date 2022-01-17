@@ -1181,6 +1181,7 @@ def get_corr_mask(
 
 
 def fill_cvx(img, mask, max_iters=1500):
+    """Fill in masked pixels in `img` using TV convex optimization"""
     import cvxpy as cp
 
     U = cp.Variable(shape=img.shape)
@@ -1191,3 +1192,51 @@ def fill_cvx(img, mask, max_iters=1500):
     prob.solve(verbose=True, solver=cp.SCS, max_iters=max_iters)
     print("optimal objective value: {}".format(obj.value))
     return prob, U
+
+
+def values_per_date(values, ifg_date_list, as_dataframe=False):
+    """Get the values for each date in `ifg_date_list`"""
+    values = np.array(values)
+    sar_date_list = list(sorted(set(itertools.chain.from_iterable(ifg_date_list))))
+    out_dict = {}
+    for (idx, cur_date) in enumerate(sar_date_list):
+        cur_data = [
+            (idx, date_pair)
+            for idx, date_pair in enumerate(ifg_date_list)
+            if cur_date in date_pair
+        ]
+        idxs, _ = zip(*cur_data)
+        out_dict[cur_date] = values[np.array(idxs)]
+    if not as_dataframe:
+        return out_dict
+    import pandas as pd
+
+    return pd.DataFrame(data=out_dict).melt(var_name="date", value_name="value")
+
+
+def get_outlier_dates(values, ifg_date_list, nsigma=4, scale=1.4826):
+    df = values_per_date(values, ifg_date_list, as_dataframe=True)
+    mean_abs_val = df.abs().groupby("date").mean()
+    # mean_abs_val.rename({"value": "mean abs value"}, axis=1, inplace=True)
+    med = mean_abs_val.median()
+    cutoff = med + nsigma * scale * np.abs(mean_abs_val - med).median()
+    # from scipy import stats
+    # cutoff = med + nsigma * stats.median_abs_deviation(mean_abs_val, scale=scale)
+    # return cutoff
+    outlier_df = mean_abs_val > cutoff
+    outlier_dates = outlier_df[outlier_df.value].index.tolist()
+    return cutoff, outlier_df, outlier_dates
+
+
+def prune_outlier_values(values, ifg_date_list, nsigma=4, scale=1.4826):
+    cutoff, outlier_df, outlier_dates = get_outlier_dates(
+        values, ifg_date_list, nsigma, scale
+    )
+    good_tuples = [
+        (val, pair)
+        for (val, pair) in zip(values, ifg_date_list)
+        if pair[0] not in outlier_dates
+        and pair[1] not in outlier_dates
+    ]
+    values_good, ifg_date_list_good = zip(*good_tuples)
+    return np.array(values_good), ifg_date_list_good #, cutoff, outlier_df, outlier_dates
