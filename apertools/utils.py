@@ -712,6 +712,19 @@ def force_symlink(src, dest):
             # os.symlink(fullpath(src), fullpath(dest))
 
 
+def record_params_as_yaml(paramfile, verbose=True, **kwargs):
+    from ruamel.yaml import YAML
+
+    if verbose:
+        from pprint import pprint
+        pprint(kwargs)
+
+    yaml = YAML()
+
+    with open(paramfile, "w") as f:
+        yaml.dump(kwargs, f)
+
+
 def rm_if_exists(filename):
     # os.path.islink(path)  # Test for symlink
     try:
