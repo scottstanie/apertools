@@ -97,6 +97,9 @@ class InsarGPSCompare:
     median: bool = True
     # convert velocity comparisons to millimeter/year
     to_mm_year: bool = True
+    # 2 ways to apply a shift to the insar: cumulative, or as a velocity
+    insar_shift_cm: float = 0.0
+    insar_shift_cm_per_year: float = 0.0
     print_summary: bool = True
 
     def run(self):
@@ -201,6 +204,7 @@ class InsarGPSCompare:
         """Set days_smooth to None or 0 to avoid any data smoothing"""
         if self.insar_ds is None:
             with xr.open_dataset(self.insar_filename) as insar_ds:
+                self.insar_ds = insar_ds
                 insar_da = insar_ds[self.dset]
         else:
             insar_da = self.insar_ds[self.dset]
@@ -212,23 +216,32 @@ class InsarGPSCompare:
         else:
             # 2D: just the average ground velocity
             is_2d = True
-            dates = insar_ds.indexes["date"]
+            dates = self.insar_ds.indexes["date"]
 
         df_insar = pd.DataFrame({"date": dates})
         for row in df_gps_locations.itertuples():
             ts = apertools.utils.window_stack_xr(
                 insar_da, lon=row.lon, lat=row.lat, window_size=self.window_size
             )
+            day_nums = (dates - dates[0]).days
             if is_2d:
                 # Make a cum_defo from the linear trend
-                x = (dates - dates[0]).days
                 v_cm_yr = ts.item()
                 coeffs = [v_cm_yr / 365.25, 0]
-                df_insar[row.name] = linear_trend(coeffs=coeffs, x=x)
+                df_insar[row.name] = linear_trend(coeffs=coeffs, x=day_nums)
                 # NOTE: To recover the linear velocity used here:
                 # gps.fit_line(df_insar[station_name])[0] * 365.25
             else:
                 df_insar[row.name] = ts
+
+            # Apply shifts if requested
+            if self.insar_shift_cm:
+                shift_cm_per_day = self.insar_shift_cm / day_nums[-1]
+                coeffs = [shift_cm_per_day, 0]
+                df_insar[row.name] += linear_trend(coeffs=coeffs, x=day_nums)
+            elif self.insar_shift_cm_per_year:
+                coeffs = [self.insar_shift_cm_per_year / 365.25, 0]
+                df_insar[row.name] += linear_trend(coeffs=coeffs, x=day_nums)
 
         df_insar.set_index("date", inplace=True)
         self.df_insar = df_insar

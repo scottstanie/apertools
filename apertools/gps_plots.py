@@ -331,7 +331,9 @@ def _plot_line_df(
     return fig, axes
 
 
-def plot_all_stations(df, df_diff, ncols=2, days_smooth_gps=30, ylim=None, share=False):
+def plot_all_stations(
+    df, df_diff, ncols=2, days_smooth_gps=30, ylim=None, share=False, figsize=(10, 10)
+):
     import proplot as pplt
 
     nplots = len(df_diff.index)
@@ -339,8 +341,9 @@ def plot_all_stations(df, df_diff, ncols=2, days_smooth_gps=30, ylim=None, share
     fig, axes = pplt.subplots(
         nrows=int(np.ceil(nplots / ncols)),
         ncols=ncols,
-        refwidth=1,
-        refheight=1,
+        # refwidth=1,
+        # refheight=1,
+        figsize=figsize,
         sharex=share,
         sharey=share,
         # figsize=(4 * ncols, nplots)
@@ -354,6 +357,7 @@ def plot_all_stations(df, df_diff, ncols=2, days_smooth_gps=30, ylim=None, share
         ax.plot(df.index, df[gps_col], marker="o", ms=1, alpha=0.3)
         _plot_smoothed(ax, df, gps_col, days_smooth_gps, "-")
         ax.plot(df.index, df[insar_col], marker="o", ms=1)
+        # print(df[insar_col].dropna())
         # ax.legend()
         # ax.grid()
         ax.set_title(n)
