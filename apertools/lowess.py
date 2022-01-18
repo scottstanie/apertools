@@ -84,6 +84,9 @@ def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
         return yest
 
     r = int(np.ceil(frac * n))
+    if r == n:
+        r -= 1
+
     # Find the distance to the rth furthest point from each x value
     h = np.array([np.sort(np.abs(x - x[i]))[r] for i in range(n)])
     xc = x.copy()  # make contiguous (necessary for `reshape` for numba)
@@ -151,7 +154,7 @@ def lowess_xr(da, x_dset="date", min_days_weighted=3 * 365.25, frac=0.7, n_iter=
     import xarray as xr
 
     x = date2num(da[x_dset].values)
-    if min_days_weighted:
+    if min_days_weighted and min_days_weighted > 0:
         frac = _find_frac(x, min_days_weighted)
     out_stack = lowess_stack(da.values, x, frac, n_iter)
     # Now return as a DataArray
@@ -171,8 +174,11 @@ def _find_frac(x, min_x_weighted):
     # (e.g. the 2nd diagonal contains how many days apart are x[2]-x[0], x[3]-x[1],...)
     smallest_diffs = np.array([np.min(np.diag(day_diffs, k=kk)) for kk in range(n)])
     # Get the first diagonal where it crosses the min_x_weighted threshold
-    idx = np.where(smallest_diffs > min_x_weighted)[0][0]
-    return idx / n
+    idxs_larger = np.where(smallest_diffs > min_x_weighted)[0]
+    if len(idxs_larger) > 0:
+        return idxs_larger[0] / n
+    else:
+        return 1.0
 
     # Failed to make this work in parallel...
     # TODO: what does this even mean??

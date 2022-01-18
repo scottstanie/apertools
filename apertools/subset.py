@@ -606,13 +606,11 @@ def crop_stacks_by_date(
         raise ValueError("No limiting criteria provided.")
 
     if min_date:
-        if not min_date.tzinfo:
-            min_date = min_date.replace(tzinfo=datetime.timezone.utc)
+        min_date = utils.to_datetime(min_date)
     else:
         min_date = datetime.datetime(1900, 1, 1, tzinfo=datetime.timezone.utc)
     if max_date:
-        if not max_date.tzinfo:
-            max_date = max_date.replace(tzinfo=datetime.timezone.utc)
+        max_date = utils.to_datetime(max_date)
     else:
         max_date = datetime.datetime(2100, 1, 1, tzinfo=datetime.timezone.utc)
 

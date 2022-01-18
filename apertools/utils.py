@@ -1211,12 +1211,18 @@ def values_per_date(values, ifg_date_list, as_dataframe=False):
         return out_dict
     import pandas as pd
 
-    return pd.DataFrame(data=out_dict).melt(var_name="date", value_name="value")
+    return pd.DataFrame(data=out_dict).melt(var_name="sar_date", value_name="value")
 
 
 def get_outlier_dates(values, ifg_date_list, nsigma=4, scale=1.4826):
     df = values_per_date(values, ifg_date_list, as_dataframe=True)
-    mean_abs_val = df.abs().groupby("date").mean()
+    try:
+        # Cant seem to groupby when it's a Timestamp
+        df["sar_date"] = df["sar_date"].dt.date
+    except:
+        pass
+    df["value"] = df["value"].abs()
+    mean_abs_val = df.groupby("sar_date").mean()
     # mean_abs_val.rename({"value": "mean abs value"}, axis=1, inplace=True)
     med = mean_abs_val.median()
     cutoff = med + nsigma * scale * np.abs(mean_abs_val - med).median()
@@ -1224,8 +1230,8 @@ def get_outlier_dates(values, ifg_date_list, nsigma=4, scale=1.4826):
     # cutoff = med + nsigma * stats.median_abs_deviation(mean_abs_val, scale=scale)
     # return cutoff
     outlier_df = mean_abs_val > cutoff
-    outlier_dates = outlier_df[outlier_df.value].index.tolist()
-    return cutoff, outlier_df, outlier_dates
+    outlier_dates = outlier_df[outlier_df.value].index
+    return cutoff, mean_abs_val, to_datetime(outlier_dates)
 
 
 def prune_outlier_values(values, ifg_date_list, nsigma=4, scale=1.4826):
@@ -1235,8 +1241,10 @@ def prune_outlier_values(values, ifg_date_list, nsigma=4, scale=1.4826):
     good_tuples = [
         (val, pair)
         for (val, pair) in zip(values, ifg_date_list)
-        if pair[0] not in outlier_dates
-        and pair[1] not in outlier_dates
+        if pair[0] not in outlier_dates and pair[1] not in outlier_dates
     ]
     values_good, ifg_date_list_good = zip(*good_tuples)
-    return np.array(values_good), ifg_date_list_good #, cutoff, outlier_df, outlier_dates
+    return (
+        np.array(values_good),
+        ifg_date_list_good,
+    )  # , cutoff, outlier_df, outlier_dates
