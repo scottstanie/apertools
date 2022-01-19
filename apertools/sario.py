@@ -1551,7 +1551,7 @@ def save_vrt(
     return outfile
 
 
-def shift_by_pixel(in_f, out_f, full_pixel=True, down_right=False):
+def shift_by_pixel(in_f, out_f, full_pixel=False, down_right=False):
     """Shift a raster up and to the left by 1/2 (or 1 if `full_pixel`=True)
 
     if `down_right` is True, shifts in the opposite direction.

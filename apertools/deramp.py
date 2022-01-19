@@ -1,5 +1,8 @@
 import os
 import numpy as np
+from .log import get_log
+
+logger = get_log()
 
 
 def remove_ramp(
@@ -213,17 +216,17 @@ def remove_ramp_xr(
     from numcodecs import Blosc
 
     if outfile and os.path.exists(outfile):
-        print("Output file exists")
+        logger.info("Output file exists")
         if overwrite:
-            print("Removing")
+            logger.info("Removing")
             os.remove(outfile)
         else:
             import xarray as xr
 
-            print("Loading")
+            logger.info("Loading")
             return xr.open_dataset(outfile)
+    logger.info("Removing ramp")
 
-    print("running deramp")
     if mask is None:
         mask = ds[dset_name] == mask_val
     if max_abs_val is not None and max_abs_val > 0:

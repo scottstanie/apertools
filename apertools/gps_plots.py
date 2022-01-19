@@ -332,7 +332,14 @@ def _plot_line_df(
 
 
 def plot_all_stations(
-    df, df_diff, ncols=2, days_smooth_gps=30, ylim=None, share=False, figsize=(10, 10)
+    df,
+    df_diff,
+    ncols=2,
+    days_smooth_gps=30,
+    ylim=None,
+    share=False,
+    figsize=(10, 10),
+    outname=None,
 ):
     import proplot as pplt
 
@@ -362,6 +369,8 @@ def plot_all_stations(
         # ax.grid()
         ax.set_title(n)
     axes.format(grid=True, ylim=ylim, ylabel="cm")
+    if outname:
+        fig.savefig(outname)
     return fig, axes
 
 

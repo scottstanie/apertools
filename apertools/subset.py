@@ -1,6 +1,7 @@
 import os
 import re
 import datetime
+from pathlib import Path
 from pprint import pprint
 from glob import glob
 import subprocess
@@ -15,7 +16,6 @@ from apertools.utils import mkdir_p, chdir_then_revert
 from apertools import geojson
 
 logger = get_log()
-
 
 COMP_DICT_BLOSC = {"compression": 32001, "compression_opts": (0, 0, 0, 0, 5, 1, 1)}
 COMP_DICT_LZF = {"compressions": "LZF"}
@@ -53,7 +53,7 @@ def read_intersections(
 def read_unions(fname1, fname2, band1=None, band2=None):
     """Read in the union of 2 files as an array"""
     bounds = get_union_bounds(fname1, fname2)
-    print(f"bounds: {bounds}")
+    # print(f"bounds: {bounds}")
     im1 = copy_vrt(fname1, out_fname="", bbox=bounds, band=band1)
     im2 = copy_vrt(fname2, out_fname="", bbox=bounds, band=band2)
     return im1, im2
@@ -103,12 +103,14 @@ def copy_vrt(in_fname, out_fname="", bbox=None, verbose=False, band=None):
         if out_fname:
             msg += f"writing to {out_fname}"
         logger.info(msg)
+    if not out_fname:
+        out_fname = ""
 
     # out_ds = gdal.Translate(out_fname, in_fname, projWin=projwin)
     # ds_in = gdal.Open(in_fname)
-    out_ds = gdal.Warp(out_fname, in_fname, outputBounds=bbox, format="VRT")
+    out_ds = gdal.Warp(str(out_fname), str(in_fname), outputBounds=bbox, format="VRT")
     out_arr = out_ds.ReadAsArray()
-    if band:
+    if band and out_arr.ndim == 3:
         out_arr = out_arr[band - 1]
     # ds_in, out_ds = None, None
     return out_arr
@@ -166,7 +168,7 @@ def write_outfile(
     unit=None,
     **kwargs,
 ):
-    if driver is None and out_fname.endswith(".tif"):
+    if driver is None and Path(out_fname).suffix == ".tif":
         driver = "GTiff"
     # TODO: do i wanna guess for any others?
     if driver is None:

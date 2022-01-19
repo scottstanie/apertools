@@ -318,7 +318,7 @@ def _temp_baseline(ifg_pair):
 
 
 def find_annual_ifgs(ifg_pairs, buffer_days=30, num_years=1):
-    """Pick out interferograms which are closest to 1 year in span """
+    """Pick out interferograms which are closest to 1 year in span"""
     # We only want to pick 1 ifg per date, closest to a year, but skip a date if it
     # doesn't have an ifg of baseline 365 +/- `buffer_days`
     # sar_dates = list(sorted(set(itertools.chain.from_iterable(ifg_pairs))))
@@ -664,6 +664,38 @@ def window_stack_xr(
     return window_stack(da, row, col, window_size=window_size, func=func)
 
 
+def interpolate_xr(
+    ds, dset_name=None, freq="6M", col="date", round_min=True, round_max=True
+):
+    """Interpolate an xarray dataset at a given frequency
+
+    Args:
+        ds (xr.Dataset): input dataset
+        dset_name (str, optional): Name of DataArray within ds to interpolate.
+        freq (str, optional): Pandas timeseries frequency. Defaults to "6M".
+        col (str, optional): column containing the time coordinate. Defaults to "date".
+
+    Returns:
+        [xr.Dataset]: interpolated dataset
+    """
+    import pandas as pd
+
+    dmin = pd.to_datetime(ds[col].min().to_pandas())
+    dmax = pd.to_datetime(ds[col].max().to_pandas())
+    if round_min:
+        dmin += pd.tseries.offsets.QuarterBegin()
+    if round_max:
+        dmax += pd.tseries.offsets.QuarterEnd()
+
+    date_range = pd.date_range(dmin, dmax, freq=freq)
+
+    d = ds[dset_name] if dset_name is not None else ds
+    out = d.interp(date=date_range, kwargs={"fill_value": "extrapolate"})
+    if dset_name is not None:
+        out = out.to_dataset()
+    return out
+
+
 # Randoms using the sentinelapi
 def find_slc_products(api, gj_obj, date_start, date_end, area_relation="contains"):
     """Query for Sentinel 1 SCL products with common options
@@ -697,7 +729,7 @@ def fullpath(path):
 
 
 def force_symlink(src, dest):
-    """python equivalent to 'ln -f -s': force overwrite """
+    """python equivalent to 'ln -f -s': force overwrite"""
     if os.path.exists(fullpath(dest)) and os.path.islink(fullpath(dest)):
         os.remove(fullpath(dest))
 
@@ -717,12 +749,25 @@ def record_params_as_yaml(paramfile, verbose=True, **kwargs):
 
     if verbose:
         from pprint import pprint
+
         pprint(kwargs)
 
     yaml = YAML()
 
     with open(paramfile, "w") as f:
         yaml.dump(kwargs, f)
+
+
+def record_params_as_toml(paramfile, verbose=True, **kwargs):
+    import toml
+
+    if verbose:
+        from pprint import pprint
+
+        pprint(kwargs)
+
+    with open(paramfile, "w") as f:
+        toml.dump(kwargs, f)
 
 
 def rm_if_exists(filename):

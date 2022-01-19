@@ -391,7 +391,7 @@ def merge_xr(ds1, ds2, freq="6M", col="date", dset1=DEFO_DSET, dset2=DEFO_DSET):
         dmin = pd.to_datetime(dmin) + pd.tseries.offsets.QuarterBegin()
         dmax = pd.to_datetime(dmax) + pd.tseries.offsets.QuarterEnd()
 
-        dd = date_range = pd.date_range(dmin, dmax, freq="6M")
+        dd = pd.date_range(dmin, dmax, freq=freq)
         # kinda convoluted... maybe there's a simpler way to get back to DataArray
         date_range = dd.to_series().to_xarray().rename(index="date")
     else:
@@ -402,3 +402,5 @@ def merge_xr(ds1, ds2, freq="6M", col="date", dset1=DEFO_DSET, dset2=DEFO_DSET):
 
     out1, out2 = out1.to_dataset(), out2.to_dataset()
     return out1, out2
+
+

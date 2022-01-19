@@ -31,7 +31,7 @@ def create_cor_matrix(
     ) as ds_ifg:
         if row_col is not None:
             row, col = row_col
-            corr_values = utils.window_stack_xr(
+            cor_values = utils.window_stack_xr(
                 ds_cor[dset], row=row, col=col, window_size=window
             )
             ifg_values = utils.window_stack_xr(
@@ -39,7 +39,7 @@ def create_cor_matrix(
             )
         elif lat_lon is not None:
             lat, lon = lat_lon
-            corr_values = utils.window_stack_xr(
+            cor_values = utils.window_stack_xr(
                 ds_cor[dset], lon=lon, lat=lat, window_size=window
             )
             ifg_values = utils.window_stack_xr(
@@ -61,7 +61,7 @@ def create_cor_matrix(
         max_bandwidth=max_bandwidth,
         max_temporal_baseline=max_temporal_baseline,
     )
-    corr_values = corr_values[valid_idxs]
+    cor_values = cor_values[valid_idxs]
     ifg_values = ifg_values[valid_idxs]
 
     full_igram_list = np.array(utils.full_igram_list(slclist))
@@ -70,8 +70,8 @@ def create_cor_matrix(
         sario.ifglist_to_filenames(ifglist),
     )
 
-    full_corr_values = fill_val * np.ones((len(full_igram_list),), dtype=np.complex64)
-    full_corr_values[valid_idxs] = corr_values * np.exp(1j * np.angle(ifg_values))
+    full_cor_values = fill_val * np.ones((len(full_igram_list),), dtype=np.complex64)
+    full_cor_values[valid_idxs] = cor_values * np.exp(1j * np.angle(ifg_values))
 
     # Now arange into a matrix: fill the upper triangle
     ngeos = len(slclist)
@@ -82,15 +82,15 @@ def create_cor_matrix(
     out[rdiag, cdiag] = 1
 
     rows, cols = np.triu_indices(ngeos, k=1)
-    out[rows, cols] = full_corr_values
+    out[rows, cols] = full_cor_values
     if not upper_triangle:
         out = out + out.conj().T
         out[rdiag, cdiag] = 1
-    return out, slclist, ifglist, corr_values
+    return out, slclist, ifglist, cor_values
 
 
 # TODO: plot with dates
-def plot_corr_matrix(corrmatrix, slclist, vmax=None, vmin=0):
+def plot_cor_matrix(corrmatrix, slclist, vmax=None, vmin=0):
     coh = np.abs(corrmatrix)
     if vmax is None:
         # Make it slightly different color than the 1s on the diag
@@ -200,7 +200,7 @@ def cov_matrix_tropo(ifg_date_list, sar_date_variances):
     return Sigma
 
 
-def get_corr_per_day(slclist, ifglist):
+def get_cor_per_day(slclist, ifglist):
     from insar import ts_utils
 
     A = ts_utils.build_A_matrix(slclist, ifglist)
@@ -210,7 +210,7 @@ def get_corr_per_day(slclist, ifglist):
     AC[first_day_rows, 0] = 1.0
     AC /= 2
 
-    # CC, slclist_C, ifglist_C, corr_values = create_cor_matrix(
+    # CC, slclist_C, ifglist_C, cor_values = create_cor_matrix(
     #     lat_lon=(lat1, lon1),
     #     cor_filename=cropped_dir + "cor_stack.h5",
     #     ifg_filename=cropped_dir + "ifg_stack.h5",
@@ -218,4 +218,72 @@ def get_corr_per_day(slclist, ifglist):
     # #     max_temporal_baseline=500,
     #     upper_triangle=True,
     # )
-    # corr_per_day = np.linalg.lstsq(AC, corr_values)[0]
+    # cor_per_day = np.linalg.lstsq(AC, cor_values)[0]
+
+
+def get_cor_mask(
+    cor_image,
+    cor_thresh,
+    smooth=True,
+    winfrac=10,
+    return_smoothed=False,
+    strel_size=3,
+):
+    """Get a mask of the correlation values in `cor_image`
+
+    Args:
+        cor_image (np.ndarray): 2D array of correlation values
+        cor_thresh (float): threshold for correlation values
+        smooth (bool, optional): whether to apply a gaussian filter before
+        masking. Removes any long-wavelength trend in correlation. Defaults to True.
+
+    Returns:
+        np.ndarray: 2D boolean array of same shape as `image`
+    """
+    import scipy.ndimage as ndi
+    from skimage.morphology import disk, opening
+
+    if np.isscalar(cor_thresh):
+        cor_thresh = [cor_thresh]
+
+    cor_image = cor_image.copy()
+    cormask = np.logical_or(np.isnan(cor_image), cor_image == 0)
+    if smooth:
+        sigma = min(cor_image.shape) / winfrac
+        cor_smooth = np.fft.ifft2(
+            ndi.fourier_gaussian(
+                # cor_smooth = ndi.filters.gaussian_filter(
+                np.fft.fft2(cor_image),
+                # cor_image,
+                sigma=sigma,
+            )
+        ).real
+        cor_image -= cor_smooth
+    cor_image[cormask] = 0
+    cor_image -= np.min(cor_image)
+    cor_image[cormask] = 0
+    masks = []
+    for c in cor_thresh:
+        mask = cor_image < c
+        selem = disk(strel_size)
+        # mask = closing(mask, selem) # Makes the mask bigger
+        mask = opening(mask, selem)
+
+        masks.append(mask)
+    mask = np.stack(masks) if len(cor_thresh) > 1 else masks[0]
+
+    return (mask, cor_smooth) if return_smoothed else mask
+
+
+def fill_cvx(img, mask, max_iters=1500):
+    """Fill in masked pixels in `img` using TV convex optimization"""
+    import cvxpy as cp
+
+    U = cp.Variable(shape=img.shape)
+    obj = cp.Minimize(cp.tv(U))
+    constraints = [cp.multiply(~mask, U) == cp.multiply(~mask, img)]
+    prob = cp.Problem(obj, constraints)
+    # Use SCS to solve the problem.
+    prob.solve(verbose=True, solver=cp.SCS, max_iters=max_iters)
+    print("optimal objective value: {}".format(obj.value))
+    return prob, U
