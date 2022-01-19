@@ -234,14 +234,15 @@ def get_cor_mask(
     Args:
         cor_image (np.ndarray): 2D array of correlation values
         cor_thresh (float): threshold for correlation values
-        smooth (bool, optional): whether to apply a gaussian filter before
-        masking. Removes any long-wavelength trend in correlation. Defaults to True.
+        smooth (bool, optional): whether to remove a gaussian filtered version before
+            masking. Removes any long-wavelength trend in correlation. 
+            Defaults to True.
 
     Returns:
         np.ndarray: 2D boolean array of same shape as `image`
     """
     import scipy.ndimage as ndi
-    from skimage.morphology import disk, opening
+    from skimage.morphology import disk, opening, closing
 
     if np.isscalar(cor_thresh):
         cor_thresh = [cor_thresh]
@@ -272,7 +273,7 @@ def get_cor_mask(
         masks.append(mask)
     mask = np.stack(masks) if len(cor_thresh) > 1 else masks[0]
 
-    return (mask, cor_smooth) if return_smoothed else mask
+    return (mask, cor_image) if return_smoothed else mask
 
 
 def fill_cvx(img, mask, max_iters=1500):
