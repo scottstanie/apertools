@@ -1917,6 +1917,6 @@ def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=
             )
 
 
-def save_xr_tif(da, crs="EPSG:4326", spatial_dims=("lon", "lat"), outname="out.tif"):
+def save_xr_tif(outname, da, crs="EPSG:4326", spatial_dims=("lon", "lat")):
     """Save an xarray dataarray to a GeoTIFF, specifying the CRS and spatial dimensions"""
     da.rio.write_crs(crs).rio.set_spatial_dims(*spatial_dims).rio.to_raster(outname)
