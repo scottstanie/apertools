@@ -1721,7 +1721,7 @@ def set_unit(filename, unit="cm", band=None):
     from osgeo import gdalconst
     from osgeo import gdal
 
-    ds = gdal.Open(filename, gdalconst.GA_Update)
+    ds = gdal.Open(str(filename), gdalconst.GA_Update)
     if band is not None:
         b = ds.GetRasterBand(band)
         b.SetUnitType(unit)

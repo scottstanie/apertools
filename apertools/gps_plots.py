@@ -340,6 +340,7 @@ def plot_all_stations(
     share=False,
     figsize=(10, 10),
     outname=None,
+    drop_na_insar=True,
 ):
     import proplot as pplt
 
@@ -363,7 +364,9 @@ def plot_all_stations(
         # curdf = df[[]]  # .dropna()
         ax.plot(df.index, df[gps_col], marker="o", ms=1, alpha=0.3)
         _plot_smoothed(ax, df, gps_col, days_smooth_gps, "-")
-        ax.plot(df.index, df[insar_col], marker="o", ms=1)
+
+        insar_df = df[[insar_col]].dropna() if drop_na_insar else df[[insar_col]]
+        ax.plot(insar_df.index, insar_df[insar_col], marker="o", ms=1)
         # print(df[insar_col].dropna())
         # ax.legend()
         # ax.grid()

@@ -207,6 +207,7 @@ def filter_slclist_ifglist(
     ifg_date_list,
     min_date=None,
     max_date=None,
+    min_temporal_baseline=None,
     max_temporal_baseline=None,
     min_bandwidth=None,
     max_bandwidth=None,
@@ -235,13 +236,14 @@ def filter_slclist_ifglist(
     # Now filter the rest by temp baseline or by "bandwidth" aka index distance
     if max_temporal_baseline is not None and max_bandwidth is not None:
         raise ValueError("Only can filter by one of bandwith or temp. baseline")
-    if max_temporal_baseline is not None:
-        # TODO: handle min and max both
+    if max_temporal_baseline is not None or min_temporal_baseline is not None:
+        max_temporal_baseline = max_temporal_baseline or 10000 
+        min_temporal_baseline = min_temporal_baseline or 0
         ll = len(valid_ifg_pairs)
         valid_ifg_pairs = [
             ifg
             for ifg in valid_ifg_pairs
-            if abs((ifg[1] - ifg[0]).days) <= max_temporal_baseline
+            if min_temporal_baseline <= abs((ifg[1] - ifg[0]).days) <= max_temporal_baseline
         ]
         if verbose:
             logger.info(
@@ -1183,73 +1185,6 @@ def chdir_then_revert(path):
     finally:
         os.chdir(orig_path)
 
-
-def get_corr_mask(
-    cor_image,
-    cor_thresh,
-    smooth=True,
-    winfrac=10,
-    return_smoothed=False,
-    strel_size=3,
-):
-    """Get a mask of the correlation values in `cor_image`
-
-    Args:
-        cor_image (np.ndarray): 2D array of correlation values
-        cor_thresh (float): threshold for correlation values
-        smooth (bool, optional): whether to apply a gaussian filter before
-        masking. Removes any long-wavelength trend in correlation. Defaults to True.
-
-    Returns:
-        np.ndarray: 2D boolean array of same shape as `image`
-    """
-    import scipy.ndimage as ndi
-    from skimage.morphology import disk, closing, opening
-
-    if np.isscalar(cor_thresh):
-        cor_thresh = [cor_thresh]
-
-    cor_image = cor_image.copy()
-    cormask = np.logical_or(np.isnan(cor_image), cor_image == 0)
-    if smooth:
-        sigma = min(cor_image.shape) / winfrac
-        cor_smooth = np.fft.ifft2(
-            ndi.fourier_gaussian(
-                # cor_smooth = ndi.filters.gaussian_filter(
-                np.fft.fft2(cor_image),
-                # cor_image,
-                sigma=sigma,
-            )
-        ).real
-        cor_image -= cor_smooth
-    cor_image[cormask] = 0
-    cor_image -= np.min(cor_image)
-    cor_image[cormask] = 0
-    masks = []
-    for c in cor_thresh:
-        mask = cor_image < c
-        selem = disk(strel_size)
-        # mask = closing(mask, selem) # Makes the mask bigger
-        mask = opening(mask, selem)
-
-        masks.append(mask)
-    mask = np.stack(masks) if len(cor_thresh) > 1 else masks[0]
-
-    return (mask, cor_smooth) if return_smoothed else mask
-
-
-def fill_cvx(img, mask, max_iters=1500):
-    """Fill in masked pixels in `img` using TV convex optimization"""
-    import cvxpy as cp
-
-    U = cp.Variable(shape=img.shape)
-    obj = cp.Minimize(cp.tv(U))
-    constraints = [cp.multiply(~mask, U) == cp.multiply(~mask, img)]
-    prob = cp.Problem(obj, constraints)
-    # Use SCS to solve the problem.
-    prob.solve(verbose=True, solver=cp.SCS, max_iters=max_iters)
-    print("optimal objective value: {}".format(obj.value))
-    return prob, U
 
 
 def values_per_date(values, ifg_date_list, as_dataframe=False):

@@ -292,36 +292,69 @@ def bbox_around_point(lons, lats, side_km=25):
 
 
 def create_merged_files(
-    fname1,
-    fname2,
-    deramp1=False,
-    deramp2=False,
+    fname_left,
+    fname_right,
+    deramp_left=False,
+    deramp_right=False,
     deramp_order=1,
-    band1=None,
-    band2=None,
+    band_left=None,
+    band_right=None,
     outfile=None,
     nodata=0,
     unit="centimeters",
+    blend=True,
 ):
     """Create a merged version of two files, bounded by their union bounds"""
 
-    img1, img2 = read_unions(fname1, fname2, band1=band1, band2=band2)
-    if deramp1:
-        mask1 = img1 == 0
-        img1 = np.nan_to_num(remove_ramp(img1, deramp_order=deramp_order, mask=mask1))
-    if deramp2:
-        mask2 = img2 == 0
-        img2 = np.nan_to_num(remove_ramp(img2, deramp_order=deramp_order, mask=mask2))
-    valid1 = (img1 != 0).astype(int)
-    valid2 = (img2 != 0).astype(int)
-    valid_count = valid1 + valid2
+    img_left, img_right = read_unions(fname_left, fname_right, band1=band_left, band2=band_right)
+    if deramp_left:
+        mask1 = img_left == 0
+        img_left = np.nan_to_num(remove_ramp(img_left, deramp_order=deramp_order, mask=mask1))
+    if deramp_right:
+        mask2 = img_right == 0
+        img_right = np.nan_to_num(remove_ramp(img_right, deramp_order=deramp_order, mask=mask2))
 
-    merged = (img1 + img2) / valid_count
+    if blend:
+        img_left = np.nan_to_num(img_left, nan=0.0)
+        img_right = np.nan_to_num(img_right, nan=0.0)
+        mask_left = img_left == 0
+        mask_right = img_right == 0
+        # mask_tot = np.logical_and(mask_left, mask_right)
+
+        merged = np.zeros_like(img_left)
+        for idx in range(img_left.shape[0]):
+            ramp_left = np.zeros(img_left.shape[1])
+            start, end = np.where(~mask_left[idx])[0][[0, -1]]
+            ramp_left[start:end] = np.linspace(1, 0, end - start)
+            # ramp_left = np.linspace(1, 0, img_left.shape[1])
+            ramp_left[mask_left[idx]] = 0.0
+
+            ramp_right = np.zeros(img_right.shape[1])
+            start, end = np.where(~mask_right[idx])[0][[0, -1]]
+            ramp_right[start:end] = np.linspace(0, 1, end - start)
+            # ramp_right = np.linspace(1, 0, img_left.shape[1])
+            ramp_right[mask_right[idx]] = 0.0
+
+            ramp_norm = ramp_left + ramp_right
+            # Where there's no data, the sum will be 0. Set to 1 to keep image values
+            ramp_norm[ramp_norm == 0] = 1.0
+            ramp_left /= ramp_norm
+            ramp_right /= ramp_norm
+
+            merged[idx] = img_left[idx] * ramp_left + img_right[idx] * ramp_right
+    else:
+        valid1 = (img_left != 0).astype(int)
+        valid2 = (img_right != 0).astype(int)
+        valid_count = valid1 + valid2
+        # Where there's no data, the sum will be 0. Set to 1 to keep image values
+        valid_count[valid_count == 0] = 1.0
+        merged = (img_left + img_right) / valid_count
+
     if outfile:
-        transform = get_union_transform(fname1, fname2)
-        crs = get_crs(fname1)
-        if crs != get_crs(fname2):
-            raise ValueError(f"CRS mismatch: {crs} != {get_crs(fname2)}")
+        transform = get_union_transform(fname_left, fname_right)
+        crs = get_crs(fname_left)
+        if crs != get_crs(fname_right):
+            raise ValueError(f"CRS mismatch: {crs} != {get_crs(fname_right)}")
         logger.info(f"Writing merged file to {outfile}")
         write_outfile(
             outfile, merged, crs=crs, transform=transform, nodata=nodata, unit=unit
