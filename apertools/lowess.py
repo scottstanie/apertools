@@ -129,14 +129,14 @@ def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
     # """Run lowess on a DataArray stack"""
 
 
-def lowess_xr(da, x_dset="date", min_days_weighted=3 * 365.25, frac=0.7, n_iter=2):
+def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=2):
     """Run lowess on a DataArray stack.
 
     Args:
         da (xr.DataArray): 3D xarray containing data to be smoothed along dimension `x_dset`.
         x_dset (str, optional): Name of the time dimension. Defaults to "date".
         min_days_weighted (float, optional): Minimum time period of data to include in smoothing.
-            See notes. Defaults to 365.25*3 (3 years of data).
+            See notes. Defaults to 365.25*2 (2 years of data).
         n_iter (int, optional): Number of LOWESS iterations to run to exclude outliers.
             Defaults to 2.
 

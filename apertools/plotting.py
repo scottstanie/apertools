@@ -693,6 +693,7 @@ def plot_img_diff(
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
+    import proplot as pplt
     if arrays is None:
         from apertools import sario
 
@@ -702,9 +703,7 @@ def plot_img_diff(
     ncols = n + 1 if show_diff else n
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(
-        1, ncols, sharex=share, sharey=share, figsize=figsize, squeeze=False
-    )
+    fig, axes = pplt.subplots( 1, ncols, sharex=share, sharey=share, figsize=figsize)
     axes = axes.ravel()
     for ii in range(n):
         if bbox:

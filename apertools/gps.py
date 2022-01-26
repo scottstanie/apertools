@@ -299,6 +299,7 @@ class InsarGPSCompare:
                     station_name=row.name,
                     start_date=self.start_date,
                     end_date=self.end_date,
+                    zero_by="start",  # TODO: why is this different from above..
                 )
 
             # np.array(pd.Series(arr).rolling(window_size).mean())
