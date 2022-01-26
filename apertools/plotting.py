@@ -703,8 +703,9 @@ def plot_img_diff(
     ncols = n + 1 if show_diff else n
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
-    fig, axes = pplt.subplots( 1, ncols, sharex=share, sharey=share, figsize=figsize)
+    fig, axes = plt.subplots(1, ncols, sharex=share, sharey=share, figsize=figsize, squeeze=False)
     axes = axes.ravel()
+    # fig, axes = pplt.subplots(ncols=ncols, sharex=share, sharey=share, figsize=figsize)
     for ii in range(n):
         if bbox:
             extent = [bbox[0], bbox[2], bbox[1], bbox[3]]
@@ -720,7 +721,7 @@ def plot_img_diff(
         )
         if titles:
             ax.set_title(titles[ii])
-        cbar = fig.colorbar(axim, ax=ax)
+        cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
         cbar.set_label(cbar_label)
         if axis_off:
             ax.set_axis_off()
@@ -746,7 +747,7 @@ def plot_img_diff(
             ax.set_axis_off()
         if aspect:
             ax.set_aspect(aspect)
-        cbar = fig.colorbar(axim, ax=ax)
+        cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
         cbar.set_label(cbar_label)
     # [f.close() for f in files]
     if show:

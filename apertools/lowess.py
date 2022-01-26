@@ -197,3 +197,23 @@ def _find_frac(x, min_x_weighted):
     #     dask_gufunc_kwargs=dict(allow_rechunk=True),
     #     vectorize=True,
     # )
+
+
+def demo_window(x, frac=2.0 / 3.0, min_x_weighted=None):
+    if min_x_weighted:
+        frac = _find_frac(x, min_x_weighted)
+    n = len(x)
+    r = int(np.ceil(frac * n))
+    if r == n:
+        r -= 1
+
+    # Find the distance to the rth furthest point from each x value
+    h = np.array([np.sort(np.abs(x - x[i]))[r] for i in range(n)])
+    xc = x.copy()  # make contiguous (necessary for `reshape` for numba)
+    # Get the relative distance to the rth furthest point
+    w = np.abs((xc.reshape((-1, 1)) - xc.reshape((1, -1))) / h)
+    # Clip to 0, 1 (`np.clip` not available in numba)
+    w = np.minimum(1.0, np.maximum(w, 0.0))
+    # tricube weighting
+    w = (1 - w ** 3) ** 3
+    return w
