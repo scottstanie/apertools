@@ -76,6 +76,8 @@ class InsarGPSCompare:
     dset: str = "linear_velocity"
     los_map_file: str = LOS_FILENAME
     insar_ds: xr.DataArray = None
+    gps_kind: str = "los"
+
     los_dset: str = LOS_FILENAME.replace(".tif", "")
     # to measure GPS relative to some other station, set the reference station
     reference_station: str = None
@@ -130,12 +132,21 @@ class InsarGPSCompare:
             dset=self.dset,
             da=self.insar_ds[self.dset],
         )
-        self.insar_ds.close()
+        try:
+            self.insar_ds.close()
+        except TypeError:  # for mfdataset
+            pass
 
         df_insar = self.create_insar_df(df_gps_locations)
         # Cap the GPS we use by the InSAR start/end dates
         self._set_start_end_date(df_insar)
-        df_gps = self.create_gps_los_df(df_gps_locations)
+        if self.gps_kind == "los":
+            df_gps = self.create_gps_los_df(df_gps_locations)
+        elif self.gps_kind in ["east", "north", "up"]:
+            df_gps = self.create_gps_enu_df(df_gps_locations, kind=self.gps_kind)
+        else:
+            raise ValueError("gps_kind must be los, east, north, or up")
+
         df = self.combine_insar_gps_dfs(df_insar, df_gps)
         if self.reference_station is not None:
             df = self._subtract_reference(df)
@@ -252,9 +263,14 @@ class InsarGPSCompare:
             df_gps_locations, kind="los", start_date=start_date, end_date=end_date
         )
 
-    def create_gps_enu_df(self, df_gps_locations, start_date=None, end_date=None):
+    def create_gps_enu_df(
+        self, df_gps_locations, kind="up", start_date=None, end_date=None
+    ):
+        kind = kind.lower()
+        if kind not in ["up", "east", "north"]:
+            raise ValueError("kind must be 'east', 'up' or 'north'")
         return self._create_gps_df(
-            df_gps_locations, kind="enu", start_date=start_date, end_date=end_date
+            df_gps_locations, kind=kind, start_date=start_date, end_date=end_date
         )
 
     def _create_gps_df(
@@ -268,8 +284,8 @@ class InsarGPSCompare:
         self.los_da = self._get_los_da()
         # df_locations = get_stations_within_image(filename=los_map_file)
         for row in df_gps_locations.itertuples():
-            if kind.lower() == "los":
-                df_los = load_gps_los(
+            if kind == "los":
+                df = load_gps_los(
                     los_map_file=self.los_map_file,
                     los_da=self.los_da,
                     station_name=row.name,
@@ -278,8 +294,8 @@ class InsarGPSCompare:
                     zero_start=True,
                     # coordinates=self.coordinates,
                 )
-            elif kind.lower() == "enu":
-                df_los = load_station_enu(
+            elif kind in ["east", "north", "up"]:
+                df = load_station_enu(
                     station_name=row.name,
                     start_date=self.start_date,
                     end_date=self.end_date,
@@ -289,10 +305,17 @@ class InsarGPSCompare:
             # df = pd.DataFrame({"date": _series_to_date(gps_dts)})
             # df[stat + "_gps"] = moving_average(los_gps_data, days_smooth)
             # df[stat + "_smooth_gps"] = moving_average(los_gps_data, days_smooth)
-            df_list.append(df_los)
+            df_list.append(df)
+
         # Now merge each one in turn, keeping all dates
         df_gps = pd.concat(df_list, join="outer", axis="columns")
-        # These will all have the same name, so set equal to the station
+
+        if kind in ["east", "north", "up"]:
+            # will return 3x(number of stations) columns
+            # grab all the specific direction columns
+            df_gps = df_gps[[kind]]
+
+        # The columns will all have the same name, so set equal to the station
         df_gps.columns = df_gps_locations.name.values
         self.df_gps = df_gps
         return df_gps

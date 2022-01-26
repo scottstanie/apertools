@@ -1920,3 +1920,26 @@ def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=
 def save_xr_tif(outname, da, crs="EPSG:4326", spatial_dims=("lon", "lat")):
     """Save an xarray dataarray to a GeoTIFF, specifying the CRS and spatial dimensions"""
     da.rio.write_crs(crs).rio.set_spatial_dims(*spatial_dims).rio.to_raster(outname)
+
+
+def load_xr_tifs(tif_glob, rename_to_latlon=True):
+    import xarray as xr
+    import pandas as pd
+    import re
+
+    def prep(ds):
+        fname = ds.encoding["source"]
+        date = re.search(r"\d{4,8}", fname).group()
+        if len(ds.band) == 1:
+            ds = ds.sel(band=ds.band[0])
+        if rename_to_latlon:
+            ds = ds.rename({"y": "lat", "x": "lon"})
+        return ds.expand_dims(date=[pd.to_datetime(date)])
+
+    return xr.open_mfdataset(
+        # sorted(glob.glob(tif_glob)),
+        tif_glob,
+        engine="rasterio",
+        # concat_dim="date",
+        preprocess=prep,
+    )
