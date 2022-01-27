@@ -579,7 +579,7 @@ def load_station_enu(
     if not os.path.exists(gps_data_file):
         if download_if_missing:
             logger.info(f"Downloading {station_name} to {gps_data_file}")
-            download_station_data(station_name)
+            download_station_data(station_name, coords="enu")
         else:
             raise ValueError(
                 "{gps_data_file} does not exist, download_if_missing = False"
@@ -612,7 +612,7 @@ def load_station_enu(
     return clean_df.set_index("date")
 
 
-def _clean_gps_df(df, start_date=None, end_date=None, is_enu=True):
+def _clean_gps_df(df, start_date=None, end_date=None, coords="enu"):
     """Reorganize the Nevada GPS data format"""
     df["date"] = pd.to_datetime(df["YYMMMDD"], format="%y%b%d")
 
@@ -620,10 +620,12 @@ def _clean_gps_df(df, start_date=None, end_date=None, is_enu=True):
         df = df[df["date"] >= pd.to_datetime(start_date)]
     if end_date:
         df = df[df["date"] <= pd.to_datetime(end_date)]
-    if is_enu:
+    if coords == "enu":
         df_out = df[["date", "__east(m)", "_north(m)", "____up(m)"]]
-    else:
+    elif coords == "xyz":
         df_out = df[["date", "x", "y", "z"]]
+    else:
+        raise ValueError(f"{coords} must be 'enu' or 'xyz'")
 
     df_out = df_out.rename(
         mapper=lambda s: s.replace("_", "").replace("(m)", ""), axis="columns"
@@ -635,20 +637,26 @@ def _clean_gps_df(df, start_date=None, end_date=None, is_enu=True):
 def load_station_xyz(
     station_name, start_date=None, end_date=None, download_if_missing=True
 ):
-    gps_data_file = os.path.join(GPS_DIR, GPS_FILE.format(station=station_name))
+    station_name = station_name.upper()
+    gps_data_file = os.path.join(GPS_DIR, GPS_XYZ_FILE.format(station=station_name))
     if not os.path.exists(gps_data_file):
         if download_if_missing:
             logger.info(f"Downloading {station_name} to {gps_data_file}")
-            download_station_data(station_name)
+            download_station_data(station_name, coords="xyz")
         else:
             raise ValueError(
                 "{gps_data_file} does not exist, download_if_missing = False"
             )
 
+    if end_date is None:
+        end_date = pd.to_datetime(pd.Timestamp.today()) - pd.Timedelta(days=1)
+    else:
+        end_date = pd.to_datetime(end_date)
+
     # http://geodesy.unr.edu/gps_timeseries/README_txyz2.txt
     columns = [
         "station",
-        "date",
+        "YYMMMDD",
         "decimal_year",
         "x",
         "y",
@@ -663,13 +671,13 @@ def load_station_xyz(
     ]
     df = pd.read_csv(gps_data_file, header=None, sep=" ", engine="c", names=columns)
 
-    clean_df = _clean_gps_df(df, start_date, end_date)
+    clean_df = _clean_gps_df(df, start_date, end_date, coords="xyz")
 
     # Check that we have up to date data
     if (clean_df["date"].max() < end_date) and download_if_missing:
         download_station_data(station_name)
-        df = pd.read_csv(gps_data_file, header=0, sep=r"\s+", engine="c")
-        clean_df = _clean_gps_df(df, start_date, end_date)
+        df = pd.read_csv(gps_data_file, header=None, sep=" ", engine="c", names=columns)
+        clean_df = _clean_gps_df(df, start_date, end_date, coords="xyz")
         # os.remove(gps_data_file)
         # logger.info(f"force removed {gps_data_file}")
     return clean_df.set_index("date")
@@ -824,15 +832,21 @@ def download_station_locations(filename, url):
         f.write(resp.text)
 
 
-def download_station_data(station_name):
+def download_station_data(station_name, coords="enu"):
     station_name = station_name.upper()
     plate = _get_station_plate(station_name)
     # plate = "PA"
-    url = GPS_BASE_URL.format(station=station_name, plate=plate)
+    if coords == "enu":
+        url = GPS_BASE_URL.format(station=station_name, plate=plate)
+        filename = os.path.join(
+            GPS_DIR, GPS_FILE.format(station=station_name, plate=plate)
+        )
+    elif coords == "xyz":
+        url = GPS_XYZ_BASE_URL.format(station=station_name)
+        filename = os.path.join(GPS_DIR, GPS_XYZ_FILE.format(station=station_name))
     response = requests.get(url)
     response.raise_for_status()
 
-    filename = os.path.join(GPS_DIR, GPS_FILE.format(station=station_name, plate=plate))
     logger.info(f"Saving {url} to {filename}")
 
     with open(filename, "w") as f:
