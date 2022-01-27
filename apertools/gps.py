@@ -49,6 +49,10 @@ GPS_FILE = GPS_BASE_URL.split("/")[-1].replace(".{plate}", "")
 # We'll use this for now to scrape the plate information with a regex :(
 GPS_STATION_URL = "http://geodesy.unr.edu/NGLStationPages/stations/{station}.sta"
 
+GPS_XYZ_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/txyz/IGS14/{station}.txyz2"
+
+GPS_XYZ_FILE = GPS_XYZ_BASE_URL.split("/")[-1]
+
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -608,21 +612,67 @@ def load_station_enu(
     return clean_df.set_index("date")
 
 
-def _clean_gps_df(df, start_date=None, end_date=None):
+def _clean_gps_df(df, start_date=None, end_date=None, is_enu=True):
     """Reorganize the Nevada GPS data format"""
-    df = df.copy()
     df["date"] = pd.to_datetime(df["YYMMMDD"], format="%y%b%d")
 
     if start_date:
         df = df[df["date"] >= pd.to_datetime(start_date)]
     if end_date:
         df = df[df["date"] <= pd.to_datetime(end_date)]
-    df_enu = df[["date", "__east(m)", "_north(m)", "____up(m)"]]
-    df_enu = df_enu.rename(
+    if is_enu:
+        df_out = df[["date", "__east(m)", "_north(m)", "____up(m)"]]
+    else:
+        df_out = df[["date", "x", "y", "z"]]
+
+    df_out = df_out.rename(
         mapper=lambda s: s.replace("_", "").replace("(m)", ""), axis="columns"
     )
-    df_enu.reset_index(inplace=True, drop=True)
-    return df_enu
+    df_out.reset_index(inplace=True, drop=True)
+    return df_out
+
+
+def load_station_xyz(
+    station_name, start_date=None, end_date=None, download_if_missing=True
+):
+    gps_data_file = os.path.join(GPS_DIR, GPS_FILE.format(station=station_name))
+    if not os.path.exists(gps_data_file):
+        if download_if_missing:
+            logger.info(f"Downloading {station_name} to {gps_data_file}")
+            download_station_data(station_name)
+        else:
+            raise ValueError(
+                "{gps_data_file} does not exist, download_if_missing = False"
+            )
+
+    # http://geodesy.unr.edu/gps_timeseries/README_txyz2.txt
+    columns = [
+        "station",
+        "date",
+        "decimal_year",
+        "x",
+        "y",
+        "z",
+        "sigma_x",
+        "sigma_y",
+        "sigma_z",
+        "sigma_xy",
+        "sigma_xz",
+        "sigma_yz",
+        "antenna height",
+    ]
+    df = pd.read_csv(gps_data_file, header=None, sep=" ", engine="c", names=columns)
+
+    clean_df = _clean_gps_df(df, start_date, end_date)
+
+    # Check that we have up to date data
+    if (clean_df["date"].max() < end_date) and download_if_missing:
+        download_station_data(station_name)
+        df = pd.read_csv(gps_data_file, header=0, sep=r"\s+", engine="c")
+        clean_df = _clean_gps_df(df, start_date, end_date)
+        # os.remove(gps_data_file)
+        # logger.info(f"force removed {gps_data_file}")
+    return clean_df.set_index("date")
 
 
 def get_stations_within_image(
