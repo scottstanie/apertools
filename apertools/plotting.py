@@ -693,7 +693,7 @@ def plot_img_diff(
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
-    import proplot as pplt
+    # import proplot as pplt
     if arrays is None:
         from apertools import sario
 
@@ -721,6 +721,8 @@ def plot_img_diff(
         )
         if titles:
             ax.set_title(titles[ii])
+        # numbers: weird
+        # https://stackoverflow.com/questions/18195758/set-matplotlib-colorbar-size-to-match-graph
         cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
         cbar.set_label(cbar_label)
         if axis_off:

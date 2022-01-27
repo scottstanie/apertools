@@ -228,6 +228,7 @@ def get_cor_mask(
     winfrac=10,
     return_smoothed=False,
     strel_size=3,
+    morph_func="closing",
 ):
     """Get a mask of the correlation values in `cor_image`
 
@@ -235,14 +236,14 @@ def get_cor_mask(
         cor_image (np.ndarray): 2D array of correlation values
         cor_thresh (float): threshold for correlation values
         smooth (bool, optional): whether to remove a gaussian filtered version before
-            masking. Removes any long-wavelength trend in correlation. 
+            masking. Removes any long-wavelength trend in correlation.
             Defaults to True.
 
     Returns:
         np.ndarray: 2D boolean array of same shape as `image`
     """
     import scipy.ndimage as ndi
-    from skimage.morphology import disk, opening, closing
+    from skimage import morphology
 
     if np.isscalar(cor_thresh):
         cor_thresh = [cor_thresh]
@@ -266,14 +267,32 @@ def get_cor_mask(
     masks = []
     for c in cor_thresh:
         mask = cor_image < c
-        selem = disk(strel_size)
-        # mask = closing(mask, selem) # Makes the mask bigger
-        mask = opening(mask, selem)
+        selem = morphology.disk(strel_size)
+        # Closing makes the mask bigger, opening smaller
+        func = getattr(morphology, morph_func)
+        mask = func(mask, selem)
 
         masks.append(mask)
     mask = np.stack(masks) if len(cor_thresh) > 1 else masks[0]
 
     return (mask, cor_image) if return_smoothed else mask
+
+
+def filt_local_cor(cor_image, ratio_threshold=1.5, win_size=9):
+    """Compare the correlation at each point with a moving median filtered version
+
+    If theres a sharp drop at a pixel, the median filtered version will be higher,
+    so (filtered / original) > ratio_threshold can detect these line-features
+    """
+    import scipy.ndimage as ndi
+
+    med_filt = ndi.median_filter(cor_image, size=win_size)
+    # out = med_filt / cor_image
+    ratio = med_filt / cor_image
+    # ratio[np.isnan(ratio)] = 0
+    return ratio > ratio_threshold
+    # out[cor_image == 0] = False
+    # return out
 
 
 def fill_cvx(img, mask, max_iters=1500):

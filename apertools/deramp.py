@@ -213,18 +213,11 @@ def remove_ramp_xr(
     overwrite=False,
     max_abs_val=None,
 ):
-    from numcodecs import Blosc
+    from apertools import sario
+    if not sario.check_dset(outfile, dset_name, overwrite):
+        import xarray as xr
+        return xr.open_dataset(outfile)
 
-    if outfile and os.path.exists(outfile):
-        logger.info("Output file exists")
-        if overwrite:
-            logger.info("Removing")
-            os.remove(outfile)
-        else:
-            import xarray as xr
-
-            logger.info("Loading")
-            return xr.open_dataset(outfile)
     logger.info("Removing ramp")
 
     if mask is None:
@@ -252,8 +245,11 @@ def remove_ramp_xr(
         # ext = os.path.splitext(infile)[1]
         # outfile = infile.replace(ext, "_ramp_removed" + out_format)
         if outfile.endswith("zarr"):
+            from numcodecs import Blosc
             compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
-            ds_out.to_zarr(outfile, encoding={"igrams": {"compressor": compressor}})
+            mode = "w" if not os.path.exists(outfile) else "a"
+            ds_out.to_zarr(outfile, encoding={"igrams": {"compressor": compressor}}, mode=mode)
         elif outfile.endswith("nc"):
-            ds_out.to_netcdf(outfile, engine="h5netcdf")
+            mode = "w" if not os.path.exists(outfile) else "a"
+            ds_out.to_netcdf(outfile, engine="h5netcdf", mode=mode)
     return ds_out

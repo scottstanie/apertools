@@ -1722,16 +1722,41 @@ def set_unit(filename, unit="cm", band=None):
     from osgeo import gdal
 
     ds = gdal.Open(str(filename), gdalconst.GA_Update)
-    if band is not None:
+    if isinstance(band, int):
+        bands = [band]
+    else:
+        bands = range(1, ds.RasterCount + 1)
+    for band in bands:
         b = ds.GetRasterBand(band)
         b.SetUnitType(unit)
         b = None
-    else:
-        for band in range(1, ds.RasterCount + 1):
-            b = ds.GetRasterBand(band)
-            b.SetUnitType(unit)
-            b = None
     ds = None
+
+
+def set_description(filename, descriptions, band=None):
+    from osgeo import gdalconst
+    from osgeo import gdal
+
+    ds = gdal.Open(str(filename), gdalconst.GA_Update)
+    if isinstance(band, int):
+        bands = [band]
+    else:
+        bands = range(1, ds.RasterCount + 1)
+    if isinstance(descriptions, str):
+        descriptions = [descriptions] * len(bands)
+
+    for band_num, dd in zip(bands, descriptions):
+        b = ds.GetRasterBand(band_num)
+        b.SetDescription(dd)
+        b = None
+    ds = None
+
+
+def set_nodata(filename, nodata=0.0):
+    import rasterio as rio
+
+    with rio.open(filename, "r+") as src:
+        src.nodata = nodata
 
 
 def cmy_colors():
@@ -1917,8 +1942,19 @@ def make_unw_vrt(unw_filelist=None, directory=None, output="unw_stack.vrt", ext=
             )
 
 
-def save_xr_tif(outname, da, crs="EPSG:4326", spatial_dims=("lon", "lat")):
+def save_xr_tif(
+    outname,
+    da,
+    crs="EPSG:4326",
+    spatial_dims=("lon", "lat"),
+    long_name=None,
+    units=None,
+):
     """Save an xarray dataarray to a GeoTIFF, specifying the CRS and spatial dimensions"""
+    if long_name:
+        da.attrs["long_name"] = long_name
+    if units:
+        da.attrs["units"] = units
     da.rio.write_crs(crs).rio.set_spatial_dims(*spatial_dims).rio.to_raster(outname)
 
 
