@@ -106,6 +106,10 @@ class InsarGPSCompare:
     # 2 ways to apply a shift to the insar: cumulative, or as a velocity
     insar_shift_cm: float = 0.0
     insar_shift_cm_per_year: float = 0.0
+
+    # List of stations to manually ignore (due to known bad GPS data, e.g.)
+    ignore_gps_stations: list = []
+    # Display a final summary
     print_summary: bool = True
 
     def run(self):
@@ -135,7 +139,10 @@ class InsarGPSCompare:
             filename=self.insar_filename,
             dset=self.dset,
             da=self.insar_ds[self.dset],
+        # exclude the manually specified ones
+            exclude_stations=self.ignore_gps_stations,
         )
+
         try:
             self.insar_ds.close()
         except TypeError:  # for mfdataset
@@ -681,6 +688,8 @@ def get_stations_within_image(
     da=None,
     bad_vals=[0],
     mask_invalid=True,
+    to_geodataframe=True,
+    exclude_stations=[]
 ):
     """Given an image, find gps stations contained in area
 
@@ -690,11 +699,13 @@ def get_stations_within_image(
         filename (str): filename to load
         mask_invalid (bool): Default true. if true, don't return stations
             where the image value is NaN or exactly 0
+        da (xarray.DataArray): if provided, use this instead of loading from `filename`
         bad_vals (list[float]): values (beside nan) indicating no data
             (default: [0])
 
     Returns:
-        ndarray: Nx3, with columns ['name', 'lon', 'lat']
+        DataFrame or GeoDataFrame, with columns ['name', 'lon', 'lat', 'alt'],
+        and if `to_geodataframe` is True, also 'geometry'
     """
     from shapely import geometry
 
@@ -708,7 +719,7 @@ def get_stations_within_image(
 
     # Do i care to filter out those not really in the image for radar coords?
     is_2d_latlon = da.lat.ndim == 2
-    gdf = read_station_llas(to_geodataframe=True)
+    gdf = read_station_llas(to_geodataframe=to_geodataframe)
     image_bbox = geometry.box(*apertools.latlon.bbox_xr(da))
     gdf_within = gdf[gdf.geometry.within(image_bbox)]
     # good_stations = []
@@ -740,6 +751,11 @@ def get_stations_within_image(
                 good_idxs.append(row.Index)
         # to keep 'name' as column, but reset the former index to start at 0
         gdf_within = gdf_within.loc[good_idxs].reset_index(drop=True)
+    if exclude_stations:
+        if isinstance(exclude_stations, str):
+            exclude_stations = [exclude_stations]
+        exclude_stations = [s.upper() for s in exclude_stations]
+        gdf_within = gdf_within[~gdf_within.name.isin(exclude_stations)]
     return gdf_within
 
 
