@@ -16,8 +16,9 @@ import re
 import os
 import difflib  # For station name misspelling checks
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import List
 
 import requests
 import h5py
@@ -108,7 +109,7 @@ class InsarGPSCompare:
     insar_shift_cm_per_year: float = 0.0
 
     # List of stations to manually ignore (due to known bad GPS data, e.g.)
-    ignore_gps_stations: list = []
+    ignore_gps_stations: List = field(default_factory=list)
     # Display a final summary
     print_summary: bool = True
 
