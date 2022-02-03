@@ -140,7 +140,7 @@ class InsarGPSCompare:
             filename=self.insar_filename,
             dset=self.dset,
             da=self.insar_ds[self.dset],
-        # exclude the manually specified ones
+            # exclude the manually specified ones
             exclude_stations=self.ignore_gps_stations,
         )
 
@@ -764,7 +764,7 @@ def get_stations_within_image(
         if isinstance(exclude_stations, str):
             exclude_stations = [exclude_stations]
         exclude_stations = [s.upper() for s in exclude_stations]
-        gdf_within = gdf_within[~gdf_within.name.isin(exclude_stations)]
+        gdf_within = gdf_within[~gdf_within.name.isin(exclude_stations)].reset_index(drop=True)
     return gdf_within
 
 

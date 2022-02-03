@@ -377,6 +377,20 @@ def plot_all_stations(
     return fig, axes
 
 
+def plot_stations_on_image(
+    df_diff,
+    ax,
+    ms=10,
+    marker="X",
+):
+    plotted_points = []
+    for idx, n in enumerate(df_diff.index):
+        lon, lat = gps.station_lonlat(n)
+        ax.plot(lon, lat, ms=ms, marker=marker)
+        plotted_points.append((lon, lat))
+    return plotted_points
+
+
 def plot_gps_east_by_loc(
     defo_filename,
     igrams_dir,
