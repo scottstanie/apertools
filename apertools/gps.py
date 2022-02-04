@@ -161,6 +161,7 @@ class InsarGPSCompare:
 
         df = self.combine_insar_gps_dfs(df_insar, df_gps)
         if self.reference_station is not None:
+            self.reference_station = self.reference_station.upper()
             df = self._subtract_reference(df)
         if self.create_diffs:
             for stat in df_gps_locations["name"]:
