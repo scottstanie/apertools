@@ -32,6 +32,22 @@ def get_file_ext(filename):
     return os.path.splitext(filename)[1]
 
 
+def rewrap_to_2pi(phase):
+    """Converts phase results to be centered from -pi to pi
+
+    The result from calculating, e.g., closure phase, will usually
+    have many values centered around -2pi, 0, and 2pi.
+    This function puts them all centered around 0.
+
+    Args:
+        phase (ndarray): array (or scalar) of phase values
+
+    Returns:
+        re-wrapped values within the interval -pi to pi
+    """
+    return np.mod(phase + np.pi, 2 * np.pi) - np.pi
+
+
 def to_datetime(dates, tzinfo=datetime.timezone.utc):
     """Convert a single (or list of) `datetime.date` to timezone-aware `datetime.datetime`"""
     if isinstance(dates, datetime.datetime):
@@ -237,13 +253,15 @@ def filter_slclist_ifglist(
     if max_temporal_baseline is not None and max_bandwidth is not None:
         raise ValueError("Only can filter by one of bandwith or temp. baseline")
     if max_temporal_baseline is not None or min_temporal_baseline is not None:
-        max_temporal_baseline = max_temporal_baseline or 10000 
+        max_temporal_baseline = max_temporal_baseline or 10000
         min_temporal_baseline = min_temporal_baseline or 0
         ll = len(valid_ifg_pairs)
         valid_ifg_pairs = [
             ifg
             for ifg in valid_ifg_pairs
-            if min_temporal_baseline <= abs((ifg[1] - ifg[0]).days) <= max_temporal_baseline
+            if min_temporal_baseline
+            <= abs((ifg[1] - ifg[0]).days)
+            <= max_temporal_baseline
         ]
         if verbose:
             logger.info(
@@ -1184,7 +1202,6 @@ def chdir_then_revert(path):
         yield
     finally:
         os.chdir(orig_path)
-
 
 
 def values_per_date(values, ifg_date_list, as_dataframe=False):

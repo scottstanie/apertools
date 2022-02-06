@@ -9,7 +9,7 @@ import os
 import numpy as np
 
 from apertools import parsers, sario
-from apertools.utils import filter_min_max_date
+from apertools.utils import filter_min_max_date, rewrap_to_2pi
 
 
 def stitch_same_dates(
@@ -189,7 +189,6 @@ def find_row_overlaps(ftop, fbot):
         return row_of_toplast_in_bottom, row_of_botfirst_in_top
 
 
-
 def stitch_topstrip(ftop, fbot, colshift=1):
     # This worked:
     # Out[14]: ((540, 32400), (2160, 0))
@@ -234,6 +233,7 @@ def stitch_topstrip(ftop, fbot, colshift=1):
     # out[-botrows:] = imgbot
     # return out
 
+
 def find_rows(ftop, fbot):
     import rasterio as rio
 
@@ -243,10 +243,6 @@ def find_rows(ftop, fbot):
 
         rowcol_of_botfirst_in_top = srctop.index(*srcbot.xy(0, 0))
         return rowcol_of_toplast_in_bottom, rowcol_of_botfirst_in_top
-
-
-def rewrap_to_2pi(phase):
-    return np.mod(phase + np.pi, 2 * np.pi) - np.pi
 
 
 def get_boundary_polygons(safe_path, dem_path=None):
