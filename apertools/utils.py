@@ -943,7 +943,7 @@ def az_inc_to_enu(
 def enu_to_az_inc(infile, outfile="los_az_inc.tif"):
     """Convert 3-band ENU LOS to ISCE convention of azimuth-elevation
 
-    Here, LOS points FROM ground, TO satellite (reveresed from our other convention).
+    Here, the output LOS points FROM ground, TO satellite (reveresed from our other convention).
     Channel 1: Incidence angle measured from vertical at target (always positive)
     Channel 2: Azimuth angle is measured from North in the anti-clockwise direction.
 
@@ -969,6 +969,23 @@ def enu_to_az_inc(infile, outfile="los_az_inc.tif"):
     cmd = f"gdal_merge.py -separate -o {outfile} {tmp_inc} {tmp_az} "
     subprocess.run(cmd, check=True, shell=True)
     subprocess.run(f"rm -f {tmp_inc} {tmp_az}", shell=True, check=True)
+
+
+def enu_to_az_inc_array(los_enu, to_deg=True):
+    """Convert 3-band ENU LOS array to ISCE convention of azimuth-elevation
+
+    Here, the output LOS points FROM ground, TO satellite (reveresed from our other convention).
+    Channel 1: Incidence angle measured from vertical at target (always positive)
+    Channel 2: Azimuth angle is measured from North in the anti-clockwise direction.
+    """
+    E, N, U = los_enu
+    inc = np.arctan2(np.sqrt(E ** 2 + N ** 2), np.abs(U))
+    if to_deg:
+        inc = np.rad2deg(inc)
+    az = -90 + np.rad2deg(np.arctan2(-N, -E))
+    if not to_deg:
+        az = np.deg2rad(az)
+    return np.stack([inc, az])
 
 
 def velo_to_cumulative_scale(slclist):

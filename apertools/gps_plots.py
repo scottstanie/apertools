@@ -382,12 +382,16 @@ def plot_stations_on_image(
     ax,
     ms=10,
     marker="X",
+    add_labels=True,
 ):
     plotted_points = []
     for idx, n in enumerate(df_diff.index):
         lon, lat = gps.station_lonlat(n)
         ax.plot(lon, lat, ms=ms, marker=marker)
         plotted_points.append((lon, lat))
+    if add_labels:
+        for idx, (lon, lat) in enumerate(plotted_points):
+            ax.annotate(df_diff.index[idx], (lon, lat), fontsize=10)
     return plotted_points
 
 
