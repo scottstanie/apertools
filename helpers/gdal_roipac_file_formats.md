@@ -43,8 +43,9 @@ array([[168.60542, 182.9884 , 136.90907, 149.62862],
 |:--------------------------------:|:----------------------------------------:|:----------------------:|:--------------------------------------------------------:|
 |  SAR image (SLC, or geocoded SLC |  (.slc, regular SAR/ .geo, geocoded SAR) |   Complex64/CFloat32   |  1 band (or BIP for 2 bands  of real floats, imag float) |
 |          Interferograms          |                   .int                   |   Complex64/CFloat32   |                      1 complex band                      |
-|          Unwrapped igram         |                   .unw                   |     Float32/Float32    |                        2 band BIL                        |
+|          Unwrapped igram         |                   .unw                   |         Float33        |                        2 band BIL                        |
 |            correlation           |               (.cor / .cc)               |         Float32        |                        2 band BIL                        |
 |             amplitude            |                   .amp                   |         Float32        |              2 band BIP (bands = SAR images)             |
+|                DEM               |                   .dem                   |          Int16         |                         1 band                           |
 
 # VRT Files (todo)
