@@ -1,6 +1,7 @@
 """Module for downloading and processing NLCD data."""
 import numpy as np
 from pathlib import Path
+from pydantic import NonNegativeFloat
 import requests
 from xml.etree import ElementTree
 import shutil
@@ -37,6 +38,7 @@ def load_nlcd(bbox, nlcd_folder=None, out_fname=""):
     if Path(out_fname).exists():
         logger.info(f"{out_fname} already exists, loading")
         import rasterio as rio
+
         with rio.open(out_fname) as src:
             return src.read(1)
     return subset.copy_vrt(img, out_fname=out_fname, bbox=bbox)
@@ -114,9 +116,123 @@ def get_nlcd_metadata(nlcd_folder=None):
             "95": 0.1825,
         },
         "colors": colors,
+        # Scott initial estimate of correlations:
+        # correlations
     }
 
     return nlcd_meta
+
+
+def get_overlapping_nlcd(filename):
+    """Get the NLCD classes that overlap with the given raster."""
+    import rasterio as rio
+    from osgeo import gdal
+
+    with rio.open(filename) as src:
+        bounds = src.bounds
+        rows, cols = src.shape[-2:]
+        crs = src.crs
+
+    ext = utils.get_file_ext(filename)
+    nlcd_filename = str(filename).replace(ext, "_nlcd.tif")
+    # Load the NLCD data cropped to the same bounds
+    load_nlcd(bbox=bounds, out_fname=nlcd_filename)
+    # Resample the NLCD to the same resolution as the input
+    # TODO: Do i care about the multilooking effect on classes?
+    out_ds = gdal.Warp(
+        "",
+        nlcd_filename,
+        format="VRT",
+        dstSRS=crs,
+        width=cols,
+        height=rows,
+    )
+    out = out_ds.ReadAsArray()
+    out_ds = None
+    return out
+
+
+def get_mean_correlations(cor, nlcd_img, nlcd_meta, min_cor=0.0, max_cor=0.8):
+    from scipy import ndimage
+    import pandas as pd
+
+    inp = cor.copy()
+    mask = np.logical_or(inp == 0, np.isnan(inp))
+
+    nlcd = nlcd_img.copy()
+    nlcd[mask] = 0  # Background, will be ignored in ndimage.meann
+    inp[mask] = np.nan
+    index = np.array(list(nlcd_meta["classes"].keys())).astype(int)
+    df = pd.DataFrame(
+        data={
+            "class_num": index,
+            "class_name": nlcd_meta["classes"].values(),
+            "mean_cor": ndimage.mean(cor, nlcd, index=index),
+        }
+    )
+    df = df.set_index("class_num")
+    # Set background/unclassified to nan
+    df.loc[0] = np.nan
+    df.loc[127] = np.nan
+    df["mean_cor_rescaled"] = rescale(df["mean_cor"], min_cor, max_cor)
+    return df
+
+
+def make_cor_image(cor, nlcd_img, nlcd_meta, min_cor=0.01, max_cor=0.8):
+    df = get_mean_correlations(
+        cor, nlcd_img, nlcd_meta, min_cor=min_cor, max_cor=max_cor
+    )
+    # breakpoint()
+    out = np.zeros_like(cor)
+    for class_num in df.index:
+        c = df.loc[class_num]["mean_cor_rescaled"]
+        indexes = np.where(nlcd_img == class_num)
+        out[indexes] = c
+
+    mask = np.logical_or(cor == 0, np.isnan(cor))
+    mask = np.logical_or(out == 0, mask)
+    out[mask] = np.nan
+    return out
+
+
+def rescale(data, min_val=0.01, max_val=0.8):
+    """Rescale the correlation values to be between min_val and max_val.
+    Can be used to offset the estimate bias (which should have, e.g., water as 0)"""
+    return (
+        max_val * ((data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data)))
+        + min_val
+    )
+
+
+def plot(nlcd_img, nlcd_meta, ax=None):
+    import matplotlib.pyplot as plt
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+    cmap, norm, legend = cover_legends(nlcd_meta)
+    # axim = ax.imshow(nlcd_img, cmap=cmap, norm=norm)
+    axim = ax.imshow(nlcd_img, cmap=cmap)
+    # axim = ax.pcolormesh(nlcd_img, cmap=cmap)
+    fig.colorbar(axim, ax=ax)
+    return fig, ax
+
+
+def cover_legends(nlcd_meta):
+    """Colormap (cmap) and their respective values (norm) for land cover data legends."""
+    import contextlib
+    from matplotlib.colors import ListedColormap, BoundaryNorm
+
+    bounds = list(nlcd_meta["colors"])
+    with contextlib.suppress(ValueError):
+        # Remove the background class
+        bounds.remove(127)
+
+    cmap = ListedColormap(list(nlcd_meta["colors"].values()))
+    norm = BoundaryNorm(bounds, cmap.N)
+    levels = bounds + [100]
+    return cmap, norm, levels
 
 
 def _get_nlcd_folder(save_dir=None):
