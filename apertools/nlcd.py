@@ -39,7 +39,7 @@ def load_nlcd(bbox, nlcd_folder=None, out_fname=""):
         import rasterio as rio
         with rio.open(out_fname) as src:
             return src.read(1)
-    return subset.copy_vrt(img, out_fname='', bbox=bbox)
+    return subset.copy_vrt(img, out_fname=out_fname, bbox=bbox)
 
 
 def get_nlcd_metadata(nlcd_folder=None):
