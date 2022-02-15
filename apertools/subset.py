@@ -80,7 +80,9 @@ def write_intersections(
 
 
 # TODO: this is basically the same as copy_subset... def merge these
-def copy_vrt(in_fname, out_fname="", bbox=None, verbose=False, band=None):
+def copy_vrt(
+    in_fname, out_fname="", bbox=None, verbose=False, band=None, dst_crs="EPSG:4326"
+):
     """Create a VRT for (a subset of) a gdal-readable file
 
     bbox format: (left, bottom, right, top)"""
@@ -108,7 +110,9 @@ def copy_vrt(in_fname, out_fname="", bbox=None, verbose=False, band=None):
 
     # out_ds = gdal.Translate(out_fname, in_fname, projWin=projwin)
     # ds_in = gdal.Open(in_fname)
-    out_ds = gdal.Warp(str(out_fname), str(in_fname), outputBounds=bbox, format="VRT")
+    out_ds = gdal.Warp(
+        str(out_fname), str(in_fname), outputBounds=bbox, format="VRT", dstSRS=dst_crs
+    )
     out_arr = out_ds.ReadAsArray()
     if band and out_arr.ndim == 3:
         out_arr = out_arr[band - 1]
@@ -306,13 +310,19 @@ def create_merged_files(
 ):
     """Create a merged version of two files, bounded by their union bounds"""
 
-    img_left, img_right = read_unions(fname_left, fname_right, band1=band_left, band2=band_right)
+    img_left, img_right = read_unions(
+        fname_left, fname_right, band1=band_left, band2=band_right
+    )
     if deramp_left:
         mask1 = img_left == 0
-        img_left = np.nan_to_num(remove_ramp(img_left, deramp_order=deramp_order, mask=mask1))
+        img_left = np.nan_to_num(
+            remove_ramp(img_left, deramp_order=deramp_order, mask=mask1)
+        )
     if deramp_right:
         mask2 = img_right == 0
-        img_right = np.nan_to_num(remove_ramp(img_right, deramp_order=deramp_order, mask=mask2))
+        img_right = np.nan_to_num(
+            remove_ramp(img_right, deramp_order=deramp_order, mask=mask2)
+        )
 
     if blend:
         img_left = np.nan_to_num(img_left, nan=0.0)

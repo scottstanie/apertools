@@ -5,19 +5,10 @@ import requests
 from xml.etree import ElementTree
 import shutil
 import subprocess
-from . import utils
+from . import utils, subset
 from .log import logger
 
 URL = "https://s3-us-west-2.amazonaws.com/mrlc/nlcd_2019_land_cover_l48_20210604.zip"
-
-
-def _get_nlcd_folder(save_dir=None):
-    """Get the NLCD folder from the cache or download it."""
-    if save_dir is None:
-        save_dir = Path(utils.get_cache_dir())
-    filepath = save_dir / URL.split("/")[-1]
-    out_folder = Path(str(filepath).replace(".zip", ""))
-    return out_folder
 
 
 def download_nlcd(save_dir=None):
@@ -38,27 +29,17 @@ def download_nlcd(save_dir=None):
     return out_folder
 
 
-def get_nlcd_img(nlcd_folder):
+def load_nlcd(bbox, nlcd_folder=None, out_fname=""):
+    """Load a subset of the NLCD data. Optionally save to `out_fname`."""
+    if nlcd_folder is None:
+        nlcd_folder = _get_nlcd_folder()
     img = list(Path(nlcd_folder).glob("*img"))[0]
-
-
-def _download_big_file(url, save_dir):
-    # https://stackoverflow.com/a/39217788/4174466
-    local_filename = url.split("/")[-1]
-    out_filename = save_dir / local_filename
-    with requests.get(url, stream=True) as r:
-        with open(out_filename, "wb") as f:
-            shutil.copyfileobj(r.raw, f)
-
-    return out_filename
-
-
-def _unzip_file(filepath, save_dir):
-    """Unzips in place the .hgt files downloaded"""
-    # -o forces overwrite without prompt, -d specifices unzip directory
-    unzip_cmd = f"unzip -o -d {save_dir} {filepath}"
-    logger.info(unzip_cmd)
-    subprocess.check_call(unzip_cmd, shell=True)
+    if Path(out_fname).exists():
+        logger.info(f"{out_fname} already exists, loading")
+        import rasterio as rio
+        with rio.open(out_fname) as src:
+            return src.read(1)
+    return subset.copy_vrt(img, out_fname='', bbox=bbox)
 
 
 def get_nlcd_metadata(nlcd_folder=None):
@@ -136,3 +117,31 @@ def get_nlcd_metadata(nlcd_folder=None):
     }
 
     return nlcd_meta
+
+
+def _get_nlcd_folder(save_dir=None):
+    """Get the NLCD folder from the cache or download it."""
+    if save_dir is None:
+        save_dir = Path(utils.get_cache_dir())
+    filepath = save_dir / URL.split("/")[-1]
+    out_folder = Path(str(filepath).replace(".zip", ""))
+    return out_folder
+
+
+def _download_big_file(url, save_dir):
+    # https://stackoverflow.com/a/39217788/4174466
+    local_filename = url.split("/")[-1]
+    out_filename = save_dir / local_filename
+    with requests.get(url, stream=True) as r:
+        with open(out_filename, "wb") as f:
+            shutil.copyfileobj(r.raw, f)
+
+    return out_filename
+
+
+def _unzip_file(filepath, save_dir):
+    """Unzips in place the .hgt files downloaded"""
+    # -o forces overwrite without prompt, -d specifices unzip directory
+    unzip_cmd = f"unzip -o -d {save_dir} {filepath}"
+    logger.info(unzip_cmd)
+    subprocess.check_call(unzip_cmd, shell=True)
