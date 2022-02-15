@@ -1551,6 +1551,31 @@ def save_vrt(
     return outfile
 
 
+def save_vrt_metadata(filename, metadata_dict, metadata_domain=None):
+    """
+    Save metadata to a VRT file.
+
+    Args:
+        filename: str
+            The filename of the VRT file to save to.
+        metadata_dict: dict
+            The dictionary of metadata to save to the VRT file.
+        metadata_domain: str
+            The domain to save the metadata to.
+
+    Returns:
+        None
+
+    """
+    from osgeo import gdal
+
+    gdal.UseExceptions()
+
+    ds = gdal.Open(filename)
+    ds.SetMetadata(metadata_dict, metadata_domain)
+    ds = None
+
+
 def shift_by_pixel(in_f, out_f, full_pixel=False, down_right=False):
     """Shift a raster up and to the left by 1/2 (or 1 if `full_pixel`=True)
 

@@ -34,9 +34,9 @@ def stitch_same_dates(
         )
 
         # Keep track of the acquisition datetimes for each stitched file
-        start_time = slclist[0].start_time
-        end_time = slclist[-1].end_time
-        stitched_acq_times[stitched_name] = (start_time, end_time)
+        start1, stop1 = slclist[0].start_time, slclist[0].stop_time
+        start2, stop2 = slclist[-1].start_time, slclist[-1].stop_time
+        stitched_acq_times[stitched_name] = (min(start1, start2), max(stop1, stop2))
 
     return stitched_acq_times
 

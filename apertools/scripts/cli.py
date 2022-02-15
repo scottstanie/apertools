@@ -421,6 +421,7 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
         aper overlaps --filename box.geojson > overlap_files.txt
     """
     import apertools.parsers
+
     # import apertools.sario
 
     def _parse(date_string):
@@ -587,6 +588,7 @@ def smallslc(
     List as many filenames with the same rsc as necessary
     """
     import apertools.sario
+
     if not filenames:
         return
 
@@ -631,6 +633,25 @@ def smallslc(
                 f" -r {resample} -outsize {pct_x}% {pct_y}% "
             )
             _log_and_run(cmd)
+
+
+@cli.command("save-acq-times")
+@click.argument("safe_path")
+@click.argument("vrt_path")
+def save_acq_times(safe_path, vrt_path="."):
+    """Save acquisition times from .SAFE files to existing VRTs"""
+    from apertools import stitching, sario
+
+    stitched_acq_times = stitching.stitch_same_dates(
+        safe_path, output_path=vrt_path, overwrite=False
+    )
+    for f in stitched_acq_times:
+        vrt_name = f + ".vrt"
+        metadata_dict = {
+            "acquisition_datetime": stitched_acq_times[f][0],
+            "acquisition_datetime_stop": stitched_acq_times[f][1],
+        }
+        sario.save_vrt_metadata(vrt_name, metadata_dict, metadata_domain=None)
 
 
 @cli.command("looked-dem")
