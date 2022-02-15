@@ -22,9 +22,10 @@ def stitch_same_dates(
     This seems to work better for some descending path examples.
     """
     grouped_geos = group_geos_by_date(geo_path, reverse=reverse)
+    stitched_acq_times = {}
 
     for _, slclist in grouped_geos:
-        stitch_geos(
+        stitched_name = stitch_geos(
             slclist,
             reverse,
             output_path,
@@ -32,7 +33,12 @@ def stitch_same_dates(
             verbose=verbose,
         )
 
-    return grouped_geos
+        # Keep track of the acquisition datetimes for each stitched file
+        start_time = slclist[0].start_time
+        end_time = slclist[-1].end_time
+        stitched_acq_times[stitched_name] = (start_time, end_time)
+
+    return stitched_acq_times
 
 
 def group_geos_by_date(geo_path, reverse=True, ext=".geo"):
@@ -114,7 +120,7 @@ def stitch_geos(slclist, reverse, output_path, overwrite=False, verbose=True):
             os.remove(new_name)
         else:
             print(" %s exists, not overwriting. skipping" % new_name)
-            return
+            return new_name
 
     # TODO: load as blocks, not all at once
     # stitched_img = combine_complex([sario.load(g.filename) for g in slclist])
@@ -124,6 +130,7 @@ def stitch_geos(slclist, reverse, output_path, overwrite=False, verbose=True):
     # Remove any file with same name before saving
     # This prevents symlink overwriting old files
     sario.save(new_name, stitched_img)
+    return new_name
 
 
 def combine_complex(img_list, verbose=True):

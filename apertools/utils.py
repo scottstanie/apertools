@@ -163,6 +163,21 @@ def take_looks_rsc(rsc_data, row_looks, col_looks):
     return out_rsc
 
 
+def moving_window_std(image, size):
+    # https://stackoverflow.com/a/25912169/4174466
+    from scipy.signal import convolve2d
+
+    im = np.array(image, dtype=float)
+    im2 = im ** 2
+    ones = np.ones(im.shape)
+
+    kernel = np.ones((size, size))
+    s = convolve2d(im, kernel, mode="same")
+    s2 = convolve2d(im2, kernel, mode="same")
+    ns = convolve2d(ones, kernel, mode="same")
+    return np.sqrt((s2 - (s ** 2 / ns)) / ns)
+
+
 def get_looks_rdr(filename: str):
     """Get the row/col looks of a radar coordinates file from the transform"""
     import rasterio as rio

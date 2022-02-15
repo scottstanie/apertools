@@ -307,3 +307,23 @@ def fill_cvx(img, mask, max_iters=1500):
     prob.solve(verbose=True, solver=cp.SCS, max_iters=max_iters)
     print("optimal objective value: {}".format(obj.value))
     return prob, U
+
+
+def phase_residue(ifg, window_size=11):
+    """Calculate the phase residue of an interferogram
+
+    Args:
+        ifg (np.ndarray): 2D array of interferogram values
+        window_size (int, optional): size of the window to use for phase residue
+            calculation. Defaults to 11.
+
+    Returns:
+        np.ndarray: 2D array of phase residue values
+    """
+    from scipy import ndimage
+
+    input_ = np.fft.fft2(ifg)
+    result = ndimage.fourier_uniform(input_, window_size)
+    ifg_filtered = np.fft.ifft2(result).real
+    # Calculate the phase residue
+    return ifg * np.conj(ifg_filtered) / (1e-6 + np.abs(ifg_filtered))
