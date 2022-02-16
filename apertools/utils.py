@@ -953,6 +953,7 @@ def az_inc_to_enu(
         logger.info(cmd)
         subprocess.run(cmd, check=True, shell=True)
         os.rename(temp_enu, outfile)
+    return outfile
 
 
 def enu_to_az_inc(infile, outfile="los_az_inc.tif"):
@@ -984,6 +985,7 @@ def enu_to_az_inc(infile, outfile="los_az_inc.tif"):
     cmd = f"gdal_merge.py -separate -o {outfile} {tmp_inc} {tmp_az} "
     subprocess.run(cmd, check=True, shell=True)
     subprocess.run(f"rm -f {tmp_inc} {tmp_az}", shell=True, check=True)
+    return outfile
 
 
 def enu_to_az_inc_array(los_enu, to_deg=True):

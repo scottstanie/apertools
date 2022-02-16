@@ -9,7 +9,7 @@ import os
 import numpy as np
 
 from apertools import parsers, sario
-from apertools.utils import filter_min_max_date, rewrap_to_2pi
+from apertools.utils import rewrap_to_2pi
 
 
 def stitch_same_dates(
@@ -65,7 +65,7 @@ def group_geos_by_date(geo_path, reverse=True, ext=".geo"):
     ]
     # Find the dates that have multiple frames/.geos
     date_counts = collections.Counter([g.date for g in geos])
-    dates_duped = set([date for date, count in date_counts.items() if count > 1])
+    dates_duped = set([date for date, count in date_counts.items()])
 
     double_geo_files = sorted(
         (g for g in geos if g.date in dates_duped),
@@ -111,6 +111,11 @@ def stitch_geos(slclist, reverse, output_path, overwrite=False, verbose=True):
     g = slclist[0]
     new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
     new_name = os.path.join(output_path, new_name)
+
+    if len(slclist) == 1:
+        print("Only one image, no stitching needed")
+        return new_name
+
     if os.path.exists(new_name):
         if os.path.islink(new_name):
             print("Removing symlink %s" % new_name)

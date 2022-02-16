@@ -16,6 +16,7 @@ import rasterio as rio
 from pathlib import Path
 
 from apertools import sario, latlon, utils
+from apertools.log import logger
 
 
 def get_cli_args():
@@ -76,11 +77,15 @@ def get_cli_args():
 def run_raider(dates, time, dem_file, los_file, lat_file, lon_file, model="GMAO", out_dir="./raider"):
     for date in dates:
         cmd = (
-            f"raiderDelay.py --model {model}  --time {time} --lineofsight {los_file}"
+            f"raiderDelay.py --model {model}  --time {time} --lineofsight {los_file} "
             f"-d {dem_file} --latlon {lat_file} {lon_file} --out {out_dir} --date {date}"
         )
-        print(cmd)
-        subprocess.check_call(cmd, shell=True)
+        logger.info(cmd)
+        try:
+            subprocess.check_call(cmd, shell=True)
+        except subprocess.CalledProcessError:
+            logger.error(f"Raider failed for {date}", exc_info=True)
+            continue
 
 
 def make_latlon_vrts(
@@ -100,7 +105,7 @@ if __name__ == "__main__":
 
     rsc_file = f"{args.dem_file}.rsc"
     los_az_inc_file = utils.enu_to_az_inc(args.los_enu_file)
-    lat, lon = latlon.grid(**sario.load(rsc_file))
+    lon, lat = latlon.grid(**sario.load(rsc_file))
     slc_list = Path(args.slc_vrt_dir).glob(args.slc_vrt_glob)
 
     dates = []
@@ -109,14 +114,14 @@ if __name__ == "__main__":
             try:
                 dt = datetime.datetime.fromisoformat(src.tags()["acquisition_datetime"])
             except:
-                print(f"{f} does not have acquisition_datetime tag. Skipping")
+                logger.info(f"{f} does not have acquisition_datetime tag. Skipping")
                 continue
             time = dt.strftime("%H:%M:%S")
             # Out[28]: '00:59:12'
             dates.append(dt.strftime("%Y%m%d"))
 
     lat_file, lon_file = make_latlon_vrts(lat, lon, rsc_file)
-    print(f"Running raider for {len(dates)} dates")
+    logger.info(f"Running raider for {len(dates)} dates")
 
     run_raider(
         dates,

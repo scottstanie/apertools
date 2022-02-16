@@ -491,7 +491,7 @@ def overlaps(sentinel_path, filename, path_num, start_date, end_date):
     "-b",
     type=int,
     multiple=True,
-    default=[1],
+    default=[0],
     help="Specify which bands within file to include in VRT",
 )
 @click.option(
