@@ -47,7 +47,7 @@ def remove_ramp(
     return (z - z_fit).astype(dtype)
 
 
-def estimate_ramp(z, deramp_order, dem=None):
+def estimate_ramp(z, deramp_order, dem=None, save_coeffs=False):
     """Takes a 2D array an fits a linear plane to the data
 
     Ignores pixels that have nan values
@@ -59,9 +59,12 @@ def estimate_ramp(z, deramp_order, dem=None):
         dem (ndarray): 2D array, heights of DEM, same shape as z
             Used remove a linear elevation-phase trend.
             if None, will ignore and not remove trend.
+        save_coeffs (bool): Default False. If True, returns the coefficients of the fit
+            in addition to the fit.
 
     Returns:
         ndarray: the estimated polynomial fit for `z`
+            If `save_coeffs` is True, returns a tuple of (fit, coeffs)
 
     Notes:
         for deramp_order = 1, and `dem=None`, fit uses 3 cofficients, a, b, c:
@@ -115,6 +118,7 @@ def estimate_ramp(z, deramp_order, dem=None):
         # We want full blocks, as opposed to matrix_index flattened
         y_block, x_block = matrix_indices(z.shape, flatten=False)
         z_fit = a * x_block + b * y_block + c + k * dem
+        # coeffs =
 
     # TODO: ever want dem + 2nd order? seems like a lot
     elif deramp_order == 2:
@@ -127,7 +131,7 @@ def estimate_ramp(z, deramp_order, dem=None):
         idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx ** 2, yy ** 2]
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
 
-    return z_fit
+    return z_fit if not save_coeffs else z_fit, coeffs
 
 
 def matrix_indices(shape, flatten=True):
