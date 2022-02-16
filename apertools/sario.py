@@ -1398,7 +1398,7 @@ def save_vrt(
     rsc_file=None,
     rsc_data=None,
     interleave=None,
-    bands=[1],
+    bands=None,
     num_bands=None,
     relative=True,
     metadata_dict=None,
@@ -1535,6 +1535,7 @@ def save_vrt(
             f"LineOffset={line_offset}",
             # 'ByteOrder=LSB'
         ]
+        # print(options)
         # print("gdal dtype", gdal_dtype, dtype)
         out_raster.AddBand(gdal_dtype, options)
 
@@ -1687,7 +1688,7 @@ def get_offsets(dtype, interleave, band, width, length, num_bands=1):
     # In this single-band case, all choices are the same
     if band == 0 and num_bands == 1:
         return (
-            width * bytes_per_pix,  # ImageOffset
+            0,  # ImageOffset
             bytes_per_pix,  # PixelOffset
             width * bytes_per_pix,  # LineOffset
         )
