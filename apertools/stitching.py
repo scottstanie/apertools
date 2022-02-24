@@ -13,7 +13,7 @@ from apertools.utils import rewrap_to_2pi
 
 
 def stitch_same_dates(
-    geo_path=".", output_path=".", reverse=True, overwrite=False, verbose=True
+    geo_path=".", output_path=".", reverse=True, overwrite=False, ext=".geo", dry_run=False, verbose=True, 
 ):
     """Combines .geo files of the same date in one directory
 
@@ -21,7 +21,7 @@ def stitch_same_dates(
     If reverse=True, then the later geo is used in the overlapping strip.
     This seems to work better for some descending path examples.
     """
-    grouped_geos = group_geos_by_date(geo_path, reverse=reverse)
+    grouped_geos = group_geos_by_date(geo_path, reverse=reverse, ext=ext)
     stitched_acq_times = {}
 
     for _, slclist in grouped_geos:
@@ -29,6 +29,7 @@ def stitch_same_dates(
             slclist,
             reverse,
             output_path,
+            dry_run=dry_run,
             overwrite=overwrite,
             verbose=verbose,
         )
@@ -100,7 +101,7 @@ def _make_groupby(slclist):
     ]
 
 
-def stitch_geos(slclist, reverse, output_path, overwrite=False, verbose=True):
+def stitch_geos(slclist, reverse, output_path, overwrite=False, dry_run=False, verbose=True):
     """Combines multiple .geo files of the same date into one image"""
     if verbose:
         print("Stitching geos for %s" % slclist[0].date)
@@ -111,6 +112,8 @@ def stitch_geos(slclist, reverse, output_path, overwrite=False, verbose=True):
     g = slclist[0]
     new_name = "{}_{}.geo".format(g.mission, g.date.strftime("%Y%m%d"))
     new_name = os.path.join(output_path, new_name)
+    if dry_run:
+        return new_name
 
     if len(slclist) == 1:
         print("Only one image, no stitching needed")

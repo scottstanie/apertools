@@ -266,7 +266,7 @@ def load(
         raise NotImplementedError(f"platform choices are {PLATFORMS}")
 
     if not ann_info and not rsc_data:
-        raise ValueError("Need .rsc file or .ann file to load")
+        raise ValueError(f"Need .rsc file or .ann file to load for {filename}")
 
     if ext in BOOL_EXTS:
         return _take_looks(

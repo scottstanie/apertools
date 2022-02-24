@@ -638,15 +638,19 @@ def smallslc(
 @cli.command("save-acq-times")
 @click.argument("safe_path")
 @click.argument("vrt_path")
-def save_acq_times(safe_path, vrt_path="."):
+@click.option("--ext", default=".SAFE")
+def save_acq_times(safe_path, vrt_path=".", ext=".SAFE"):
     """Save acquisition times from .SAFE files to existing VRTs"""
     from apertools import stitching, sario
 
     stitched_acq_times = stitching.stitch_same_dates(
-        safe_path, output_path=vrt_path, overwrite=False
+        safe_path, output_path=vrt_path, overwrite=False, ext=ext, dry_run=True,
     )
     for f in stitched_acq_times:
         vrt_name = f + ".vrt"
+        if not os.path.exists(f):
+            logger.warning(f"{f} does not exist. skipping")
+            continue
         metadata_dict = {
             "acquisition_datetime": stitched_acq_times[f][0],
             "acquisition_datetime_stop": stitched_acq_times[f][1],
