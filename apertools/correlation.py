@@ -3,15 +3,19 @@
 from datetime import datetime
 import itertools
 import numpy as np
-
-from scipy import linalg
-import xarray as xr
-import h5py
-import apertools.sario as sario
-import apertools.utils as utils
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 
+from scipy import linalg
+import xarray as xr
+from pandas import to_datetime
+
+import h5py
+import apertools.sario as sario
+import apertools.utils as utils
+from apertools.log import get_log
+
+logger = get_log()
 
 # TODO: lat, lon...
 def create_cor_matrix(
@@ -29,8 +33,10 @@ def create_cor_matrix(
     max_temporal_baseline=None,
     upper_triangle=False,
 ):
-    with xr.open_dataset(cor_filename, engine="h5netcdf") as ds_cor, xr.open_dataset(
-        ifg_filename, engine="h5netcdf"
+    with xr.open_dataset(
+        cor_filename, engine="h5netcdf", phony_dims="sort"
+    ) as ds_cor, xr.open_dataset(
+        ifg_filename, engine="h5netcdf", phony_dims="sort"
     ) as ds_ifg:
         if row_col is not None:
             row, col = row_col
@@ -338,34 +344,39 @@ import pymp
 def solve_cor_eigval(
     cor_filename="cor_stack.h5",
     ifg_filename="ifg_stack.h5",
-    fill_val=0.0,
     dset="stack",
     min_date=datetime(2014, 1, 1),
     max_date=datetime(2022, 1, 1),
     slclist_ignore_file="slclist_ignore.txt",
     ministack_size=10,
-    max_bandwidth=None,
-    max_temporal_baseline=None,
-    n_jobs=5,
+    n_jobs=20,
 ):
 
     slclist_full, ifglist_full = sario.load_slclist_ifglist(h5file=cor_filename)
+    # First ignore all ones that have bad data
+    slclist2, _, _ = utils.filter_slclist_ifglist(
+        ifg_date_list=ifglist_full,
+        min_date=min_date,
+        max_date=max_date,
+        slclist_ignore_file=slclist_ignore_file,
+    )
+    # Then use this smaller list to get start/end dates
     # slclist_chunks, ifglist_chunks, valid_idx_chunks = [], [], []
     for min_date, max_date in zip(
-        slclist_full[::ministack_size], slclist_full[ministack_size::ministack_size]
+        slclist2[::ministack_size], slclist2[ministack_size::ministack_size]
     ):
         slclist, ifglist, valid_idxs = utils.filter_slclist_ifglist(
             ifg_date_list=ifglist_full,
             min_date=min_date,
             max_date=max_date,
             slclist_ignore_file=slclist_ignore_file,
-            max_bandwidth=max_bandwidth,
-            max_temporal_baseline=max_temporal_baseline,
         )
+        ngeos = len(slclist)
         # slclist_chunks.append(slclist)
         # ifglist_chunks.append(ifglist)
         # valid_idx_chunks.append(valid_idxs)
 
+        logger.info(f"Loading {len(ifglist)} ifgs from {ngeos} SLCs, {min_date} through {max_date}")
         with h5py.File(cor_filename) as hf_cor, h5py.File(ifg_filename) as hf_ifg:
             cor_stack = hf_cor[dset][valid_idxs, :, :]
             ifg_stack = hf_ifg[dset][valid_idxs, :, :]
@@ -377,38 +388,41 @@ def solve_cor_eigval(
         cor_stack_cols = cor_stack.reshape((ns, -1))
         ifg_stack_cols = ifg_stack.reshape((ns, -1))
 
-        out_cols = np.zeros((ministack_size, nrows * ncols), dtype=np.complex64)
-        out_lambdas = np.zeros((ministack_size,), dtype=np.complex64)
+        logger.info(f"Looping over {nrows * ncols} pixels with {n_jobs} processes")
+        out_cols = np.zeros((ngeos, nrows * ncols), dtype=np.complex64)
+        out_lambdas = np.zeros(nrows * ncols, dtype=np.float32)
         # for index in range(0, out_cols.shape[1]):
-        for index in range(500):
-            # out_cols = pymp.shared.array((ministack_size, nrows * ncols), dtype=ifg_stack.dtype)
-            # with pymp.Parallel(n_jobs) as p:
-            # for index in p.range(0, cor_stack_cols.shape[1]):
-            cor_values = cor_stack_cols[:, index]
-            ifg_values = ifg_stack_cols[:, index]
-            lambda1, v1 = form_cor_matrix(
-                slclist,
-                ifglist,
-                cor_values,
-                ifg_values,
-                fill_val=fill_val,
-            )
-            out_cols[:, index] = v1
-            out_lambdas[index] = lambda1
+        # for index in range(500):
+        out_cols = pymp.shared.array((ngeos, nrows * ncols), dtype=np.complex64)
+        with pymp.Parallel(n_jobs) as p:
+            for index in p.range(0, cor_stack_cols.shape[1]):
+                cor_values = cor_stack_cols[:, index]
+                ifg_values = ifg_stack_cols[:, index]
+                lambda1, v1 = form_cor_matrix(
+                    slclist,
+                    ifglist,
+                    cor_values,
+                    ifg_values,
+                    fill_val=0,
+                )
+                out_cols[:, index] = v1.ravel()
+                # Normalize by number of days (which is the max possible eigenvalue)
+                out_lambdas[index] = lambda1 / ngeos
 
-        out_stack = out_cols.reshape((ministack_size, nrows, ncols))
         out_xr = utils.stack_to_xr(
-            out_stack,
+            out_cols.reshape((ngeos, nrows, ncols)),
             x_coords=lons,
             y_coords=lats,
-            z_coords=slclist,
+            z_coords=to_datetime(slclist),
             dims=["date", "lat", "lon"],
-        )
+        ).to_dataset(name="evd_stack")
+        out_xr["lambda_max"] = (("lat", "lon"), out_lambdas.reshape((nrows, ncols)))
+        
         out_name = (
-            f"evd_stack_{min_date.strftime('%Y%m%d')}_{max_date.strftime('%Y%m%d')}"
+            f"evd_stack_{min_date.strftime('%Y%m%d')}_{max_date.strftime('%Y%m%d')}.nc"
         )
-        out_xr.to_dataset(name="evd_stack").to_netcdf(out_name)
-        break
+        logger.info(f"Saving {out_name}")
+        out_xr.to_netcdf(out_name, engine="h5netcdf")
 
 
 def form_cor_matrix(
@@ -418,6 +432,9 @@ def form_cor_matrix(
     ifg_values,
     fill_val=0.0,
 ):
+    if np.sum(ifg_values) == 0 or np.any(np.isnan(cor_values)) or np.any(np.isnan(ifg_values)):
+        return 0.0, np.zeros(len(slclist), dtype=np.complex64)
+
     full_igram_list = np.array(utils.full_igram_list(slclist))
     valid_idxs = np.searchsorted(
         sario.ifglist_to_filenames(full_igram_list),
@@ -437,6 +454,9 @@ def form_cor_matrix(
 
     rows, cols = np.triu_indices(ngeos, k=1)
     out[rows, cols] = full_cor_values
+    out = out + out.conj().T
+    out[rdiag, cdiag] = 1
 
-    lambda1, v1 = linalg.eigh(out, subset_by_index=[ngeos - 1, ngeos - 1], lower=False)
+    lambda1, v1 = linalg.eigh(out, subset_by_index=[ngeos - 1, ngeos - 1])
+    # breakpoint()
     return lambda1, v1

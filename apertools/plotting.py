@@ -116,6 +116,7 @@ def plot_ifg(
     subplot_layout=None,
     figsize=None,
     zero_mean_phase=False,
+    log_amp=True,
     **kwargs,
 ):
     ifg = np.nan_to_num(ifg, copy=True, nan=0)
@@ -131,8 +132,11 @@ def plot_ifg(
     # mag = scale_mag(ifg)
     mag = np.abs(ifg)
     ax = axes[0]
-    # Note: this PowerNorm does the same thing as my "scale_mag", but lets you see the actual values
-    norm = mpl.colors.PowerNorm(gamma=expval, vmax=np.percentile(mag, 99.5))
+    if log_amp:
+        # Note: this PowerNorm does the same thing as my "scale_mag", but lets you see the actual values
+        norm = mpl.colors.PowerNorm(gamma=expval, vmax=np.percentile(mag, 99.5))
+    else:
+        norm = None
     axim = ax.imshow(mag, norm=norm, cmap=mag_cmap)
     fig.colorbar(axim, ax=ax, extend="max")
 
