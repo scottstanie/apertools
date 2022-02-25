@@ -1985,6 +1985,18 @@ def save_xr_tif(
 
 
 def load_xr_tifs(tif_glob, rename_to_latlon=True):
+    """Load a bunch of GeoTIFFs into an xarray dataarray
+
+    Assumes the filenames have `YYYYmmdd` date string somewhere in the name,
+    which will be extracted for the "date" coordinate.
+
+    Args:
+        tif_glob (str): glob matching filenames to load into data cube
+        rename_to_latlon (bool, optional): Convert the x/y coords into lon/lat. Defaults to True.
+
+    Returns:
+        xr.Dataset: 3D dataset from stacked tif files
+    """
     import xarray as xr
     import pandas as pd
     import re

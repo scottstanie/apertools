@@ -731,9 +731,30 @@ def interpolate_xr(
     return out
 
 
+def stack_to_xr(
+    data,
+    x_coords=None,
+    y_coords=None,
+    z_coords=None,
+    dims=["z", "y", "x"],
+    name="stack",
+):
+    import xarray as xr
+
+    if x_coords is None:
+        x_coords = np.arange(data.shape[-1])
+    if y_coords is None:
+        y_coords = np.arange(data.shape[-2])
+    if z_coords is None:
+        z_coords = np.arange(data.shape[-3])
+    return xr.DataArray(
+        data=data, coords=[z_coords, y_coords, x_coords], dims=dims, name=name
+    )
+
+
 # Randoms using the sentinelapi
 def find_slc_products(api, gj_obj, date_start, date_end, area_relation="contains"):
-    """Query for Sentinel 1 SCL products with common options
+    """Query for Sentinel 1 SLC products with common options
 
     from sentinelsat import SentinelAPI, read_geojson, geojson_to_wkt
     api = api = SentinelAPI(user, pw)

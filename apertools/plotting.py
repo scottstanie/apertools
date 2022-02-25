@@ -311,11 +311,11 @@ def hvplot_stack(
     import panel as pn
     import holoviews as hv
 
-    def get_timeseries(x, y):
-        return da.sel(lon=x, lat=y, method="nearest").hvplot(z)
+    def get_timeseries(xc, yc):
+        return da.sel(indexers={x: xc, y: yc}, method="nearest").hvplot(z)
 
     # pn.extension()
-    vmin, vmax = _get_vminmax(da[-1], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
+    vmin, vmax = _get_vminmax(da, vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
 
     image, select = da.hvplot(
         x,
@@ -330,7 +330,7 @@ def hvplot_stack(
     stream = hv.streams.Tap(source=image.object, x=da[x][0].item(), y=da[y][0].item())
 
     return pn.Column(
-        image, select, pn.bind(get_timeseries, x=stream.param.x, y=stream.param.y)
+        image, select, pn.bind(get_timeseries, xc=stream.param.x, yc=stream.param.y)
     )
 
 
