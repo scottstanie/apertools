@@ -3,7 +3,10 @@
 from datetime import datetime
 import itertools
 import numpy as np
+
+from scipy import linalg
 import xarray as xr
+import h5py
 import apertools.sario as sario
 import apertools.utils as utils
 import matplotlib.dates as mdates
@@ -327,3 +330,113 @@ def phase_residue(ifg, window_size=11):
     ifg_filtered = np.fft.ifft2(result).real
     # Calculate the phase residue
     return ifg * np.conj(ifg_filtered) / (1e-6 + np.abs(ifg_filtered))
+
+
+import pymp
+
+
+def solve_cor_eigval(
+    cor_filename="cor_stack.h5",
+    ifg_filename="ifg_stack.h5",
+    fill_val=0.0,
+    dset="stack",
+    min_date=datetime(2014, 1, 1),
+    max_date=datetime(2022, 1, 1),
+    slclist_ignore_file="slclist_ignore.txt",
+    ministack_size=10,
+    max_bandwidth=None,
+    max_temporal_baseline=None,
+    n_jobs=5,
+):
+
+    slclist_full, ifglist_full = sario.load_slclist_ifglist(h5file=cor_filename)
+    # slclist_chunks, ifglist_chunks, valid_idx_chunks = [], [], []
+    for min_date, max_date in zip(
+        slclist_full[::ministack_size], slclist_full[ministack_size::ministack_size]
+    ):
+        slclist, ifglist, valid_idxs = utils.filter_slclist_ifglist(
+            ifg_date_list=ifglist_full,
+            min_date=min_date,
+            max_date=max_date,
+            slclist_ignore_file=slclist_ignore_file,
+            max_bandwidth=max_bandwidth,
+            max_temporal_baseline=max_temporal_baseline,
+        )
+        # slclist_chunks.append(slclist)
+        # ifglist_chunks.append(ifglist)
+        # valid_idx_chunks.append(valid_idxs)
+
+        with h5py.File(cor_filename) as hf_cor, h5py.File(ifg_filename) as hf_ifg:
+            cor_stack = hf_cor[dset][valid_idxs, :, :]
+            ifg_stack = hf_ifg[dset][valid_idxs, :, :]
+            lats = hf_ifg["lat"][()]
+            lons = hf_ifg["lon"][()]
+
+        ns, nrows, ncols = cor_stack.shape
+        # Make each depth-wise pixel into a column (so there's only 1 OMP loop)
+        cor_stack_cols = cor_stack.reshape((ns, -1))
+        ifg_stack_cols = ifg_stack.reshape((ns, -1))
+
+        out_cols = np.zeros((ministack_size, nrows * ncols), dtype=np.complex64)
+        out_lambdas = np.zeros((ministack_size,), dtype=np.complex64)
+        # for index in range(0, out_cols.shape[1]):
+        for index in range(500):
+            # out_cols = pymp.shared.array((ministack_size, nrows * ncols), dtype=ifg_stack.dtype)
+            # with pymp.Parallel(n_jobs) as p:
+            # for index in p.range(0, cor_stack_cols.shape[1]):
+            cor_values = cor_stack_cols[:, index]
+            ifg_values = ifg_stack_cols[:, index]
+            lambda1, v1 = form_cor_matrix(
+                slclist,
+                ifglist,
+                cor_values,
+                ifg_values,
+                fill_val=fill_val,
+            )
+            out_cols[:, index] = v1
+            out_lambdas[index] = lambda1
+
+        out_stack = out_cols.reshape((ministack_size, nrows, ncols))
+        out_xr = utils.stack_to_xr(
+            out_stack,
+            x_coords=lons,
+            y_coords=lats,
+            z_coords=slclist,
+            dims=["date", "lat", "lon"],
+        )
+        out_name = (
+            f"evd_stack_{min_date.strftime('%Y%m%d')}_{max_date.strftime('%Y%m%d')}"
+        )
+        out_xr.to_dataset(name="evd_stack").to_netcdf(out_name)
+        break
+
+
+def form_cor_matrix(
+    slclist,
+    ifglist,
+    cor_values,
+    ifg_values,
+    fill_val=0.0,
+):
+    full_igram_list = np.array(utils.full_igram_list(slclist))
+    valid_idxs = np.searchsorted(
+        sario.ifglist_to_filenames(full_igram_list),
+        sario.ifglist_to_filenames(ifglist),
+    )
+
+    full_cor_values = fill_val * np.ones((len(full_igram_list),), dtype=np.complex64)
+    full_cor_values[valid_idxs] = cor_values * np.exp(1j * np.angle(ifg_values))
+
+    # Now arange into a matrix: fill the upper triangle
+    ngeos = len(slclist)
+    out = np.full((ngeos, ngeos), fill_val, dtype=np.complex64)
+
+    # Diagonal is always 1
+    rdiag, cdiag = np.diag_indices(ngeos)
+    out[rdiag, cdiag] = 1
+
+    rows, cols = np.triu_indices(ngeos, k=1)
+    out[rows, cols] = full_cor_values
+
+    lambda1, v1 = linalg.eigh(out, subset_by_index=[ngeos - 1, ngeos - 1], lower=False)
+    return lambda1, v1
