@@ -217,3 +217,36 @@ def demo_window(x, frac=2.0 / 3.0, min_x_weighted=None):
     # tricube weighting
     w = (1 - w ** 3) ** 3
     return w
+
+
+def demo_fit(x, y, w, i, delta=None):
+    if delta is None:
+        delta = np.ones(len(x))
+    weights = delta * w[:, i]
+    # Form the linear system as the reduced-size version of the Ax=b:
+    # A^T A x = A^T b
+    b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
+    A = np.array(
+        [
+            [np.sum(weights), np.sum(weights * x)],
+            [np.sum(weights * x), np.sum(weights * x * x)],
+        ]
+    )
+
+    beta = np.linalg.lstsq(A, b)[0]
+    return beta
+
+
+def demo_residual(x, y, w, i, delta=None):
+    if delta is None:
+        delta = np.ones(len(x))
+    beta = demo_fit(x, y, w, i, delta=delta)
+    yest = beta[0] + beta[1] * x[i]
+    residuals = y - yest
+    s = np.median(np.abs(residuals))
+    if s < 1e-3:
+        return np.ones_like(x)
+    # delta = np.clip(residuals / (6.0 * s), -1.0, 1.0)
+    delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
+    delta = (1 - delta ** 2) ** 2
+    return delta
