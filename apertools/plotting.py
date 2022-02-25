@@ -32,14 +32,14 @@ class DateSlider(Slider):
             return mdates.num2date(val).strftime("%Y-%m-%d")
 
 
-def get_style(size=15, grid_on=False, cmap="viridis"):
+def get_style(size=15, grid_on=False, cmap="viridis", weight="bold"):
     style_dict = {
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
         # "font.family": "Helvetica",
         "font.family": "sans-serif",
         "font.size": size,
-        "font.weight": "bold",
+        "font.weight": weight,
         "legend.fontsize": "large",
         "axes.labelsize": size,
         "axes.titlesize": size,
@@ -51,10 +51,10 @@ def get_style(size=15, grid_on=False, cmap="viridis"):
     return style_dict
 
 
-def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis"):
+def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis", weight="bold"):
     style = ["science", "no-latex"] if nolatex else "science"
     plt.style.use(style)
-    style_dict = get_style(size, grid_on=grid_on, cmap=cmap)
+    style_dict = get_style(size, grid_on=grid_on, cmap=cmap, weight=weight)
     plt.rcParams.update(style_dict)
     try:
         import xarray as xr
@@ -707,7 +707,9 @@ def plot_img_diff(
     ncols = n + 1 if show_diff else n
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(1, ncols, sharex=share, sharey=share, figsize=figsize, squeeze=False)
+    fig, axes = plt.subplots(
+        1, ncols, sharex=share, sharey=share, figsize=figsize, squeeze=False
+    )
     axes = axes.ravel()
     # fig, axes = pplt.subplots(ncols=ncols, sharex=share, sharey=share, figsize=figsize)
     for ii in range(n):
