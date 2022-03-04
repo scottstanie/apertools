@@ -22,7 +22,7 @@ from matplotlib.dates import date2num
 import pymp
 
 
-def lowess_stack(stack, x, frac=2.0 / 3.0, min_x_weighted=None, n_iter=2, n_jobs=-1):
+def lowess_stack(stack, x, frac=0.4, min_x_weighted=None, n_iter=2, n_jobs=-1):
     """Smooth a stack of images using linear lowess.
 
     When n_iter > 1, will rerun each regression, reweighting by residuals
@@ -74,7 +74,7 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, min_x_weighted=None, n_iter=2, n_jobs
 
 
 @njit(cache=True, nogil=True)
-def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
+def lowess_pixel(y, x, frac=0.4, n_iter=2):
     """Run LOWESS smoothing on a single pixel.
 
     Note that lowess smoother requiring native endian datatype (for numba).
@@ -173,7 +173,10 @@ def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=
         frac = _find_frac(x, min_days_weighted)
     out_stack = lowess_stack(da.values, x, frac, n_iter)
     # Now return as a DataArray
-    return xr.DataArray(out_stack, coords=da.coords, dims=da.dims)
+    out_da = xr.DataArray(out_stack, coords=da.coords, dims=da.dims)
+    out_da.attrs["description"] = "Bootstrap mean of lowess smoothed stack"
+
+    out_da = _write_attrs(out_da, frac=frac, n_iter=n_iter)
 
 
 def _find_frac(x, min_x_weighted):
@@ -214,7 +217,7 @@ def _find_frac(x, min_x_weighted):
     # )
 
 
-def demo_window(x, frac=2.0 / 3.0, min_x_weighted=None):
+def demo_window(x, frac=0.4, min_x_weighted=None):
     if min_x_weighted:
         frac = _find_frac(x, min_x_weighted)
     n = len(x)
@@ -235,20 +238,22 @@ def demo_window(x, frac=2.0 / 3.0, min_x_weighted=None):
 
 
 @njit(cache=True, nogil=True)
-def bootstrap_mean_std(x, y, frac=0.3, n_iter=2, K=10, pct_bootstrap=1.0):
-    """Bootstrap mean and standard deviation of y given x
+def bootstrap_mean_std(x, y, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
+    """Bootstrap mean and standard deviation of y
 
     Args:
         x (ndarray): x values
         y (ndarray): y values
         frac (float, optional): fraction of data to use for lowess fit. Defaults to 0.3.
-        n_iter (int, optional): number of LOWESS iterations to run to exclude outliers. Defaults to 2.
-        K (int, optional): number of bootstrap samples to take. Defaults to 10.
-        pct_bootstrap (float, optional): fraction of data to use for bootstrapping. Defaults to 1.0.
+        n_iter (int, optional): number of LOWESS iterations to run to exclude outliers.
+            Defaults to 2.
+        K (int, optional): number of bootstrap samples to take. Defaults to 100.
+        pct_bootstrap (float, optional): fraction of data to use for bootstrapping.
+            Defaults to 1.0.
 
     Returns:
         tuple: (mean, std) calculated from the bootstrapped samples.
-        Shape of both `mean` and `std` are the same as `y`.
+        Shape of both `mean` and `std` are `len(y)`
 
     """
     bootstraps = bootstrap_lowess(
@@ -260,12 +265,12 @@ def bootstrap_mean_std(x, y, frac=0.3, n_iter=2, K=10, pct_bootstrap=1.0):
         pct_bootstrap=pct_bootstrap,
     )
     mean = np_nanmean(bootstraps, axis=0)
-    stderr = np_nanstd(bootstraps, axis=0)
-    return mean, stderr
+    std = np_nanstd(bootstraps, axis=0)
+    return mean, std
 
 
 @njit(cache=True, nogil=True)
-def bootstrap_lowess(x, y, frac=0.3, n_iter=2, K=10, pct_bootstrap=1.0):
+def bootstrap_lowess(x, y, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
     """Repeatedly run lowess on a pixel, bootstrapping the data
 
     Args:
@@ -273,7 +278,7 @@ def bootstrap_lowess(x, y, frac=0.3, n_iter=2, K=10, pct_bootstrap=1.0):
         y (ndarray): y values
         frac (float, optional): fraction of data to use for lowess fit. Defaults to 0.3.
         n_iter (int, optional): number of iterations to run lowess. Defaults to 2.
-        K (int, optional): number of bootstrap samples to take. Defaults to 10.
+        K (int, optional): number of bootstrap samples to take. Defaults to 100.
         pct_bootstrap (float, optional): fraction of data to use for bootstrapping. Defaults to 1.0.
 
     Returns:
@@ -296,21 +301,40 @@ def bootstrap_lowess(x, y, frac=0.3, n_iter=2, K=10, pct_bootstrap=1.0):
     return out
 
 
-def plot_bootstrap(x, y, frac=0.4, K=100, pct_bootstrap=1.0, xplot=None):
+def plot_bootstrap(
+    x=None,
+    y=None,
+    frac=None,
+    K=None,
+    pct_bootstrap=None,
+    xplot=None,
+    mean=None,
+    std=None,
+):
     import matplotlib.pyplot as plt
 
-    bootstraps = bootstrap_lowess(x, y, K=K, pct_bootstrap=pct_bootstrap, frac=frac)
-    mean = np.nanmean(bootstraps, axis=1)
-    # stderr = stats.sem(bootstraps, axis=1, nan_policy='omit')
-    stderr = np.nanstd(bootstraps, axis=1, ddof=0)
+    if mean is None or std is None:
+        if K is None:
+            K = 100
+        if pct_bootstrap is None:
+            pct_bootstrap = 1.0
+        if frac is None:
+            frac = 0.4
+        mean, std = bootstrap_mean_std(
+            x, y, K=K, pct_bootstrap=pct_bootstrap, frac=frac
+        )
+
     xplot = xplot if xplot is not None else x
+    if xplot is None:
+        xplot = np.arange(len(y))
+
     fig, ax = plt.subplots()
-    ax.fill_between(xplot, mean - 1.96 * stderr, mean + 1.96 * stderr, alpha=0.25)
-    # ax.plot(ts.date, bootstraps,  color='tomato', alpha=0.25)
+    ax.fill_between(xplot, mean - 1.96 * std, mean + 1.96 * std, alpha=0.25)
     ax.plot(xplot, mean, color="red")
-    ax.plot(xplot, y, ".-")
+    if y is not None:
+        ax.plot(xplot, y, ".-")
     ax.set_title(f"{frac = :.2f}, {K = }, {pct_bootstrap = :.2f}")
-    return bootstraps, ax
+    return fig, ax
 
 
 def demo_fit(x, y, w, i, delta=None):
@@ -384,3 +408,111 @@ def np_nanmean(array, axis):
 def np_nanstd(array, axis):
     """Same as np.nanstd, but with `axis` argument"""
     return np_apply_along_axis(np.nanstd, axis, array)
+
+
+# TODO: deduplicate this with the one in up top
+def bootstrap_lowess_xr(
+    da,
+    x_dset="date",
+    min_days_weighted=2 * 365.25,
+    frac=0.4,
+    n_iter=2,
+    n_jobs=-1,
+    K=100,
+    pct_bootstrap=1.0,
+):
+    """Get bootstrap estimates lowess mean and standard deviation of every pixel in a stack
+
+    Args:
+        da (xr.DataArray): 3D xarray containing data to be smoothed along dimension `x_dset`.
+        x_dset (str, optional): Name of the time dimension. Defaults to "date".
+        min_days_weighted (float, optional): Minimum time period of data to include in smoothing.
+            See notes. Defaults to 365.25*2 (2 years of data).
+        frac ([type], optional): fraction of data to use for each smoothing
+            Defaults to 2/3. Alternative to `min_days_weighted`.
+        n_iter (int, optional): Number of iterations to rerun fit after
+            reweighting by residuals.
+            Defaults to 2.
+        n_jobs (int, optional): Number of parallel processes to use.
+            Defaults to -1 (all CPU cores).
+        K (int, optional): Number of bootstrap samples to draw.
+            Defaults to 100.
+        pct_bootstrap (float, optional): Percent of data to use for bootstrap.
+            Defaults to 1.0.
+
+    Returns:
+        ndarray: stack smoothed with shape (ns, nrows, ncols), smoothed along
+            the first dimension.
+    """
+    import xarray as xr
+
+    x = date2num(da[x_dset].values)
+    stack = da.values
+    if min_days_weighted and min_days_weighted > 0:
+        frac = _find_frac(x, min_days_weighted)
+
+    if n_jobs < 0:
+        n_jobs = os.cpu_count()
+    if stack.ndim == 1:
+        stack = stack[:, np.newaxis, np.newaxis]
+    if stack.ndim != 3:
+        raise ValueError("stack must be 1D or 3D")
+
+    ns, nrows, ncols = stack.shape
+    # Make each depth-wise pixel into a column (so there's only 1 OMP loop)
+    stack_cols = stack.reshape((ns, -1))
+
+    if min_days_weighted:
+        frac = _find_frac(x, min_days_weighted)
+
+    # stack_out = np.zeros(stack_cols.shape, dtype=stack.dtype)
+    # for index in range(0, stack_cols.shape[1]):
+    stack_out_mean = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
+    stack_out_std = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
+    with pymp.Parallel(n_jobs) as p:
+        for index in p.range(0, stack_cols.shape[1]):
+            y = stack_cols[:, index]
+            mean, std = bootstrap_mean_std(
+                x, y, frac=frac, n_iter=n_iter, K=K, pct_bootstrap=pct_bootstrap
+            )
+            stack_out_mean[:, index] = mean
+            stack_out_std[:, index] = std
+
+    # return stack_out.reshape((ns, nrows, ncols))
+    # Now return as a DataArray
+    out_mean = xr.DataArray(stack_out_mean, coords=da.coords, dims=da.dims)
+    out_std = xr.DataArray(stack_out_std, coords=da.coords, dims=da.dims)
+    out_mean.attrs["description"] = "Bootstrap mean of lowess smoothed stack"
+    out_std.attrs[
+        "description"
+    ] = "Bootstrap standard deviation of lowess smoothed stack"
+
+    out_mean = _write_attrs(
+        out_mean, K=K, frac=frac, n_iter=n_iter, pct_bootstrap=pct_bootstrap
+    )
+    out_std = _write_attrs(
+        out_std, K=K, frac=frac, n_iter=n_iter, pct_bootstrap=pct_bootstrap
+    )
+    return out_mean, out_std
+
+
+def _write_attrs(da, K=None, n_iter=None, frac=None, pct_bootstrap=None):
+    """Write attributes to a DataArray"""
+    attr_names = []
+    attr_values = []
+    if K:
+        attr_names.append("bootstrap_replications")
+        attr_values.append(K)
+    if n_iter:
+        attr_names.append("lowess_iterations")
+        attr_values.append(n_iter)
+    if frac:
+        attr_names.append("lowess_fraction")
+        attr_values.append(frac)
+    if pct_bootstrap:
+        attr_names.append("pct_bootstrap")
+        attr_values.append(pct_bootstrap)
+
+    for attr_name, val in zip(attr_names, attr_values):
+        da.attrs[attr_name] = val
+    return da
