@@ -22,6 +22,11 @@ from matplotlib.dates import date2num
 import pymp
 
 
+from apertools.log import get_log, log_runtime
+
+logger = get_log()
+
+
 def lowess_stack(stack, x, frac=0.4, min_x_weighted=None, n_iter=2, n_jobs=-1):
     """Smooth a stack of images using linear lowess.
 
@@ -411,6 +416,7 @@ def np_nanstd(array, axis):
 
 
 # TODO: deduplicate this with the one in up top
+@log_runtime
 def bootstrap_lowess_xr(
     da,
     x_dset="date",
@@ -420,6 +426,8 @@ def bootstrap_lowess_xr(
     n_jobs=-1,
     K=100,
     pct_bootstrap=1.0,
+    out_fname=None,
+    out_dsets=["defo_lowess", "defo_lowess_std"],
 ):
     """Get bootstrap estimates lowess mean and standard deviation of every pixel in a stack
 
@@ -467,18 +475,20 @@ def bootstrap_lowess_xr(
 
     # stack_out = np.zeros(stack_cols.shape, dtype=stack.dtype)
     # for index in range(0, stack_cols.shape[1]):
-    stack_out_mean = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
-    stack_out_std = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
+    mean_cols = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
+    std_cols = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
     with pymp.Parallel(n_jobs) as p:
+        # for index in p.range(0, 3000):
         for index in p.range(0, stack_cols.shape[1]):
             y = stack_cols[:, index]
             mean, std = bootstrap_mean_std(
                 x, y, frac=frac, n_iter=n_iter, K=K, pct_bootstrap=pct_bootstrap
             )
-            stack_out_mean[:, index] = mean
-            stack_out_std[:, index] = std
+            mean_cols[:, index] = mean
+            std_cols[:, index] = std
 
-    # return stack_out.reshape((ns, nrows, ncols))
+    stack_out_mean = mean_cols.reshape((ns, nrows, ncols))
+    stack_out_std = std_cols.reshape((ns, nrows, ncols))
     # Now return as a DataArray
     out_mean = xr.DataArray(stack_out_mean, coords=da.coords, dims=da.dims)
     out_std = xr.DataArray(stack_out_std, coords=da.coords, dims=da.dims)
@@ -493,6 +503,13 @@ def bootstrap_lowess_xr(
     out_std = _write_attrs(
         out_std, K=K, frac=frac, n_iter=n_iter, pct_bootstrap=pct_bootstrap
     )
+
+    if out_fname:
+        mean_name, std_name = out_dsets
+        out_ds = out_mean.to_dataset(name=mean_name)
+        out_ds[std_name] = out_std
+        logger.info("Saving %s/%s and %s/%s", out_fname, mean_name, out_fname, std_name)
+        out_ds.to_netcdf(out_fname, mode="a", engine="h5netcdf")
     return out_mean, out_std
 
 
