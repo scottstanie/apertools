@@ -75,9 +75,24 @@ def lowess_stack(stack, x, frac=2.0 / 3.0, min_x_weighted=None, n_iter=2, n_jobs
 
 @njit(cache=True, nogil=True)
 def lowess_pixel(y, x, frac=2.0 / 3.0, n_iter=2):
-    """Lowess smoother requiring native endian datatype (for numba).
+    """Run LOWESS smoothing on a single pixel.
+
+    Note that lowess smoother requiring native endian datatype (for numba).
     Performs multiple iterations for robust fitting, downweighting
-    by the residuals of the previous fit."""
+    by the residuals of the previous fit.
+
+    Args:
+        y (ndarray): y values with shape (ns,)
+        x (ndarray): x values with shape (ns,)
+        frac ([type], optional): fraction of data to use for each smoothing
+            Defaults to 2/3.
+        n_iter (int, optional): Number of iterations to rerun fit after
+            reweighting by residuals.
+            Defaults to 2.
+
+    Returns:
+        ndarray: smoothed y values with shape (ns,)
+    """
     n = len(x)
     yest = np.zeros(n)
     if np.any(np.isnan(y)) or np.all(y == 0.0):
@@ -219,6 +234,85 @@ def demo_window(x, frac=2.0 / 3.0, min_x_weighted=None):
     return w
 
 
+@njit(cache=True, nogil=True)
+def bootstrap_mean_std(x, y, frac=0.3, n_iter=2, K=10, pct_bootstrap=1.0):
+    """Bootstrap mean and standard deviation of y given x
+
+    Args:
+        x (ndarray): x values
+        y (ndarray): y values
+        frac (float, optional): fraction of data to use for lowess fit. Defaults to 0.3.
+        n_iter (int, optional): number of LOWESS iterations to run to exclude outliers. Defaults to 2.
+        K (int, optional): number of bootstrap samples to take. Defaults to 10.
+        pct_bootstrap (float, optional): fraction of data to use for bootstrapping. Defaults to 1.0.
+
+    Returns:
+        tuple: (mean, std) calculated from the bootstrapped samples.
+        Shape of both `mean` and `std` are the same as `y`.
+
+    """
+    bootstraps = bootstrap_lowess(
+        x,
+        y,
+        frac=frac,
+        n_iter=n_iter,
+        K=K,
+        pct_bootstrap=pct_bootstrap,
+    )
+    mean = np_nanmean(bootstraps, axis=0)
+    stderr = np_nanstd(bootstraps, axis=0)
+    return mean, stderr
+
+
+@njit(cache=True, nogil=True)
+def bootstrap_lowess(x, y, frac=0.3, n_iter=2, K=10, pct_bootstrap=1.0):
+    """Repeatedly run lowess on a pixel, bootstrapping the data
+
+    Args:
+        x (ndarray): x values
+        y (ndarray): y values
+        frac (float, optional): fraction of data to use for lowess fit. Defaults to 0.3.
+        n_iter (int, optional): number of iterations to run lowess. Defaults to 2.
+        K (int, optional): number of bootstrap samples to take. Defaults to 10.
+        pct_bootstrap (float, optional): fraction of data to use for bootstrapping. Defaults to 1.0.
+
+    Returns:
+        ndarray: bootstrapped lowess fits. Shape is (K, len(x))
+    """
+    out = np.zeros((K, len(x)))
+
+    nboot = int(pct_bootstrap * len(x))
+
+    for k in range(K):
+        # Get a bootstrap sample
+        # Note that Numba does not allow RandomState to be passed
+        sample_idxs = np.random.choice(len(x), nboot, replace=True)
+        y_boot = y[sample_idxs]
+        x_boot = x[sample_idxs]
+
+        # Run lowess on the bootstrap sample
+        out[k, :] = lowess_pixel(y_boot, x_boot, frac=frac, n_iter=n_iter)
+
+    return out
+
+
+def plot_bootstrap(x, y, frac=0.4, K=100, pct_bootstrap=1.0, xplot=None):
+    import matplotlib.pyplot as plt
+
+    bootstraps = bootstrap_lowess(x, y, K=K, pct_bootstrap=pct_bootstrap, frac=frac)
+    mean = np.nanmean(bootstraps, axis=1)
+    # stderr = stats.sem(bootstraps, axis=1, nan_policy='omit')
+    stderr = np.nanstd(bootstraps, axis=1, ddof=0)
+    xplot = xplot if xplot is not None else x
+    fig, ax = plt.subplots()
+    ax.fill_between(xplot, mean - 1.96 * stderr, mean + 1.96 * stderr, alpha=0.25)
+    # ax.plot(ts.date, bootstraps,  color='tomato', alpha=0.25)
+    ax.plot(xplot, mean, color="red")
+    ax.plot(xplot, y, ".-")
+    ax.set_title(f"{frac = :.2f}, {K = }, {pct_bootstrap = :.2f}")
+    return bootstraps, ax
+
+
 def demo_fit(x, y, w, i, delta=None):
     if delta is None:
         delta = np.ones(len(x))
@@ -250,3 +344,43 @@ def demo_residual(x, y, w, i, delta=None):
     delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
     delta = (1 - delta ** 2) ** 2
     return delta
+
+
+@njit
+def np_apply_along_axis(func1d, axis, arr):
+    """Hack from https://github.com/numba/numba/issues/1269 to get around `axis` problem"""
+    assert arr.ndim == 2
+    assert axis in [0, 1]
+    if axis == 0:
+        result = np.empty(arr.shape[1])
+        for i in range(len(result)):
+            result[i] = func1d(arr[:, i])
+    else:
+        result = np.empty(arr.shape[0])
+        for i in range(len(result)):
+            result[i] = func1d(arr[i, :])
+    return result
+
+
+@njit
+def np_mean(array, axis):
+    """Same as np.mean, but with `axis` argument"""
+    return np_apply_along_axis(np.mean, axis, array)
+
+
+@njit
+def np_std(array, axis):
+    """Same as np.std, but with `axis` argument"""
+    return np_apply_along_axis(np.std, axis, array)
+
+
+@njit
+def np_nanmean(array, axis):
+    """Same as np.nanmean, but with `axis` argument"""
+    return np_apply_along_axis(np.nanmean, axis, array)
+
+
+@njit
+def np_nanstd(array, axis):
+    """Same as np.nanstd, but with `axis` argument"""
+    return np_apply_along_axis(np.nanstd, axis, array)
