@@ -79,7 +79,7 @@ def lowess_stack(stack, x, frac=0.4, min_x_weighted=None, n_iter=2, n_jobs=-1):
 
 
 @njit(cache=True, nogil=True)
-def lowess_pixel(y, x, frac=0.4, n_iter=2):
+def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False):
     """Run LOWESS smoothing on a single pixel.
 
     Note that lowess smoother requiring native endian datatype (for numba).
@@ -94,6 +94,8 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2):
         n_iter (int, optional): Number of iterations to rerun fit after
             reweighting by residuals.
             Defaults to 2.
+        do_sort (bool, optional): Sort x and y before running LOWESS.
+            Defaults to False.
 
     Returns:
         ndarray: smoothed y values with shape (ns,)
@@ -102,6 +104,12 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2):
     yest = np.zeros(n)
     if np.any(np.isnan(y)) or np.all(y == 0.0):
         return yest
+
+    if do_sort:
+        # Sort the x and y values
+        sort_idxs = np.argsort(x)
+        x = x[sort_idxs]
+        y = y[sort_idxs]
 
     r = int(np.ceil(frac * n))
     if r == n:
@@ -146,8 +154,6 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2):
 
     return yest
 
-    # """Run lowess on a DataArray stack"""
-
 
 def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=2):
     """Run lowess on a DataArray stack.
@@ -179,7 +185,7 @@ def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=
     out_stack = lowess_stack(da.values, x, frac, n_iter)
     # Now return as a DataArray
     out_da = xr.DataArray(out_stack, coords=da.coords, dims=da.dims)
-    out_da.attrs["description"] = "Bootstrap mean of lowess smoothed stack"
+    out_da.attrs["description"] = "Lowess smoothed stack"
 
     out_da = _write_attrs(out_da, frac=frac, n_iter=n_iter)
 
@@ -297,6 +303,8 @@ def bootstrap_lowess(x, y, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
         # Get a bootstrap sample
         # Note that Numba does not allow RandomState to be passed
         sample_idxs = np.random.choice(len(x), nboot, replace=True)
+        # Need sort, since they will be mixed up from the bootstrap sample
+        sample_idxs.sort()
         y_boot = y[sample_idxs]
         x_boot = x[sample_idxs]
 
@@ -338,7 +346,14 @@ def plot_bootstrap(
     ax.plot(xplot, mean, color="red")
     if y is not None:
         ax.plot(xplot, y, ".-")
-    ax.set_title(f"{frac = :.2f}, {K = }, {pct_bootstrap = :.2f}")
+    title = "Bootstrap mean and std "
+    if frac is not None:
+        title += f"frac={frac:.2f}"
+    if K is not None:
+        title += f" K={K}"
+    if pct_bootstrap is not None:
+        title += f" pct_bootstrap={pct_bootstrap:.2f}"
+    ax.set_title(title)
     return fig, ax
 
 
@@ -504,6 +519,9 @@ def bootstrap_lowess_xr(
         out_std, K=K, frac=frac, n_iter=n_iter, pct_bootstrap=pct_bootstrap
     )
 
+    # TODO: If there's an existing mean/std, update using
+    # https://math.stackexchange.com/questions/374881/recursive-formula-for-variance or 
+    # https://math.stackexchange.com/questions/20593/calculate-variance-from-a-stream-of-sample-values
     if out_fname:
         mean_name, std_name = out_dsets
         out_ds = out_mean.to_dataset(name=mean_name)
