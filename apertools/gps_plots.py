@@ -94,6 +94,9 @@ def plot_gps_enu(
     days_smooth=12,
     start_date=None,
     end_date=None,
+    figsize=None,
+    ylabel="[cm]",
+    title="",
 ):
     """Plot the east,north,up components of `station`"""
 
@@ -115,21 +118,21 @@ def plot_gps_enu(
     dts = enu_df.index
     (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
 
-    fig, axes = plt.subplots(3, 1)
+    fig, axes = plt.subplots(3, 1, figsize=figsize)
     axes[0].plot(dts, east_cm, "b.")
-    axes[0].set_ylabel("east (cm)")
+    axes[0].set_ylabel("East (cm)")
     axes[0].plot(dts, gps.moving_average(east_cm, days_smooth), "r-")
     axes[0].grid(True)
     remove_xticks(axes[0])
 
     axes[1].plot(dts, north_cm, "b.")
-    axes[1].set_ylabel("north (cm)")
+    axes[1].set_ylabel("North (cm)")
     axes[1].plot(dts, gps.moving_average(north_cm, days_smooth), "r-")
     axes[1].grid(True)
     remove_xticks(axes[1])
 
     axes[2].plot(dts, up_cm, "b.")
-    axes[2].set_ylabel("up (cm)")
+    axes[2].set_ylabel("Up (cm)")
     axes[2].plot(dts, gps.moving_average(up_cm, days_smooth), "r-")
     axes[2].grid(True)
     # remove_xticks(axes[2])

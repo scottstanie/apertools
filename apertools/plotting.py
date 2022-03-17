@@ -32,7 +32,7 @@ class DateSlider(Slider):
             return mdates.num2date(val).strftime("%Y-%m-%d")
 
 
-def get_style(size=15, grid_on=False, cmap="viridis", weight="bold"):
+def get_style(size=15, grid_on=False, cmap="viridis", weight="bold", minor_ticks=False):
     style_dict = {
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
@@ -47,14 +47,16 @@ def get_style(size=15, grid_on=False, cmap="viridis", weight="bold"):
         "ytick.labelsize": size * 0.75,
         "axes.grid": grid_on,
         "image.cmap": cmap,
+        "xtick.minor.visible": minor_ticks,
+        "ytick.minor.visible": minor_ticks,
     }
     return style_dict
 
 
-def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis", weight="bold"):
+def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis", weight="bold", minor_ticks=False):
     style = ["science", "no-latex"] if nolatex else "science"
     plt.style.use(style)
-    style_dict = get_style(size, grid_on=grid_on, cmap=cmap, weight=weight)
+    style_dict = get_style(size, grid_on=grid_on, cmap=cmap, weight=weight, minor_ticks=minor_ticks)
     plt.rcParams.update(style_dict)
     try:
         import xarray as xr
@@ -792,6 +794,31 @@ def rescale_and_color(in_name, outname, vmin=None, vmax=None, cmap=None):
 
 save_as_rgv_tiff = rescale_and_color
 
+
+def create_marker_from_svg(filename, rotation=0, shift=True, flip=True, scale=1, **kwargs):
+    """Create a marker from an SVG file
+    
+    Based on https://petercbsmith.github.io/marker-tutorial.html
+    Requires svgpathtools and svgpath2mpl
+
+    Example:
+        >>> marker = create_marker_from_svg("/path/to/marker.svg", rotation=45)
+        >>> ax.plot(x, y, marker=marker)
+    """
+    import matplotlib as mpl
+    from svgpathtools import svg2paths
+    from svgpath2mpl import parse_path
+
+    path, attributes = svg2paths(filename)
+    marker = parse_path(attributes[0]['d'])
+    if shift:
+        marker.vertices -= marker.vertices.mean(axis=0)
+    if flip:
+        marker = marker.transformed(mpl.transforms.Affine2D().rotate_deg(180))
+        marker = marker.transformed(mpl.transforms.Affine2D().scale(-1,1))
+    if rotation:
+        marker = marker.transformed(mpl.transforms.Affine2D().rotate_deg(rotation))
+    return marker
 
 def cmap_to_dict(cmap_name, vmin=None, vmax=None):
     # for matplotlib.colors.LinearSegmentedColormap
