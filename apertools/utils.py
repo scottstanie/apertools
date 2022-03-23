@@ -129,6 +129,15 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
         return arr
     if isinstance(arr, dict):
         return take_looks_rsc(arr, row_looks, col_looks)
+    if arr.ndim == 3:
+        return np.stack(
+            [
+                take_looks(
+                    a, row_looks, col_looks, separate_complex=separate_complex, **kwargs
+                )
+                for a in arr
+            ]
+        )
     if np.iscomplexobj(arr) and separate_complex:
         mag_looked = take_looks(np.abs(arr), row_looks, col_looks)
         phase_looked = take_looks(np.angle(arr), row_looks, col_looks)
@@ -149,7 +158,7 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
     if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype("float")
 
-    return np.mean(arr.reshape(new_rows, row_looks, new_cols, col_looks), axis=(3, 1))
+    return np.mean(np.reshape(arr, (new_rows, row_looks, new_cols, col_looks)), axis=(3, 1))
 
 
 def take_looks_rsc(rsc_data, row_looks, col_looks):
