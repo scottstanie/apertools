@@ -6,7 +6,7 @@ logger = get_log()
 
 
 def remove_ramp(
-    z, deramp_order=1, mask=np.ma.nomask, copy=True, dtype=np.float32, dem=None
+    z, deramp_order=1, mask=np.ma.nomask, copy=True, dtype=np.float32, dem=None, save_coeffs=False,
 ):
     """Estimates a linear plane through data and subtracts to flatten
 
@@ -29,7 +29,7 @@ def remove_ramp(
             mask = [mask] * len(z)
         return np.stack(
             [
-                remove_ramp(layer, deramp_order, m, copy, dtype)
+                remove_ramp(layer, deramp_order, m, copy, dtype, save_coeffs=save_coeffs)
                 for layer, m in zip(z, mask)
             ]
         )
@@ -42,7 +42,7 @@ def remove_ramp(
     # return (z - np.nanmean(z_masked)).astype(dtype)
 
     # Use this constrained version to find the plane/quadratic fit
-    z_fit = estimate_ramp(z_masked, deramp_order, dem=dem)
+    z_fit = estimate_ramp(z_masked, deramp_order, dem=dem, save_coeffs=save_coeffs)
     # Then use the non-masked as return value
     return (z - z_fit).astype(dtype)
 
@@ -131,7 +131,7 @@ def estimate_ramp(z, deramp_order, dem=None, save_coeffs=False):
         idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx ** 2, yy ** 2]
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
 
-    return z_fit if not save_coeffs else z_fit, coeffs
+    return z_fit if not save_coeffs else (z_fit, coeffs)
 
 
 def matrix_indices(shape, flatten=True):
