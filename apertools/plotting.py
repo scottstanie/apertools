@@ -969,7 +969,7 @@ def map_img(img, bbox=None, pad_pct=0.0, ax=None, crs=None, **imshow_kwargs):
     return ax
 
 
-def scale_bar(
+def scale_bar0(
     ax,
     location,
     length,

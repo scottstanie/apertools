@@ -1324,7 +1324,9 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
     """
     from osgeo import gdal
 
-    rows, cols = array.shape
+    if array.ndim == 3 and array.shape[2] == 3:
+        array = np.moveaxis(array, 2, 0)
+    rows, cols = array[-2:].shape
     if rsc_data is not None and (
         rows != rsc_data["file_length"] or cols != rsc_data["width"]
     ):
@@ -1367,8 +1369,18 @@ def save_image_like(
     import rasterio as rio
 
     # print(f"{arr=}, {outname=}, {input_fname=}")
+    if arr.ndim == 3:
+        if arr.shape[2] == 3:
+            arr = np.moveaxis(arr, 2, 0)
+    else:
+        arr = arr[np.newaxis, ...]
+    print(arr.shape)
+    nbands = arr.shape[0]
+    if outname.endswith(".tif"):
+        driver = driver or "GTiff"
+
     with rio.open(input_fname) as src:
-        if (src.height, src.width) != arr.shape:
+        if (src.height, src.width) != arr.shape[-2:]:
             raise ValueError(
                 f"{input_fname} must be same size as arr to use georeference data"
             )
@@ -1377,15 +1389,16 @@ def save_image_like(
             outname,
             "w",
             driver=(driver or src.driver),
-            height=arr.shape[0],
-            width=arr.shape[1],
+            height=arr.shape[-2],
+            width=arr.shape[-1],
             transform=src.transform,
-            count=1,
+            count=nbands,
             dtype=(out_dtype or arr.dtype),
             crs=src.crs,
             nodata=(nodata or src.nodata),
         ) as dest:
-            dest.write(arr, 1)
+            for idx in range(nbands):
+                dest.write(arr[idx], idx + 1)
 
 
 def save_vrt(
