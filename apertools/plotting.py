@@ -906,6 +906,7 @@ def _padded_extent(bbox, pad_pct):
     return (left - padx, right + padx, bot - pady, top + pady)
 
 
+
 def add_ticks(ax, side="right"):
     import cartopy.crs as ccrs
     from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
@@ -963,10 +964,10 @@ def map_img(img, bbox=None, pad_pct=0.0, ax=None, crs=None, **imshow_kwargs):
         bbox = _get_rio_bbox(img)
 
     extent_img = _padded_extent(bbox, 0.0)
-    ax.imshow(img, transform=crs, extent=extent_img, origin="upper", **imshow_kwargs)
-    # extent = _padded_extent(bbox, pad_pct)
-    # ax.set_extent(extent, crs=crs)
-    return ax
+    axim = ax.imshow(img, transform=crs, extent=extent_img, origin="upper", **imshow_kwargs)
+    extent = _padded_extent(bbox, pad_pct)
+    ax.set_extent(extent, crs=crs)
+    return ax, axim
 
 
 def scale_bar0(
@@ -1180,10 +1181,11 @@ def scale_bar(
     proj,
     length,
     location=(0.5, 0.05),
-    linewidth=3,
+    scalewidth=3,
     units="km",
     m_per_unit=1000,
     zorder=1,
+    lw=5,
 ):
     """
     http://stackoverflow.com/a/35705477/1072212
@@ -1191,9 +1193,16 @@ def scale_bar(
     proj is the projection the axes are in
     location is center of the scalebar in axis coordinates ie. 0.5 is the middle of the plot
     length is the length of the scalebar in km.
-    linewidth is the thickness of the scalebar.
+    scalewidth is the thickness of the scalebar.
     units is the name of the unit
     m_per_unit is the number of meters in a unit
+
+
+    Example:
+    scale_len = 100 # km
+    loc = (0.2, 0.03)
+    scale_bar(ax, ax.projection, scale_len, location=loc, zorder=4)
+
     """
     import cartopy.crs as ccrs
     from matplotlib import patheffects
@@ -1206,24 +1215,26 @@ def scale_bar(
     x0, x1, y0, y1 = ax.get_extent(utm)
     print(x0, x1, y0, y1)
     # Turn the specified scalebar location into coordinates in metres
-    sbcx, sbcy = x0 + (x1 - x0) * location[0], y0 + (y1 - y0) * location[1]
+    sbcx = x0 + (x1 - x0) * location[0]
+    sbcy = y0 + (y1 - y0) * location[1]
     # Generate the x coordinate for the ends of the scalebar
     bar_xs = [sbcx - length * m_per_unit / 2, sbcx + length * m_per_unit / 2]
     # buffer for scalebar
-    buffer = [patheffects.withStroke(linewidth=5, foreground="w")]
+    buffer = [patheffects.withStroke(linewidth=lw, foreground="w")]
     # Plot the scalebar with buffer
-    ax.plot(
-        bar_xs,
-        [sbcy, sbcy],
-        transform=utm,
-        color="k",
-        linewidth=linewidth,
-        path_effects=buffer,
-        zorder=zorder,
-    )
+    # ax.plot(
+    #     bar_xs,
+    #     [sbcy, sbcy],
+    #     transform=utm,
+    #     color="k",
+    #     linewidth=scalewidth,
+    #     path_effects=buffer,
+    #     zorder=zorder,
+    # )
     # buffer for text
-    buffer = [patheffects.withStroke(linewidth=3, foreground="w")]
+    buffer = [patheffects.withStroke(linewidth=lw // 2 + 1, foreground="w")]
     # Plot the scalebar label
+    print(sbcx, sbcy)
     t0 = ax.text(
         sbcx,
         sbcy,
@@ -1245,6 +1256,7 @@ def scale_bar(
         [sbcy, sbcy],
         transform=utm,
         color="k",
-        linewidth=linewidth,
+        linewidth=scalewidth,
         zorder=zorder + 2,
     )
+    

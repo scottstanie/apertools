@@ -98,8 +98,8 @@ def solve_east_up(
         asc_da = asc_xr[asc_dset]
         desc_da = desc_xr[desc_dset]
         if date is not None:
-            asc_da = asc_da.sel(date=date)
-            desc_da = desc_da.sel(date=date)
+            asc_da = asc_da.sel(date=date, method="nearest")
+            desc_da = desc_da.sel(date=date, method="nearest")
         asc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(
             asc_img_fname
         )
