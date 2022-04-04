@@ -14,61 +14,6 @@ DEFO_DSET = "defo_lowess_shifted"
 logger = get_log()
 
 
-def find_enu_coeffs(
-    lon,
-    lat,
-    los_map_file=None,
-    los_da=None,
-    coordinates=None,
-    geom_dir="geom_reference",
-):
-    """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
-
-    Args:
-        lon (float): longitude of point to get LOS vector
-        lat (float): latitude of point
-        los_map_file (str): name of 3-band image with E,N,U as bands.
-        los_array (xr.DataArray): 3-band DataArray with E,N,U as bands, 'lat', 'lon' coords
-        coordinates (str): ['geo', 'rdr']. Pass 'rdr' if `los_map_file` is in
-            radar coordinates
-        geom_dir (str): if `los_map_file` is in radar coordinates, directory
-            containing `lat.rdr` and `lon.rdr` files
-
-    Returns:
-        ndarray: enu_coeffs, shape = (3,) array [alpha_e, alpha_n, alpha_up]
-        Pointing from satellite to ground
-        Can be used to project an ENU vector into the line of sight direction
-    """
-    import rasterio as rio
-
-    # Prefer to use the DataArray if it's passed in
-    if los_da is not None:
-        # Check that lat/lon is inbounds:
-        if (lat < los_da.lat.min()) or (lat > los_da.lat.max()):
-            raise ValueError("lat out of bounds")
-        if (lon < los_da.lon.min()) or (lon > los_da.lon.max()):
-            raise ValueError("lon out of bounds")
-        return los_da.sel(lat=lat, lon=lon, method="nearest").values.ravel()
-
-    if los_map_file is None:
-        raise ValueError("los_map_file or los_da is required")
-
-    with rio.open(los_map_file) as src:
-
-        # src.index(-121.915628095, 37.87857542)  # (1250, -566)
-        if coordinates == "rdr":
-            from apertools import latlon
-
-            row, col = latlon.latlon_to_rowcol_rdr(lat, lon, geom_dir=geom_dir)
-        else:
-            row, col = src.index(lon, lat)
-
-        nrows, ncols = src.shape[-2:]
-        if any([row < 0, col < 0, row >= nrows, col >= ncols]):
-            raise ValueError(f"({lon}, {lat}) is out of bounds from {src.bounds}")
-        return src.read(window=((row, row + 1), (col, col + 1))).ravel()
-
-
 def solve_east_up(
     asc_enu_fname=None,
     desc_enu_fname=None,
@@ -205,6 +150,61 @@ def solve_east_up_imgs(
     up[mask] = 0
 
     return east, up
+
+
+def find_enu_coeffs(
+    lon,
+    lat,
+    los_map_file=None,
+    los_da=None,
+    coordinates=None,
+    geom_dir="geom_reference",
+):
+    """For arbitrary lat/lon, find the coefficients for ENU components of LOS vector
+
+    Args:
+        lon (float): longitude of point to get LOS vector
+        lat (float): latitude of point
+        los_map_file (str): name of 3-band image with E,N,U as bands.
+        los_array (xr.DataArray): 3-band DataArray with E,N,U as bands, 'lat', 'lon' coords
+        coordinates (str): ['geo', 'rdr']. Pass 'rdr' if `los_map_file` is in
+            radar coordinates
+        geom_dir (str): if `los_map_file` is in radar coordinates, directory
+            containing `lat.rdr` and `lon.rdr` files
+
+    Returns:
+        ndarray: enu_coeffs, shape = (3,) array [alpha_e, alpha_n, alpha_up]
+        Pointing from satellite to ground
+        Can be used to project an ENU vector into the line of sight direction
+    """
+    import rasterio as rio
+
+    # Prefer to use the DataArray if it's passed in
+    if los_da is not None:
+        # Check that lat/lon is inbounds:
+        if (lat < los_da.lat.min()) or (lat > los_da.lat.max()):
+            raise ValueError("lat out of bounds")
+        if (lon < los_da.lon.min()) or (lon > los_da.lon.max()):
+            raise ValueError("lon out of bounds")
+        return los_da.sel(lat=lat, lon=lon, method="nearest").values.ravel()
+
+    if los_map_file is None:
+        raise ValueError("los_map_file or los_da is required")
+
+    with rio.open(los_map_file) as src:
+
+        # src.index(-121.915628095, 37.87857542)  # (1250, -566)
+        if coordinates == "rdr":
+            from apertools import latlon
+
+            row, col = latlon.latlon_to_rowcol_rdr(lat, lon, geom_dir=geom_dir)
+        else:
+            row, col = src.index(lon, lat)
+
+        nrows, ncols = src.shape[-2:]
+        if any([row < 0, col < 0, row >= nrows, col >= ncols]):
+            raise ValueError(f"({lon}, {lat}) is out of bounds from {src.bounds}")
+        return src.read(window=((row, row + 1), (col, col + 1))).ravel()
 
 
 def _deramp(img, deramp_order, thresh):
@@ -402,5 +402,3 @@ def merge_xr(ds1, ds2, freq="6M", col="date", dset1=DEFO_DSET, dset2=DEFO_DSET):
 
     out1, out2 = out1.to_dataset(), out2.to_dataset()
     return out1, out2
-
-
