@@ -91,12 +91,19 @@ def plot_gps_los(
 
 def plot_gps_enu(
     station=None,
-    days_smooth=12,
+    days_smooth=24,
     start_date=None,
     end_date=None,
-    figsize=None,
     ylabel="[cm]",
     title="",
+    colordots=None,
+    colorline=None,
+    lw=2,
+    ylim=None,
+    nrows=3,
+    ncols=1,
+    use_proplot=False,
+    **subplot_kw,
 ):
     """Plot the east,north,up components of `station`"""
 
@@ -108,6 +115,11 @@ def plot_gps_enu(
             top=False,  # ticks along the top edge are off
             labelbottom=False,
         )
+    if nrows == 1:
+        ncols = 3
+    elif ncols == 3:
+        nrows = 1
+    assert nrows * ncols == 3, "nrows and ncols must be 1 or 3"
 
     enu_df = gps.load_station_enu(
         station,
@@ -118,27 +130,37 @@ def plot_gps_enu(
     dts = enu_df.index
     (east_cm, north_cm, up_cm) = enu_df[["east", "north", "up"]].T.values
 
-    fig, axes = plt.subplots(3, 1, figsize=figsize)
-    axes[0].plot(dts, east_cm, "b.")
-    axes[0].set_ylabel("East (cm)")
-    axes[0].plot(dts, gps.moving_average(east_cm, days_smooth), "r-")
+    if use_proplot:
+        import proplot as pplt
+        print(subplot_kw)
+        fig, axes = pplt.subplots(nrows=nrows, ncols=ncols, sharex=False, sharey=False, **subplot_kw)
+        # axes.set_ylim(y-1, 1))
+        # axes.format(yticks=[-2, 0, 2],ylim=(-2, 2))
+    else:
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
+    axes[0].plot(dts, east_cm, ".")
+    axes[0].set_ylabel("East [cm]")
+    axes[0].plot(dts, gps.moving_average(east_cm, days_smooth), color=colorline, lw=lw)
     axes[0].grid(True)
-    remove_xticks(axes[0])
+    axes[0].set_ylim(ylim)
+    # remove_xticks(axes[0])
 
-    axes[1].plot(dts, north_cm, "b.")
-    axes[1].set_ylabel("North (cm)")
-    axes[1].plot(dts, gps.moving_average(north_cm, days_smooth), "r-")
+    axes[1].plot(dts, north_cm, ".")
+    axes[1].set_ylabel("North [cm]")
+    axes[1].plot(dts, gps.moving_average(north_cm, days_smooth), color=colorline, lw=lw)
     axes[1].grid(True)
-    remove_xticks(axes[1])
+    axes[1].set_ylim(ylim)
+    # remove_xticks(axes[1])
 
-    axes[2].plot(dts, up_cm, "b.")
-    axes[2].set_ylabel("Up (cm)")
-    axes[2].plot(dts, gps.moving_average(up_cm, days_smooth), "r-")
+    axes[2].plot(dts, up_cm, ".", color=colordots)
+    axes[2].set_ylabel("Up [cm]")
+    axes[2].plot(dts, gps.moving_average(up_cm, days_smooth), color=colorline, lw=lw)
     axes[2].grid(True)
+    axes[2].set_ylim(ylim)
     # remove_xticks(axes[2])
 
-    fig.suptitle(station)
-    plt.show(block=False)
+    # fig.suptitle(station)
+    # plt.show(block=False)
 
     return fig, axes
 

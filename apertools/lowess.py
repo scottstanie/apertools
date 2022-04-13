@@ -188,6 +188,7 @@ def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=
     out_da.attrs["description"] = "Lowess smoothed stack"
 
     out_da = _write_attrs(out_da, frac=frac, n_iter=n_iter)
+    return out_da
 
 
 def _find_frac(x, min_x_weighted):
@@ -226,26 +227,6 @@ def _find_frac(x, min_x_weighted):
     #     dask_gufunc_kwargs=dict(allow_rechunk=True),
     #     vectorize=True,
     # )
-
-
-def demo_window(x, frac=0.4, min_x_weighted=None):
-    if min_x_weighted:
-        frac = _find_frac(x, min_x_weighted)
-    n = len(x)
-    r = int(np.ceil(frac * n))
-    if r == n:
-        r -= 1
-
-    # Find the distance to the rth furthest point from each x value
-    h = np.array([np.sort(np.abs(x - x[i]))[r] for i in range(n)])
-    xc = x.copy()  # make contiguous (necessary for `reshape` for numba)
-    # Get the relative distance to the rth furthest point
-    w = np.abs((xc.reshape((-1, 1)) - xc.reshape((1, -1))) / h)
-    # Clip to 0, 1 (`np.clip` not available in numba)
-    w = np.minimum(1.0, np.maximum(w, 0.0))
-    # tricube weighting
-    w = (1 - w ** 3) ** 3
-    return w
 
 
 @njit(cache=True, nogil=True)
@@ -355,39 +336,6 @@ def plot_bootstrap(
         title += f" pct_bootstrap={pct_bootstrap:.2f}"
     ax.set_title(title)
     return fig, ax
-
-
-def demo_fit(x, y, w, i, delta=None):
-    if delta is None:
-        delta = np.ones(len(x))
-    weights = delta * w[:, i]
-    # Form the linear system as the reduced-size version of the Ax=b:
-    # A^T A x = A^T b
-    b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
-    A = np.array(
-        [
-            [np.sum(weights), np.sum(weights * x)],
-            [np.sum(weights * x), np.sum(weights * x * x)],
-        ]
-    )
-
-    beta = np.linalg.lstsq(A, b)[0]
-    return beta
-
-
-def demo_residual(x, y, w, i, delta=None):
-    if delta is None:
-        delta = np.ones(len(x))
-    beta = demo_fit(x, y, w, i, delta=delta)
-    yest = beta[0] + beta[1] * x[i]
-    residuals = y - yest
-    s = np.median(np.abs(residuals))
-    if s < 1e-3:
-        return np.ones_like(x)
-    # delta = np.clip(residuals / (6.0 * s), -1.0, 1.0)
-    delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
-    delta = (1 - delta ** 2) ** 2
-    return delta
 
 
 @njit
@@ -520,7 +468,7 @@ def bootstrap_lowess_xr(
     )
 
     # TODO: If there's an existing mean/std, update using
-    # https://math.stackexchange.com/questions/374881/recursive-formula-for-variance or 
+    # https://math.stackexchange.com/questions/374881/recursive-formula-for-variance or
     # https://math.stackexchange.com/questions/20593/calculate-variance-from-a-stream-of-sample-values
     if out_fname:
         mean_name, std_name = out_dsets
@@ -551,3 +499,62 @@ def _write_attrs(da, K=None, n_iter=None, frac=None, pct_bootstrap=None):
     for attr_name, val in zip(attr_names, attr_values):
         da.attrs[attr_name] = val
     return da
+
+
+### Demonstrations of LOWESS steps ### 
+
+
+def demo_window(x, frac=0.4, min_x_weighted=None):
+    if min_x_weighted:
+        frac = _find_frac(x, min_x_weighted)
+    n = len(x)
+    r = int(np.ceil(frac * n))
+    if r == n:
+        r -= 1
+
+    # Find the distance to the rth furthest point from each x value
+    h = np.array([np.sort(np.abs(x - x[i]))[r] for i in range(n)])
+    # abs_dists = [np.abs(x - x[i]) for i in range(n)]
+    # # h = np.array([np.sort(abs_dists[i])[r] for i in range(n)])
+
+    xc = x.copy()  # make contiguous (necessary for `reshape` for numba)
+    # Get the relative distance to the rth furthest point
+    w = np.abs((xc.reshape((-1, 1)) - xc.reshape((1, -1))) / h)
+    # Clip to 0, 1 (`np.clip` not available in numba)
+    w = np.minimum(1.0, np.maximum(w, 0.0))
+    # tricube weighting
+    w = (1 - w ** 3) ** 3
+    return w
+
+
+def demo_fit(x, y, w, i, delta=None):
+    if delta is None:
+        delta = np.ones(len(x))
+    weights = delta * w[:, i]
+    # Form the linear system as the reduced-size version of the Ax=b:
+    # A^T A x = A^T b
+    b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
+    A = np.array(
+        [
+            [np.sum(weights), np.sum(weights * x)],
+            [np.sum(weights * x), np.sum(weights * x * x)],
+        ]
+    )
+
+    beta = np.linalg.lstsq(A, b)[0]
+    return beta
+
+
+def demo_residual(x, y, w, i, delta=None):
+    if delta is None:
+        delta = np.ones(len(x))
+    beta = demo_fit(x, y, w, i, delta=delta)
+    yest = beta[0] + beta[1] * x[i]
+    residuals = y - yest
+    s = np.median(np.abs(residuals))
+    if s < 1e-3:
+        return np.ones_like(x)
+    # delta = np.clip(residuals / (6.0 * s), -1.0, 1.0)
+    delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
+    delta = (1 - delta ** 2) ** 2
+    return delta

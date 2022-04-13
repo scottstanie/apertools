@@ -687,6 +687,7 @@ def plot_img_diff(
     show_diff=True,
     vdiff=1,
     cmap=DEFAULT_CMAP,
+    axes=None,
     axis_off=False,
     cbar_label="",
     show=True,
@@ -696,10 +697,11 @@ def plot_img_diff(
     bbox=None,
     extent=None,
     share=True,
+    use_proplot=True,
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
-    # import proplot as pplt
+    import proplot as pplt
     if arrays is None:
         from apertools import sario
 
@@ -709,11 +711,15 @@ def plot_img_diff(
     ncols = n + 1 if show_diff else n
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
-    fig, axes = plt.subplots(
-        1, ncols, sharex=share, sharey=share, figsize=figsize, squeeze=False
-    )
-    axes = axes.ravel()
-    # fig, axes = pplt.subplots(ncols=ncols, sharex=share, sharey=share, figsize=figsize)
+    if axes is None:
+        # fig, axes = plt.subplots(
+        fig, axes = pplt.subplots(
+            ncols=ncols, sharex=share, sharey=share, figsize=figsize,
+        )
+    else:
+        fig = axes.figure
+    # axes = axes.ravel()
+
     for ii in range(n):
         if bbox:
             extent = [bbox[0], bbox[2], bbox[1], bbox[3]]
@@ -731,8 +737,10 @@ def plot_img_diff(
             ax.set_title(titles[ii])
         # numbers: weird
         # https://stackoverflow.com/questions/18195758/set-matplotlib-colorbar-size-to-match-graph
-        cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
-        cbar.set_label(cbar_label)
+        # cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
+        # cbar.set_label(cbar_label)
+        # Proplot version:
+        ax.colorbar(axim, loc='r', label=cbar_label)
         if axis_off:
             ax.set_axis_off()
         if aspect:
@@ -757,8 +765,9 @@ def plot_img_diff(
             ax.set_axis_off()
         if aspect:
             ax.set_aspect(aspect)
-        cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
-        cbar.set_label(cbar_label)
+        # cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
+        # cbar.set_label(cbar_label)
+        ax.colorbar(axim, loc='r', label=cbar_label)
     # [f.close() for f in files]
     if show:
         plt.show(block=False)
@@ -1259,4 +1268,3 @@ def scale_bar(
         linewidth=scalewidth,
         zorder=zorder + 2,
     )
-    
