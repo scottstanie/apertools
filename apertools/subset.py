@@ -709,3 +709,38 @@ def crop_stacks_by_date(
         compressions = {ds: COMP_DICT_BLOSC for ds in dsets_to_compress}
         logger.info("Writing to %s, compressing with: %s", f_out, compressions)
         ds_sub.to_netcdf(f_out, engine="h5netcdf", encoding=compressions, mode="a")
+
+
+def read_intersections_xr(
+    asc_da,
+    desc_da,
+    # asc_los_da,
+    # desc_los_da,
+    date=None,
+    xdim="lon",
+    ydim="lat",
+    crs="EPSG:4326",
+    asc_img_fname="tmp_asc.tif",
+    desc_img_fname="tmp_desc.tif",
+):
+    asc_img_fname, desc_img_fname = "tmp_asc.tif", "tmp_desc.tif"
+    # asc_da = asc_xr[asc_dset]
+    # desc_da = desc_xr[desc_dset]
+    if date is not None:
+        asc_da = asc_da.sel(date=date, method="nearest")
+        desc_da = desc_da.sel(date=date, method="nearest")
+    asc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(
+        asc_img_fname
+    )
+    desc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(
+        desc_img_fname
+    )
+    asc_img, desc_img = read_intersections(asc_img_fname, desc_img_fname)
+    return asc_img, desc_img
+
+    # # Save and read in the LOS stack overlap
+    # name_asc2, name_desc2 = "tmp_asc_los.tif", "tmp_desc_los.tif"
+    # asc_los_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(name_asc2)
+    # desc_los_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(name_desc2)
+    # asc_enu_stack, desc_enu_stack = read_intersections(name_asc2, name_desc2)
+    # return asc_img,

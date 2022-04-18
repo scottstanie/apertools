@@ -53,10 +53,19 @@ def get_style(size=15, grid_on=False, cmap="viridis", weight="bold", minor_ticks
     return style_dict
 
 
-def set_style(size=15, nolatex=True, grid_on=False, cmap="viridis", weight="bold", minor_ticks=False):
+def set_style(
+    size=15,
+    nolatex=True,
+    grid_on=False,
+    cmap="viridis",
+    weight="bold",
+    minor_ticks=False,
+):
     style = ["science", "no-latex"] if nolatex else "science"
     plt.style.use(style)
-    style_dict = get_style(size, grid_on=grid_on, cmap=cmap, weight=weight, minor_ticks=minor_ticks)
+    style_dict = get_style(
+        size, grid_on=grid_on, cmap=cmap, weight=weight, minor_ticks=minor_ticks
+    )
     plt.rcParams.update(style_dict)
     try:
         import xarray as xr
@@ -702,6 +711,7 @@ def plot_img_diff(
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
     import proplot as pplt
+
     if arrays is None:
         from apertools import sario
 
@@ -714,7 +724,10 @@ def plot_img_diff(
     if axes is None:
         # fig, axes = plt.subplots(
         fig, axes = pplt.subplots(
-            ncols=ncols, sharex=share, sharey=share, figsize=figsize,
+            ncols=ncols,
+            sharex=share,
+            sharey=share,
+            figsize=figsize,
         )
     else:
         fig = axes.figure
@@ -740,7 +753,7 @@ def plot_img_diff(
         # cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
         # cbar.set_label(cbar_label)
         # Proplot version:
-        ax.colorbar(axim, loc='r', label=cbar_label)
+        ax.colorbar(axim, loc="r", label=cbar_label)
         if axis_off:
             ax.set_axis_off()
         if aspect:
@@ -767,7 +780,7 @@ def plot_img_diff(
             ax.set_aspect(aspect)
         # cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
         # cbar.set_label(cbar_label)
-        ax.colorbar(axim, loc='r', label=cbar_label)
+        ax.colorbar(axim, loc="r", label=cbar_label)
     # [f.close() for f in files]
     if show:
         plt.show(block=False)
@@ -804,9 +817,11 @@ def rescale_and_color(in_name, outname, vmin=None, vmax=None, cmap=None):
 save_as_rgv_tiff = rescale_and_color
 
 
-def create_marker_from_svg(filename, rotation=0, shift=True, flip=True, scale=1, **kwargs):
+def create_marker_from_svg(
+    filename, rotation=0, shift=True, flip=True, scale=1, **kwargs
+):
     """Create a marker from an SVG file
-    
+
     Based on https://petercbsmith.github.io/marker-tutorial.html
     Requires svgpathtools and svgpath2mpl
 
@@ -819,15 +834,16 @@ def create_marker_from_svg(filename, rotation=0, shift=True, flip=True, scale=1,
     from svgpath2mpl import parse_path
 
     path, attributes = svg2paths(filename)
-    marker = parse_path(attributes[0]['d'])
+    marker = parse_path(attributes[0]["d"])
     if shift:
         marker.vertices -= marker.vertices.mean(axis=0)
     if flip:
         marker = marker.transformed(mpl.transforms.Affine2D().rotate_deg(180))
-        marker = marker.transformed(mpl.transforms.Affine2D().scale(-1,1))
+        marker = marker.transformed(mpl.transforms.Affine2D().scale(-1, 1))
     if rotation:
         marker = marker.transformed(mpl.transforms.Affine2D().rotate_deg(rotation))
     return marker
+
 
 def cmap_to_dict(cmap_name, vmin=None, vmax=None):
     # for matplotlib.colors.LinearSegmentedColormap
@@ -915,7 +931,6 @@ def _padded_extent(bbox, pad_pct):
     return (left - padx, right + padx, bot - pady, top + pady)
 
 
-
 def add_ticks(ax, side="right"):
     import cartopy.crs as ccrs
     from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
@@ -933,18 +948,127 @@ def add_ticks(ax, side="right"):
     print("added ticks")
     ax.xaxis.tick_bottom()
 
-    # TODO: start of zebra frame?
-    # https://stackoverflow.com/questions/44273365/color-axis-spine-with-multiple-colors-using-matplotlib
-    # colors=["b","r","lightgreen","gold"]
-    # x=[0,.25,.5,.75,1]
-    # y=[0,0,0,0,0]
-    # points = np.array([x, y]).T.reshape(-1, 1, 2)
-    # segments = np.concatenate([points[:-1], points[1:]], axis=1)
-    # lc = LineCollection(segments,colors=colors, linewidth=2,
-    #                                transform=ax.get_xaxis_transform(), clip_on=False )
-    # ax.add_collection(lc)
-    # ax.spines["bottom"].set_visible(False)
-    # ax.set_xticks(x)
+
+def _make_line_collections(ax, *, ticks=None, loc="bottom", lw=2, **kwargs):
+    import itertools
+    from matplotlib.collections import LineCollection
+
+    left, right, bot, top = ax.get_extent()
+    print(ax.get_extent())
+    if ticks is None:
+        if loc in ["top", "bottom", "bot"]:
+            ticks = [left, *ax.get_xticks(), right]
+            print(ticks)
+            ticks = np.unique(np.array(ticks).round(2))
+            # ticks = np.array(
+            #     [t.get_position() for t in ax.get_xmajorticklabels()]
+            # ).round(0)
+        else:
+            ticks = [bot, *ax.get_yticks(), top]
+            print(ticks)
+            ticks = np.unique(np.array(ticks).round(2))
+            # ticks = np.array(
+            #     [t.get_position() for t in ax.get_ymajorticklabels()]
+            # ).round(0)
+    print(f"{loc = }, ticks: {ticks}")
+    if loc in ("bottom", "bot"):
+        points = np.array([ticks, bot * np.ones_like(ticks)]).T.reshape(-1, 1, 2)
+    elif loc == "top":
+        points = np.array([ticks, top * np.ones_like(ticks)]).T.reshape(-1, 1, 2)
+    elif loc == "left":
+        points = np.array([left * np.ones_like(ticks), ticks]).T.reshape(-1, 1, 2)
+    elif loc == "right":
+        points = np.array([right * np.ones_like(ticks), ticks]).T.reshape(-1, 1, 2)
+    # print(points)
+
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    lc_outline = LineCollection(
+        segments,
+        colors="black",
+        linewidth=lw + 1,
+        transform=ax.get_xaxis_transform(),
+        clip_on=False,
+    )
+    bws = itertools.cycle(["k", "white"])
+    colors = [next(bws) for _ in range(len(ticks) - 1)]
+    print(f"""colors: {colors}""")
+    lc = LineCollection(
+        segments,
+        colors=colors,
+        linewidth=lw,
+        transform=ax.get_xaxis_transform(),
+        clip_on=False,
+    )
+    return lc_outline, lc
+
+
+def add_zebra(ax, lw=2, add_outline=True, crs="pcarree"):
+    import itertools
+    import matplotlib.patheffects as pe
+    from matplotlib import patches
+
+    ax.spines["geo"].set_visible(False)
+
+    # for loc in ["left", "bot", "right", "top"]:
+    #     lc, lc_outline = _make_line_collections(ax, loc=loc, lw=lw)
+    #     # ax.add_collection(lc_outline)  # , crs=ccrs.PlateCarree())
+    #     ax.add_collection(lc)  # , crs=ccrs.PlateCarree())
+
+    left, right, bot, top = ax.get_extent()
+    bws = itertools.cycle(["k", "white"])
+    # locs = ["left", "bot", "right", "top"]
+    # print(ax.get_extent())
+
+    xticks = sorted([left, *ax.get_xticks(), right])
+    xticks = np.unique(np.array(xticks).round(2))
+    yticks = sorted([bot, *ax.get_yticks(), top])
+    yticks = np.unique(np.array(yticks).round(2))
+    # Fat linewidths will offset the zebra lines
+    dx, dy = get_data_offset(ax, lw=lw/5)
+    print(dx)
+    for ticks, which in zip([xticks, yticks], ["lon", "lat"]):
+        for start, end in zip(ticks, ticks[1:]):
+            # print(f"{end = }")
+            # if start == -102.0:
+                # start = -102.1
+            bw = next(bws)
+            if which == "lon":
+                # xs = [[start, end - dx], [start + dx, end]]
+                xs = [[start + dx, end], [start + dx, end]]
+                ys = [[bot, bot], [top, top]]
+            else:
+                xs = [[left, left], [right, right]]
+                ys = [[start + dy, end], [start + dy, end]]
+            print(xs)
+            for (xx, yy) in zip(xs, ys):
+                ax.plot(
+                    xx,
+                    yy,
+                    color=bw,
+                    linewidth=lw,
+                    clip_on=False,
+                    transform=crs,
+                    path_effects=[
+                        pe.Stroke(linewidth=lw + 1, foreground="black"),
+                        pe.Normal(),
+                    ],
+                )
+
+    # ax.add_patch(patches.Rectangle((right, top), width=0.1, height=0.1, clip_on=False,
+    # facecolor="white", edgecolor="black"))
+
+
+def get_data_offset(ax, dx_pix=0.01, dy_pix=0.01, lw=5):
+    if lw:
+        dx_pix = lw / 72 / 2
+        dy_pix = lw / 72 / 2
+    FC_to_DC = ax.transData.inverted().transform
+    NDC_to_FC = ax.transAxes.transform
+    NDC_to_DC = lambda x: FC_to_DC(NDC_to_FC(x))
+
+    dy = NDC_to_DC([0.00, dy_pix]) - NDC_to_DC([0.00, 0.00])
+    dx = NDC_to_DC([dx_pix, 0.0]) - NDC_to_DC([0.00, 0.00])
+    return dx[0], dy[1]
 
 
 def _get_rio_bbox(img):
@@ -973,7 +1097,9 @@ def map_img(img, bbox=None, pad_pct=0.0, ax=None, crs=None, **imshow_kwargs):
         bbox = _get_rio_bbox(img)
 
     extent_img = _padded_extent(bbox, 0.0)
-    axim = ax.imshow(img, transform=crs, extent=extent_img, origin="upper", **imshow_kwargs)
+    axim = ax.imshow(
+        img, transform=crs, extent=extent_img, origin="upper", **imshow_kwargs
+    )
     extent = _padded_extent(bbox, pad_pct)
     ax.set_extent(extent, crs=crs)
     return ax, axim
