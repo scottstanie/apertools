@@ -861,9 +861,10 @@ def cmap_to_dict(cmap_name, vmin=None, vmax=None):
 
 
 def map_background(
-    bbox,
-    pad_pct=0.3,
+    *,
+    bbox=None,
     image=None,
+    pad_pct=0.3,
     bbox_image=None,
     zoom_level=9,
     fig=None,
@@ -871,6 +872,7 @@ def map_background(
     coastlines=False,
     show_ticks=True,
     tickside="left",
+    img_zorder=2,
     **imshow_kwargs,
 ):
     """Plot the raster `img` on top of background tiles
@@ -896,6 +898,11 @@ def map_background(
     else:
         fig = ax.figure
 
+    if bbox is None:
+        try:
+            bbox = image.rio.bounds()
+        except AttributeError:
+            bbox = (0, 0, 1, 1)
     # matplotlib wants extent different than gdal/rasterio convention
     pad_pct = pad_pct or 0.0
     extent = _padded_extent(bbox, pad_pct)
@@ -906,12 +913,12 @@ def map_background(
         if bbox_image is None:
             bbox_image = _get_rio_bbox(image)
         extent_img = _padded_extent(bbox_image, 0.0)
-        ax.imshow(
+        axim = ax.imshow(
             image,
             transform=ccrs.PlateCarree(),
             extent=extent_img,
             origin="upper",
-            zorder=3,
+            zorder=img_zorder,
             **imshow_kwargs,
         )
 
@@ -1002,7 +1009,7 @@ def _make_line_collections(ax, *, ticks=None, loc="bottom", lw=2, **kwargs):
     return lc_outline, lc
 
 
-def add_zebra(ax, lw=2, add_outline=True, crs="pcarree"):
+def add_zebra(ax, lw=2, add_outline=True, crs="pcarree", zorder=None):
     import itertools
     import matplotlib.patheffects as pe
     from matplotlib import patches
@@ -1023,23 +1030,26 @@ def add_zebra(ax, lw=2, add_outline=True, crs="pcarree"):
     xticks = np.unique(np.array(xticks).round(2))
     yticks = sorted([bot, *ax.get_yticks(), top])
     yticks = np.unique(np.array(yticks).round(2))
-    # Fat linewidths will offset the zebra lines
-    dx, dy = get_data_offset(ax, lw=lw/5)
-    print(dx)
+    # print(dx)
     for ticks, which in zip([xticks, yticks], ["lon", "lat"]):
-        for start, end in zip(ticks, ticks[1:]):
+        for idx, (start, end) in enumerate(zip(ticks, ticks[1:])):
             # print(f"{end = }")
             # if start == -102.0:
-                # start = -102.1
+            # start = -102.1
             bw = next(bws)
             if which == "lon":
                 # xs = [[start, end - dx], [start + dx, end]]
-                xs = [[start + dx, end], [start + dx, end]]
+                # offset = dx if idx > 0 else 0
+                # xs = [[start + offset, end], [start + offset, end]]
+                xs = [[start, end], [start, end]]
                 ys = [[bot, bot], [top, top]]
             else:
                 xs = [[left, left], [right, right]]
-                ys = [[start + dy, end], [start + dy, end]]
-            print(xs)
+                # ys = [[start + offset, end], [start + offset, end]]
+                ys = [[start, end], [start, end]]
+            # print(xs)
+            # Fat linewidths will offset the zebra lines
+            capstyle = "butt" if idx not in (0, len(ticks) - 2) else "projecting"
             for (xx, yy) in zip(xs, ys):
                 ax.plot(
                     xx,
@@ -1048,6 +1058,8 @@ def add_zebra(ax, lw=2, add_outline=True, crs="pcarree"):
                     linewidth=lw,
                     clip_on=False,
                     transform=crs,
+                    zorder=zorder,
+                    solid_capstyle=capstyle,
                     path_effects=[
                         pe.Stroke(linewidth=lw + 1, foreground="black"),
                         pe.Normal(),
@@ -1083,7 +1095,9 @@ def _get_rio_bbox(img):
     return bbox
 
 
-def map_img(img, bbox=None, pad_pct=0.0, ax=None, crs=None, **imshow_kwargs):
+def map_img(
+    img, bbox=None, pad_pct=0.0, ax=None, crs=None, add_colorbar=True, **imshow_kwargs
+):
     import cartopy.crs as ccrs
 
     if crs is None:
@@ -1100,6 +1114,8 @@ def map_img(img, bbox=None, pad_pct=0.0, ax=None, crs=None, **imshow_kwargs):
     axim = ax.imshow(
         img, transform=crs, extent=extent_img, origin="upper", **imshow_kwargs
     )
+    # if add_colorbar:
+    # ax.colorbar(axim, loc='r')
     extent = _padded_extent(bbox, pad_pct)
     ax.set_extent(extent, crs=crs)
     return ax, axim
@@ -1393,4 +1409,5 @@ def scale_bar(
         color="k",
         linewidth=scalewidth,
         zorder=zorder + 2,
+        solid_capstyle="butt",
     )

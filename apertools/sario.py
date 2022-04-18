@@ -1997,8 +1997,8 @@ def save_xr_tif(
     da.rio.write_crs(crs).rio.set_spatial_dims(*spatial_dims).rio.to_raster(outname)
 
 
-def load_xr_tifs(tif_glob, rename_to_latlon=True):
-    """Load a bunch of GeoTIFFs into an xarray dataarray
+def load_xr_tifs(tif_glob, rename_to_latlon=True, crs="EPSG:4326", units="cm", return_da=True):
+    """Load a bunch of GeoTIFFs into an xarray DataArray
 
     Assumes the filenames have `YYYYmmdd` date string somewhere in the name,
     which will be extracted for the "date" coordinate.
@@ -2023,10 +2023,20 @@ def load_xr_tifs(tif_glob, rename_to_latlon=True):
             ds = ds.rename({"y": "lat", "x": "lon"})
         return ds.expand_dims(date=[pd.to_datetime(date)])
 
-    return xr.open_mfdataset(
+    ds = xr.open_mfdataset(
         # sorted(glob.glob(tif_glob)),
         tif_glob,
         engine="rasterio",
         # concat_dim="date",
         preprocess=prep,
     )
+    if return_da:
+        ds = ds["band_data"]
+
+    if rename_to_latlon:
+        ds = ds.rio.set_spatial_dims("lon", "lat")
+    if crs is not None:
+        ds = ds.rio.set_crs(crs)
+    if units is not None:
+        ds.attrs["units"] = units
+    return ds
