@@ -2042,13 +2042,15 @@ def load_xr_tifs(tif_glob, rename_to_latlon=True, crs="EPSG:4326", units="cm", r
     return ds
 
 
-def netcdf_to_zarr(infile, outname=None):
+def netcdf_to_zarr(infile, outname=None, exclude_dsets=[]):
     import zarr
     import xarray as xr
     if outname is None:
         ext = os.path.splitext(infile)[1]
         outname = infile.replace(ext, ".zarr")
     with xr.open_dataset(infile) as ds:
+        for d in exclude_dsets:
+            del ds[d]
         compressor = zarr.Blosc(cname='zstd', clevel=3)
         encoding = {vname: {'compressor': compressor} for vname in ds.data_vars}
         ds.to_zarr(store=outname, encoding=encoding, consolidated=True)
