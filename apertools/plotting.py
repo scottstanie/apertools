@@ -952,7 +952,7 @@ def add_ticks(ax, side="right"):
     ax.xaxis.set_major_formatter(lon_formatter)
     ax.yaxis.set_major_formatter(lat_formatter)
     ax.yaxis.tick_left()
-    print("added ticks")
+    # print("added ticks")
     ax.xaxis.tick_bottom()
 
 
