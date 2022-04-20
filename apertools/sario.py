@@ -1997,7 +1997,9 @@ def save_xr_tif(
     da.rio.write_crs(crs).rio.set_spatial_dims(*spatial_dims).rio.to_raster(outname)
 
 
-def load_xr_tifs(tif_glob, rename_to_latlon=True, crs="EPSG:4326", units="cm", return_da=True):
+def load_xr_tifs(
+    tif_glob, rename_to_latlon=True, crs="EPSG:4326", units="cm", return_da=True
+):
     """Load a bunch of GeoTIFFs into an xarray DataArray
 
     Assumes the filenames have `YYYYmmdd` date string somewhere in the name,
@@ -2045,10 +2047,33 @@ def load_xr_tifs(tif_glob, rename_to_latlon=True, crs="EPSG:4326", units="cm", r
 def netcdf_to_zarr(infile, outname=None):
     import zarr
     import xarray as xr
+
     if outname is None:
         ext = os.path.splitext(infile)[1]
         outname = infile.replace(ext, ".zarr")
     with xr.open_dataset(infile) as ds:
-        compressor = zarr.Blosc(cname='zstd', clevel=3)
-        encoding = {vname: {'compressor': compressor} for vname in ds.data_vars}
+        compressor = zarr.Blosc(cname="zstd", clevel=3)
+        encoding = {vname: {"compressor": compressor} for vname in ds.data_vars}
         ds.to_zarr(store=outname, encoding=encoding, consolidated=True)
+
+
+def read_geopandas(csvfile, latcol=None, loncol=None):
+    import pandas as pd
+    import geopandas as gpd
+
+    df = pd.read_csv(csvfile)
+    if latcol is None:
+        # guess which is lat
+        latcol = df.columns[df.columns.str.lower().str.contains("lat")]
+        try:
+            latcol = latcol.item()
+        except:
+            raise ValueError(f"Could not get lat column. Found {latcol = }")
+
+    if loncol is None:
+        loncol = df.columns[df.columns.str.lower().str.contains("lon")]
+        try:
+            loncol = loncol.item()
+        except:
+            raise ValueError(f"Could not get lat column. Found {loncol = }")
+    return gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df[loncol], df[latcol]))

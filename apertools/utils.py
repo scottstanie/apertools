@@ -158,7 +158,9 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
     if np.issubdtype(arr.dtype, np.integer):
         arr = arr.astype("float")
 
-    return np.mean(np.reshape(arr, (new_rows, row_looks, new_cols, col_looks)), axis=(3, 1))
+    return np.mean(
+        np.reshape(arr, (new_rows, row_looks, new_cols, col_looks)), axis=(3, 1)
+    )
 
 
 def take_looks_rsc(rsc_data, row_looks, col_looks):
@@ -761,6 +763,28 @@ def stack_to_xr(
     )
 
 
+def get_xr_transect(da, lon, lat, lon_name="lon", lat_name="lat"):
+    import geopandas as gpd
+    from shapely import geometry
+    import xarray as xr
+
+    # Setup an example geodataframe:
+    gdf = gpd.GeoDataFrame(
+        geometry=[
+            geometry.LineString([(0.0, 0.0), (5.0, 5.0)]),
+            geometry.LineString([(10.0, 10.0), (15.0, 15.0)]),
+        ]
+    )
+
+    # Get the centroids, and create the indexers for the DataArray:
+    centroids = gdf.centroid
+    x_indexer = xr.DataArray(centroids.x, dims=["point"])
+    y_indexer = xr.DataArray(centroids.y, dims=["point"])
+
+    # Grab the results:
+    da.sel(x=x_indexer, y=y_indexer, method="nearest")
+
+
 # Randoms using the sentinelapi
 def find_slc_products(api, gj_obj, date_start, date_end, area_relation="contains"):
     """Query for Sentinel 1 SLC products with common options
@@ -1322,3 +1346,140 @@ def prune_outlier_values(values, ifg_date_list, nsigma=4, scale=1.4826):
         np.array(values_good),
         ifg_date_list_good,
     )  # , cutoff, outlier_df, outlier_dates
+
+
+def cross_section(data, start, end, steps=100, interp_type="linear", crs="epsg:4326"):
+    """Obtain an interpolated cross-sectional slice through gridded data.
+    Utilizing the interpolation functionality in `xarray`, this function takes a vertical
+    cross-sectional slice along a geodesic through the given data on a regular grid, which is
+    given as an `xarray.DataArray` so that we can utilize its coordinate and projection
+    metadata.
+    Parameters
+    ----------
+    data: `xarray.DataArray` or `xarray.Dataset`
+        Three- (or higher) dimensional field(s) to interpolate. The DataArray (or each
+        DataArray in the Dataset) must have been parsed by MetPy and include both an x and
+        y coordinate dimension and the added `crs` coordinate.
+    start: (2, ) array_like
+        A longitude-latitude designating the start point of the geodesic (units are
+        degrees east and degrees north).
+    end: (2, ) array_like
+        A longitude-latitude pair designating the end point of the geodesic (units are degrees
+        east and degrees north).
+    steps: int, optional
+        The number of points along the geodesic between the start and the end point
+        (including the end points) to use in the cross section. Defaults to 100.
+    interp_type: str, optional
+        The interpolation method, either 'linear' or 'nearest' (see
+        `xarray.DataArray.interp()` for details). Defaults to 'linear'.
+    Returns
+    -------
+    `xarray.DataArray` or `xarray.Dataset`
+        The interpolated cross section, with new index dimension along the cross-section.
+    See Also
+    --------
+    interpolate_to_slice, geodesic
+    """
+    # https://github.com/Unidata/MetPy/blob/main/src/metpy/interpolate/slices.py
+    import xarray as xr
+
+    if isinstance(data, xr.Dataset):
+        # Recursively apply to dataset
+        return data.map(
+            cross_section, True, (start, end), steps=steps, interp_type=interp_type
+        )
+    elif data.ndim == 0:
+        # This has no dimensions, so it is likely a projection variable. In any case, there
+        # are no data here to take the cross section with. Therefore, do nothing.
+        return data
+
+    # Get the geodesic
+    points_cross = geodesic(start, end, steps, crs=crs)
+
+    # Return the interpolated data
+    return interpolate_to_slice(data, points_cross, interp_type=interp_type)
+
+# alias
+transect = cross_section
+
+def interpolate_to_slice(data, points, x="lon", y="lat", interp_type="linear"):
+    """Obtain an interpolated slice through data using xarray.
+    Utilizing the interpolation functionality in `xarray`, this function takes a slice the
+    given data (currently only regular grids are supported), which is given as an
+    `xarray.DataArray` so that we can utilize its coordinate metadata.
+    Parameters
+    ----------
+    data: `xarray.DataArray` or `xarray.Dataset`
+        Three- (or higher) dimensional field(s) to interpolate. The DataArray (or each
+        DataArray in the Dataset) must have been parsed by MetPy and include both an x and
+        y coordinate dimension.
+    points: (N, 2) array_like
+        A list of x, y points in the data projection at which to interpolate the data
+    interp_type: str, optional
+        The interpolation method, either 'linear' or 'nearest' (see
+        `xarray.DataArray.interp()` for details). Defaults to 'linear'.
+    Returns
+    -------
+    `xarray.DataArray` or `xarray.Dataset`
+        The interpolated slice of data, with new index dimension of size N.
+    See Also
+    --------
+    cross_section
+    """
+    import xarray as xr
+
+    data_sliced = data.interp(
+        {
+            x: xr.DataArray(points[:, 0], dims="index"),
+            y: xr.DataArray(points[:, 1], dims="index"),
+        },
+        method=interp_type,
+    )
+    data_sliced.coords["index"] = range(len(points))
+
+    return data_sliced
+
+
+def geodesic(start, end, steps, crs="EPSG:4326"):
+    """Construct a geodesic path between two points.
+    This function acts as a wrapper for the geodesic construction available in `pyproj`.
+    Parameters
+    ----------
+    start: (2, ) array_like
+        A longitude-latitude designating the start point of the geodesic (units are
+        degrees east and degrees north).
+    end: (2, ) array_like
+        A longitude-latitude pair designating the end point of the geodesic (units are degrees
+        east and degrees north).
+    steps: int, optional
+        The number of points along the geodesic between the start and the end point
+        (including the end points).
+    crs: `pyproj.CRS`
+        PyProj Coordinate Reference System to use for the output. Default EPSG:4326.
+    Returns
+    -------
+    `numpy.ndarray`
+        The list of x, y points in the given CRS of length `steps` along the geodesic.
+    See Also
+    --------
+    cross_section
+    """
+    from pyproj import Proj
+    from pyproj.crs import CRS
+
+    if isinstance(crs, str):
+        crs = CRS(crs)
+
+    g = crs.get_geod()
+    p = Proj(crs)
+
+    # Geod.npts only gives points *in between* the start and end, and we want to include
+    # the endpoints.
+    geodesic = np.concatenate(
+        [
+            np.array(start)[None],
+            np.array(g.npts(*start, *end, steps - 2)),
+            np.array(end)[None],
+        ]
+    ).transpose()
+    return np.stack(p(geodesic[0], geodesic[1], inverse=False, radians=False), axis=-1)
