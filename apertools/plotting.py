@@ -884,8 +884,8 @@ def map_background(
     import cartopy.crs as ccrs
     from cartopy.io import img_tiles
 
-    tiler = img_tiles.Stamen("terrain-background")
-    tiler = img_tiles.GoogleTiles(style="satellite")
+    # tiler = img_tiles.Stamen("terrain-background")
+    # tiler = img_tiles.GoogleTiles(style="satellite")
     mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
     tiler = img_tiles.MapboxTiles(mykey, "satellite")
     crs = tiler.crs
@@ -905,14 +905,14 @@ def map_background(
             bbox = (0, 0, 1, 1)
     # matplotlib wants extent different than gdal/rasterio convention
     pad_pct = pad_pct or 0.0
-    extent = _padded_extent(bbox, pad_pct)
+    extent = padded_extent(bbox, pad_pct)
     ax.set_extent(extent, crs=ccrs.PlateCarree())
 
     ax.add_image(tiler, zoom_level)
     if image is not None:
         if bbox_image is None:
             bbox_image = _get_rio_bbox(image)
-        extent_img = _padded_extent(bbox_image, 0.0)
+        extent_img = padded_extent(bbox_image, 0.0)
         axim = ax.imshow(
             image,
             transform=ccrs.PlateCarree(),
@@ -930,7 +930,7 @@ def map_background(
     return fig, ax
 
 
-def _padded_extent(bbox, pad_pct):
+def padded_extent(bbox, pad_pct):
     """Return a padded extent, given a bbox and a percentage of padding"""
     left, bot, right, top = bbox
     padx = pad_pct * (right - left) / 2
@@ -1009,46 +1009,29 @@ def _make_line_collections(ax, *, ticks=None, loc="bottom", lw=2, **kwargs):
     return lc_outline, lc
 
 
-def add_zebra(ax, lw=2, add_outline=True, crs="pcarree", zorder=None):
+def add_zebra_frame(ax, lw=2, crs="pcarree", zorder=None):
     import itertools
     import matplotlib.patheffects as pe
-    from matplotlib import patches
 
     ax.spines["geo"].set_visible(False)
-
-    # for loc in ["left", "bot", "right", "top"]:
-    #     lc, lc_outline = _make_line_collections(ax, loc=loc, lw=lw)
-    #     # ax.add_collection(lc_outline)  # , crs=ccrs.PlateCarree())
-    #     ax.add_collection(lc)  # , crs=ccrs.PlateCarree())
-
     left, right, bot, top = ax.get_extent()
     bws = itertools.cycle(["k", "white"])
-    # locs = ["left", "bot", "right", "top"]
-    # print(ax.get_extent())
 
     xticks = sorted([left, *ax.get_xticks(), right])
-    xticks = np.unique(np.array(xticks).round(2))
+    xticks = np.unique(np.array(xticks))
     yticks = sorted([bot, *ax.get_yticks(), top])
-    yticks = np.unique(np.array(yticks).round(2))
-    # print(dx)
+    yticks = np.unique(np.array(yticks))
     for ticks, which in zip([xticks, yticks], ["lon", "lat"]):
         for idx, (start, end) in enumerate(zip(ticks, ticks[1:])):
-            # print(f"{end = }")
-            # if start == -102.0:
-            # start = -102.1
             bw = next(bws)
             if which == "lon":
-                # xs = [[start, end - dx], [start + dx, end]]
-                # offset = dx if idx > 0 else 0
-                # xs = [[start + offset, end], [start + offset, end]]
                 xs = [[start, end], [start, end]]
                 ys = [[bot, bot], [top, top]]
             else:
                 xs = [[left, left], [right, right]]
-                # ys = [[start + offset, end], [start + offset, end]]
                 ys = [[start, end], [start, end]]
-            # print(xs)
-            # Fat linewidths will offset the zebra lines
+
+            # For first and lastlines, used the "projecting" effect
             capstyle = "butt" if idx not in (0, len(ticks) - 2) else "projecting"
             for (xx, yy) in zip(xs, ys):
                 ax.plot(
@@ -1065,9 +1048,6 @@ def add_zebra(ax, lw=2, add_outline=True, crs="pcarree", zorder=None):
                         pe.Normal(),
                     ],
                 )
-
-    # ax.add_patch(patches.Rectangle((right, top), width=0.1, height=0.1, clip_on=False,
-    # facecolor="white", edgecolor="black"))
 
 
 def get_data_offset(ax, dx_pix=0.01, dy_pix=0.01, lw=5):
@@ -1110,13 +1090,13 @@ def map_img(
     if bbox is None:
         bbox = _get_rio_bbox(img)
 
-    extent_img = _padded_extent(bbox, 0.0)
+    extent_img = padded_extent(bbox, 0.0)
     axim = ax.imshow(
         img, transform=crs, extent=extent_img, origin="upper", **imshow_kwargs
     )
     # if add_colorbar:
     # ax.colorbar(axim, loc='r')
-    extent = _padded_extent(bbox, pad_pct)
+    extent = padded_extent(bbox, pad_pct)
     ax.set_extent(extent, crs=crs)
     return ax, axim
 
