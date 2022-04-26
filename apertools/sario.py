@@ -1990,6 +1990,8 @@ def save_xr_tif(
     units=None,
 ):
     """Save an xarray dataarray to a GeoTIFF, specifying the CRS and spatial dimensions"""
+    import rioxarray # noqa
+    # import so that there's the .rio attribute of the xarray object
     if long_name:
         da.attrs["long_name"] = long_name
     if units:

@@ -1341,7 +1341,7 @@ def scale_bar(
     # find lat/lon center to find best UTM zone
     x0, x1, y0, y1 = ax.get_extent(proj.as_geodetic())
     # Projection in metres
-    utm = ccrs.UTM(latlon.utm_from_lon((x0 + x1) / 2))
+    utm = ccrs.UTM(latlon.utm_zone_from_lon((x0 + x1) / 2), southern_hemisphere=(y0 < 0))
     # Get the extent of the plotted area in coordinates in metres
     x0, x1, y0, y1 = ax.get_extent(utm)
     print(x0, x1, y0, y1)
