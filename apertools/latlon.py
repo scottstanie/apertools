@@ -86,6 +86,7 @@ def latlon_to_rowcol(lat, lon, rsc_data=None, filename=None, image_xr=None):
     if filename is not None:
         # rasterio doesn't work for HDF5 files without the full GDAL path
         import xarray as xr
+
         image_xr = xr.open_dataset(filename)
 
     try:
@@ -819,9 +820,9 @@ def crop_rdr_by_bbox(
     return img_crop, lat_crop, lon_crop
 
 
-def utm_from_lon(lon):
+def utm_zone_from_lon(lon):
     """
-    utm_from_lon - UTM zone for a longitude
+    utm_zone_from_lon - UTM zone for a longitude
 
     Not right for some polar regions (Norway, Svalbard, Antartica)
 
@@ -833,3 +834,45 @@ def utm_from_lon(lon):
     import math
 
     return math.floor((lon + 180) / 6) + 1
+
+
+def get_utm_list(bbox):
+    # from pyproj import CRS
+    from pyproj.aoi import AreaOfInterest
+    from pyproj.database import query_utm_crs_info
+
+    left, bot, right, top = bbox
+    utm_crs_list = query_utm_crs_info(
+        datum_name="WGS 84",
+        area_of_interest=AreaOfInterest(
+            west_lon_degree=left,
+            south_lat_degree=bot,
+            east_lon_degree=right,
+            north_lat_degree=top,
+        ),
+    )
+    return utm_crs_list
+
+
+# def llh_to_enu_proj(lons, lats, heights):
+#     from pyproj import Transformer
+#     tt = Transformer.from_pipeline("+proj=pipeline +step +proj=cart +ellps=WGS84 +step +proj=topocentric +ellps=WGS84 +lon_0=5 +lat_0=55 +h_0=200")
+#     tt.transform(5.0001, 55.0001, 201)
+
+
+def xyz_to_enu_proj(xs, ys, zs, xyz0=None):
+    from pyproj import Transformer
+
+    if xyz0 is None:
+        if np.isscalar(xs):
+            xyz0 = (xs, ys, zs)
+        else:
+            xyz0 = (xs[0], ys[0], zs[0])
+    x0, y0, z0 = xyz0
+
+    proj_str = (
+        "+proj=pipeline +step +proj=topocentric +ellps=WGS84 "
+        f"+X_0={x0} +Y_0={y0}  +Z_0={z0} +"
+    )
+    pipe_trans = Transformer.from_pipeline(proj_str)
+    return pipe_trans.transform(xs, ys, zs)
