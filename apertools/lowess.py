@@ -65,7 +65,7 @@ def lowess_stack(stack, x, frac=0.4, min_x_weighted=None, n_iter=2, n_jobs=-1):
     stack_cols = stack.reshape((ns, -1))
 
     if min_x_weighted:
-        frac = _find_frac(x, min_x_weighted)
+        frac = find_frac(x, min_x_weighted)
 
     # stack_out = np.zeros(stack_cols.shape, dtype=stack.dtype)
     # for index in range(0, stack_cols.shape[1]):
@@ -78,8 +78,7 @@ def lowess_stack(stack, x, frac=0.4, min_x_weighted=None, n_iter=2, n_jobs=-1):
     return stack_out.reshape((ns, nrows, ncols))
 
 
-@njit(cache=True, nogil=True)
-def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False):
+def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False, x_out=None):
     """Run LOWESS smoothing on a single pixel.
 
     Note that lowess smoother requiring native endian datatype (for numba).
@@ -96,14 +95,18 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False):
             Defaults to 2.
         do_sort (bool, optional): Sort x and y before running LOWESS.
             Defaults to False.
+        x_out (ndarray, optional): x values to output. If None, will use x.
 
     Returns:
         ndarray: smoothed y values with shape (ns,)
     """
     n = len(x)
-    yest = np.zeros(n)
+    if x_out is None:
+        x_out = x
+    x_out = np.ascontiguousarray(x_out)
+
     if np.any(np.isnan(y)) or np.all(y == 0.0):
-        return yest
+        return np.zeros(len(x_out))
 
     if do_sort:
         # Sort the x and y values
@@ -111,25 +114,43 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False):
         x = x[sort_idxs]
         y = y[sort_idxs]
 
+    # First run LOWESS on the data points to get the weights of the data points
+    # using it-1 iterations, last iter done next
+    if n_iter > 1:
+        _, delta = _lowess(y, x, np.ones_like(x), frac=frac, n_iter=n_iter - 1, x_out=x)
+    else:
+        # Initialize the residual-weights to 1
+        delta = np.ones(n)
+    # Then run once more using those supplied weights at the points provided by xvals
+    # No extra iterations are performed here since weights are fixed
+    y_out, _ = _lowess(y, x, delta, frac=frac, n_iter=1, x_out=x_out)
+
+    return y_out
+
+
+@njit(cache=True, nogil=True)
+def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
+    n = len(x)
+    n_out = len(x_out)
     r = int(np.ceil(frac * n))
     if r == n:
         r -= 1
 
+    # Get the matrix of local weights for each step
+    xc = np.ascontiguousarray(x)  # make contiguous (necessary for `reshape` for numba)
     # Find the distance to the rth furthest point from each x value
-    h = np.array([np.sort(np.abs(x - x[i]))[r] for i in range(n)])
-    xc = x.copy()  # make contiguous (necessary for `reshape` for numba)
+    h = np.array([np.sort(np.abs(xc - xc[i]))[r] for i in range(n)])
     # Get the relative distance to the rth furthest point
-    w = np.abs((xc.reshape((-1, 1)) - xc.reshape((1, -1))) / h)
+    # w = np.abs((xc.reshape((-1, 1)) - xc.reshape((1, -1))) / h)
+    w = np.abs((xc.reshape((-1, 1)) - x_out.reshape((1, -1))) / h.reshape((-1, 1)))
     # Clip to 0, 1 (`np.clip` not available in numba)
     w = np.minimum(1.0, np.maximum(w, 0.0))
     # tricube weighting
     w = (1 - w ** 3) ** 3
 
-    # Initialize the residual-weights to 1
-    delta = np.ones(n)
-
-    for _ in range(n_iter):
-        for i in range(n):
+    yest = np.zeros(n_out)
+    for iter in range(n_iter):
+        for i in range(n_out):
             weights = delta * w[:, i]
             # Form the linear system as the reduced-size version of the Ax=b:
             # A^T A x = A^T b
@@ -144,6 +165,8 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False):
             beta = np.linalg.lstsq(A, b)[0]
             yest[i] = beta[0] + beta[1] * x[i]
 
+        if iter == n_iter - 1:
+            break
         residuals = y - yest
         s = np.median(np.abs(residuals))
         if s < 1e-3:
@@ -152,7 +175,7 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False):
         delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
         delta = (1 - delta ** 2) ** 2
 
-    return yest
+    return yest, delta
 
 
 def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=2):
@@ -181,7 +204,7 @@ def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=
 
     x = date2num(da[x_dset].values)
     if min_days_weighted and min_days_weighted > 0:
-        frac = _find_frac(x, min_days_weighted)
+        frac = find_frac(x, min_days_weighted)
     out_stack = lowess_stack(da.values, x, frac, n_iter)
     # Now return as a DataArray
     out_da = xr.DataArray(out_stack, coords=da.coords, dims=da.dims)
@@ -191,22 +214,51 @@ def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=
     return out_da
 
 
-def _find_frac(x, min_x_weighted):
+def find_frac(x, min_x_weighted=None, how="all", min_points=50):
     """Find fraction of data to use so all windows are at least `min_x_weighted` days
 
     Args:
         x (ndarray): array of days from date2num
         min_x_weighted (int, float): Minimum time period (in units of `x`) to include in lowess fit
+        max_x_weighted (int, float): Maximum time period (in units of `x`) to include in lowess fit
+        how (str, optional): Options are "any" (default), "all".
+            "any" means that any x difference can be above `min_x_weighted`.
+            "all" means that all x differences must be above `min_x_weighted`. "all" produces
+            larger fractions than "any"
+        min_points (int, optional): Minimum number of points to include in lowess fit.
+            Overrides `min_x_weighted` if `min_points` is greater than than `min_x_weighted`.
+
+    Notes on min_x_weighted/max_x_weighted:
+        For irregular sampling, the fraction of data to use can be based on the lower or
+        high sample frequency parts of the data.
+
+        For example, if x = [0, 3, 6, 9, 12, 13, 14, 15] days,
+        and you want to use a window covering at least 4 days, then a 4-day window
+        at the beginning (when the spacing is 3-days apart) covers 2 points,
+        while at the end (when the spacing is 1-day apart) covers 4 points.
+            min_x_weighted = 4 leads to a fraction of 2/8 = 0.125
+            max_x_weighted = 4 leads to a fraction of 4/8 = 0.5
+
     """
     n = len(x)
+    if min_points:
+        min_frac = np.clip(min_points / n, 0.0, 1.0)
     day_diffs = np.abs(x.reshape((-1, 1)) - x.reshape((1, -1)))
     # The `kk`th diagonal will contain the time differences when using points `kk` indices apart
     # (e.g. the 2nd diagonal contains how many days apart are x[2]-x[0], x[3]-x[1],...)
-    smallest_diffs = np.array([np.min(np.diag(day_diffs, k=kk)) for kk in range(n)])
+
+    if how == "any":
+        # 'any' means that there's at least one point that is at least `min_x_weighted` days apart
+        diffs = np.array([np.max(np.diag(day_diffs, k=kk)) for kk in range(n)])
+    elif how == "all" or how is None:
+        diffs = np.array([np.min(np.diag(day_diffs, k=kk)) for kk in range(n)])
+    else:
+        raise ValueError("how must be 'any' or 'all'")
+
     # Get the first diagonal where it crosses the min_x_weighted threshold
-    idxs_larger = np.where(smallest_diffs > min_x_weighted)[0]
+    idxs_larger = np.where(diffs > min_x_weighted)[0]
     if len(idxs_larger) > 0:
-        return idxs_larger[0] / n
+        return max(idxs_larger[0] / n, min_frac)
     else:
         return 1.0
 
@@ -420,7 +472,7 @@ def bootstrap_lowess_xr(
     x = date2num(da[x_dset].values)
     stack = da.values
     if min_days_weighted and min_days_weighted > 0:
-        frac = _find_frac(x, min_days_weighted)
+        frac = find_frac(x, min_days_weighted)
 
     if n_jobs < 0:
         n_jobs = os.cpu_count()
@@ -434,7 +486,7 @@ def bootstrap_lowess_xr(
     stack_cols = stack.reshape((ns, -1))
 
     if min_days_weighted:
-        frac = _find_frac(x, min_days_weighted)
+        frac = find_frac(x, min_days_weighted)
 
     # stack_out = np.zeros(stack_cols.shape, dtype=stack.dtype)
     # for index in range(0, stack_cols.shape[1]):
@@ -501,12 +553,12 @@ def _write_attrs(da, K=None, n_iter=None, frac=None, pct_bootstrap=None):
     return da
 
 
-### Demonstrations of LOWESS steps ### 
+### Demonstrations of LOWESS steps ###
 
 
 def demo_window(x, frac=0.4, min_x_weighted=None):
     if min_x_weighted:
-        frac = _find_frac(x, min_x_weighted)
+        frac = find_frac(x, min_x_weighted)
     n = len(x)
     r = int(np.ceil(frac * n))
     if r == n:
