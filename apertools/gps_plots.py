@@ -37,6 +37,7 @@ def plot_gps_los(
     gps_color="#86b251",
     ms=7,
     los_map_file=LOS_FILENAME,
+    enu_coeffs=None,
 ):
     if labels is None:
         labels = repeat(None, len(insar_mm_list))
@@ -52,6 +53,7 @@ def plot_gps_los(
         end_date=end_date,
         zero_start=zero_start,
         zero_mean=zero_mean,
+        enu_coeffs=enu_coeffs,
     )
     dts = df.index
     day_nums = (dts - dts[0]).days
@@ -115,6 +117,7 @@ def plot_gps_enu(
             top=False,  # ticks along the top edge are off
             labelbottom=False,
         )
+
     if nrows == 1:
         ncols = 3
     elif ncols == 3:
@@ -132,8 +135,11 @@ def plot_gps_enu(
 
     if use_proplot:
         import proplot as pplt
+
         print(subplot_kw)
-        fig, axes = pplt.subplots(nrows=nrows, ncols=ncols, sharex=False, sharey=False, **subplot_kw)
+        fig, axes = pplt.subplots(
+            nrows=nrows, ncols=ncols, sharex=False, sharey=False, **subplot_kw
+        )
         # axes.set_ylim(y-1, 1))
         # axes.format(yticks=[-2, 0, 2],ylim=(-2, 2))
     else:
@@ -289,13 +295,14 @@ def _plot_slope_df(df, **kwargs):
     return fig, axes
 
 
-def _plot_smoothed(ax, df, column, days_smooth, marker, lw=3):
+def _plot_smoothed(ax, df, column, days_smooth, marker, lw=3, color=None):
     ax.plot(
         df[column].dropna().index,
         df[column].dropna().rolling(days_smooth, min_periods=1, center=True).mean(),
         marker,
         linewidth=lw,
         label="%s day smoothed %s" % (days_smooth, column),
+        color=color,
     )
 
 
@@ -364,8 +371,15 @@ def plot_all_stations(
     ylim=None,
     share=False,
     figsize=(10, 10),
+    lw_insar=3,
+    lw_gps=3,
+    color_insar=None,
+    color_gps=None,
+    rasterize_gps=True,
     outname=None,
-    drop_na_insar=True,
+    plot_std=False,
+    std_nsigma=2,
+    abc=False,
 ):
     import proplot as pplt
 
@@ -379,6 +393,7 @@ def plot_all_stations(
         figsize=figsize,
         sharex=share,
         sharey=share,
+        abc=abc,
         # figsize=(4 * ncols, nplots)
     )
     # axes = axes.ravel()
@@ -386,17 +401,26 @@ def plot_all_stations(
         # ax = axes.ravel()[idx]
         ax = axes[idx]
         gps_col, insar_col = f"{n}_gps", f"{n}_insar"
-        # curdf = df[[]]  # .dropna()
-        ax.plot(df.index, df[gps_col], marker="o", ms=1, alpha=0.3)
-        _plot_smoothed(ax, df, gps_col, days_smooth_gps, "-")
+        ax.plot(df.index, df[gps_col], marker="o", ms=1, alpha=0.3, color=color_gps, rasterized=rasterize_gps)
+        _plot_smoothed(ax, df, gps_col, days_smooth_gps, "-", lw=lw_gps, color=color_gps)
 
-        insar_df = df[[insar_col]].dropna() if drop_na_insar else df[[insar_col]]
-        ax.plot(insar_df.index, insar_df[insar_col], marker="o", ms=1)
+        df_nona = df[[insar_col]].dropna()
+        # print(f"{plot_std = }, {c in df.columns}")
+        if plot_std and f"{n}_std" in df.columns:
+            std = df.loc[df_nona.index, f"{n}_std"]
+            ax.fill_between(
+                df_nona.index,
+                df_nona[insar_col] - std_nsigma * std,
+                df_nona[insar_col] + std_nsigma * std,
+                alpha=0.9,
+            )
+
+        ax.plot(df_nona.index, df_nona[insar_col], marker="o", ms=1, lw=lw_insar, color=color_insar)
         # print(df[insar_col].dropna())
         # ax.legend()
         # ax.grid()
         ax.set_title(n)
-    axes.format(grid=True, ylim=ylim, ylabel="cm")
+    axes.format(grid=True, ylim=ylim, ylabel="cm", xlabel="")
     if outname:
         fig.savefig(outname)
     return fig, axes

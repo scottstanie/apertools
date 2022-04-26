@@ -81,6 +81,7 @@ class InsarGPSCompare:
     dset: str = "linear_velocity"
     los_map_file: str = LOS_FILENAME
     insar_ds: xr.DataArray = None
+    insar_std_dset: str = None
     gps_kind: str = "los"
 
     los_dset: str = LOS_FILENAME.replace(".tif", "")
@@ -241,6 +242,10 @@ class InsarGPSCompare:
             # 2D: just the average ground velocity
             is_2d = True
             dates = self.insar_ds.indexes["date"]
+        if self.insar_std_dset is not None:
+            insar_std_da = self.insar_ds[self.insar_std_dset]
+        else:
+            insar_std_da = None
 
         df_insar = pd.DataFrame({"date": dates})
         for row in df_gps_locations.itertuples():
@@ -266,6 +271,13 @@ class InsarGPSCompare:
             elif self.insar_shift_cm_per_year:
                 coeffs = [self.insar_shift_cm_per_year / 365.25, 0]
                 df_insar[row.name] += linear_trend(coeffs=coeffs, x=day_nums)
+
+            # Apply standard deviations if requested
+            if insar_std_da is not None:
+                ts_std = apertools.utils.window_stack_xr(
+                    insar_std_da, lon=row.lon, lat=row.lat, window_size=self.window_size
+                )
+                df_insar[row.name + "_std"] = ts_std
 
         df_insar.set_index("date", inplace=True)
         self.df_insar = df_insar
@@ -406,15 +418,8 @@ class InsarGPSCompare:
                 continue
             df_out.drop(col, axis=1, inplace=True)
             station = col.replace("_gps", "").replace("_insar", "")
-            c = "%s_gps" % station
-            if c in df_out.columns:
-                df_out.drop(c, axis=1, inplace=True)
-            c = "%s_insar" % station
-            if c in df_out.columns:
-                df_out.drop(c, axis=1, inplace=True)
-            c = "%s_diff" % station
-            if c in df_out.columns:
-                df_out.drop(c, axis=1, inplace=True)
+            col_list = [f"{station}_{suffix}" for suffix in ["gps", "insar", "diff", "std"]]
+            df_out.drop(columns=col_list, inplace=True, errors="ignore")
         return df_out
 
     def _subtract_reference(self, df):
