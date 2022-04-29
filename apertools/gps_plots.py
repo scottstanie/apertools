@@ -96,11 +96,10 @@ def plot_gps_enu(
     days_smooth=24,
     start_date=None,
     end_date=None,
-    ylabel="[cm]",
-    title="",
     colordots=None,
     colorline=None,
     lw=2,
+    markersize=5,
     ylim=None,
     nrows=3,
     ncols=1,
@@ -140,29 +139,37 @@ def plot_gps_enu(
         fig, axes = pplt.subplots(
             nrows=nrows, ncols=ncols, sharex=False, sharey=False, **subplot_kw
         )
-        # axes.set_ylim(y-1, 1))
-        # axes.format(yticks=[-2, 0, 2],ylim=(-2, 2))
     else:
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
-    axes[0].plot(dts, east_cm, ".")
+    axes[0].plot(dts, east_cm, ".", color=colordots, markersize=markersize)
     axes[0].set_ylabel("East [cm]")
-    axes[0].plot(dts, gps.moving_average(east_cm, days_smooth), color=colorline, lw=lw)
+    if days_smooth and days_smooth > 0:
+        axes[0].plot(
+            dts, gps.moving_average(east_cm, days_smooth), color=colorline, lw=lw
+        )
     axes[0].grid(True)
     axes[0].set_ylim(ylim)
     # remove_xticks(axes[0])
 
-    axes[1].plot(dts, north_cm, ".")
+    axes[1].plot(dts, north_cm, ".", color=colordots, markersize=markersize)
     axes[1].set_ylabel("North [cm]")
-    axes[1].plot(dts, gps.moving_average(north_cm, days_smooth), color=colorline, lw=lw)
+    if days_smooth and days_smooth > 0:
+        axes[1].plot(
+            dts, gps.moving_average(north_cm, days_smooth), color=colorline, lw=lw
+        )
     axes[1].grid(True)
     axes[1].set_ylim(ylim)
     # remove_xticks(axes[1])
 
-    axes[2].plot(dts, up_cm, ".", color=colordots)
+    axes[2].plot(dts, up_cm, ".", color=colordots, markersize=markersize)
     axes[2].set_ylabel("Up [cm]")
-    axes[2].plot(dts, gps.moving_average(up_cm, days_smooth), color=colorline, lw=lw)
+    if days_smooth and days_smooth > 0:
+        axes[2].plot(
+            dts, gps.moving_average(up_cm, days_smooth), color=colorline, lw=lw
+        )
     axes[2].grid(True)
     axes[2].set_ylim(ylim)
+    axes.format(xlabel="")
     # remove_xticks(axes[2])
 
     # fig.suptitle(station)
@@ -295,10 +302,11 @@ def _plot_slope_df(df, **kwargs):
     return fig, axes
 
 
-def _plot_smoothed(ax, df, column, days_smooth, marker, lw=3, color=None):
-    ax.plot(
-        df[column].dropna().index,
-        df[column].dropna().rolling(days_smooth, min_periods=1, center=True).mean(),
+def _plot_smoothed(ax, df, column, days_smooth, marker, lw=3, color=None, shift=0):
+    series = df[column].dropna().rolling(days_smooth, min_periods=1, center=True).mean()
+    return series, ax.plot(
+        series.index,
+        series + shift,
         marker,
         linewidth=lw,
         label="%s day smoothed %s" % (days_smooth, column),
@@ -373,6 +381,7 @@ def plot_all_stations(
     figsize=(10, 10),
     lw_insar=3,
     lw_gps=3,
+    alpha_gps=1.0,
     color_insar=None,
     color_gps=None,
     rasterize_gps=True,
@@ -380,6 +389,9 @@ def plot_all_stations(
     plot_std=False,
     std_nsigma=2,
     abc=False,
+    return_lines=False,
+    shift_gps=False,
+    return_rms=False,
 ):
     import proplot as pplt
 
@@ -388,8 +400,6 @@ def plot_all_stations(
     fig, axes = pplt.subplots(
         nrows=int(np.ceil(nplots / ncols)),
         ncols=ncols,
-        # refwidth=1,
-        # refheight=1,
         figsize=figsize,
         sharex=share,
         sharey=share,
@@ -397,33 +407,95 @@ def plot_all_stations(
         # figsize=(4 * ncols, nplots)
     )
     # axes = axes.ravel()
-    for idx, n in enumerate(df_diff.index):
+    rms_dict = {}
+    for idx, name in enumerate(df_diff.index):
+        lines = []
         # ax = axes.ravel()[idx]
         ax = axes[idx]
-        gps_col, insar_col = f"{n}_gps", f"{n}_insar"
-        ax.plot(df.index, df[gps_col], marker="o", ms=1, alpha=0.3, color=color_gps, rasterized=rasterize_gps)
-        _plot_smoothed(ax, df, gps_col, days_smooth_gps, "-", lw=lw_gps, color=color_gps)
+        gps_col, insar_col = f"{name}_gps", f"{name}_insar"
+        if shift_gps:
+            shift = _find_rms_shift(df[gps_col], df[insar_col], gps_rolling_window=360)
+        else:
+            shift = 0
+
+        l1 = ax.plot(
+            df.index,
+            df[gps_col] + shift,
+            marker=".",
+            linestyle="none",
+            ms=1,
+            alpha=0.8,
+            color=color_gps,
+            rasterized=rasterize_gps,
+        )
+        lines.append(l1)
+        if days_smooth_gps and days_smooth_gps > 1:
+            gps_sm, l2 = _plot_smoothed(
+                ax,
+                df,
+                gps_col,
+                days_smooth_gps,
+                "-",
+                lw=lw_gps,
+                color=color_gps,
+                shift=shift,
+            )
+            lines.append(l2)
 
         df_nona = df[[insar_col]].dropna()
         # print(f"{plot_std = }, {c in df.columns}")
-        if plot_std and f"{n}_std" in df.columns:
-            std = df.loc[df_nona.index, f"{n}_std"]
+        if plot_std and f"{name}_std" in df.columns:
+            std = df.loc[df_nona.index, f"{name}_std"]
             ax.fill_between(
                 df_nona.index,
                 df_nona[insar_col] - std_nsigma * std,
                 df_nona[insar_col] + std_nsigma * std,
-                alpha=0.9,
+                alpha=alpha_gps,
             )
 
-        ax.plot(df_nona.index, df_nona[insar_col], marker="o", ms=1, lw=lw_insar, color=color_insar)
+        l3 = ax.plot(
+            df_nona.index,
+            df_nona[insar_col],
+            # marker="o",
+            # ms=1,
+            lw=lw_insar,
+            color=color_insar,
+        )
+        lines.append(l3)
         # print(df[insar_col].dropna())
         # ax.legend()
         # ax.grid()
-        ax.set_title(n)
+        ax.set_title(name)
+
+        gps_sm = df[gps_col].rolling(30, min_periods=1).mean()
+        d = (gps_sm + shift - df[insar_col]).dropna()
+        rms_dict[name] = (rms(d), maxabs(d))
+
     axes.format(grid=True, ylim=ylim, ylabel="cm", xlabel="")
     if outname:
         fig.savefig(outname)
-    return fig, axes
+
+    ret = [fig, axes]
+    if return_lines:
+        ret.append(lines)
+    if return_rms:
+        ret.append(rms_dict)
+    return ret
+
+
+def rms(x):
+    return np.sqrt(np.nanmean(x ** 2))
+
+
+def maxabs(x):
+    return np.nanmax(np.abs(x))
+
+
+def _find_rms_shift(gps, insar, gps_rolling_window=30, search_range=(-1, 1)):
+    """Find RMS-minimizing shift between two series. Add this to GPS"""
+    gps_sm = gps.rolling(gps_rolling_window, min_periods=1).mean()
+    diff = (insar - gps_sm).dropna()
+    return np.clip(diff.mean(), *search_range)
 
 
 def plot_stations_on_image(
