@@ -78,6 +78,7 @@ def lowess_stack(stack, x, frac=0.4, min_x_weighted=None, n_iter=2, n_jobs=-1):
     return stack_out.reshape((ns, nrows, ncols))
 
 
+@njit
 def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False, x_out=None):
     """Run LOWESS smoothing on a single pixel.
 
@@ -121,6 +122,7 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False, x_out=None):
     else:
         # Initialize the residual-weights to 1
         delta = np.ones(n)
+    # print(np.sum(delta))
     # Then run once more using those supplied weights at the points provided by xvals
     # No extra iterations are performed here since weights are fixed
     y_out, _ = _lowess(y, x, delta, frac=frac, n_iter=1, x_out=x_out)
@@ -130,6 +132,7 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False, x_out=None):
 
 @njit(cache=True, nogil=True)
 def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
+    """Actual linear fit loop, given the starting residual weights"""
     n = len(x)
     n_out = len(x_out)
     r = int(np.ceil(frac * n))
@@ -149,7 +152,7 @@ def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
     w = (1 - w ** 3) ** 3
 
     yest = np.zeros(n_out)
-    for iter in range(n_iter):
+    for _ in range(n_iter):
         for i in range(n_out):
             weights = delta * w[:, i]
             # Form the linear system as the reduced-size version of the Ax=b:
@@ -165,8 +168,6 @@ def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
             beta = np.linalg.lstsq(A, b)[0]
             yest[i] = beta[0] + beta[1] * x[i]
 
-        if iter == n_iter - 1:
-            break
         residuals = y - yest
         s = np.median(np.abs(residuals))
         if s < 1e-3:
@@ -241,8 +242,10 @@ def find_frac(x, min_x_weighted=None, how="all", min_points=50):
 
     """
     n = len(x)
-    if min_points:
-        min_frac = np.clip(min_points / n, 0.0, 1.0)
+    if not min_points:
+        min_points = 0.0
+    min_frac = np.clip(min_points / n, 0.0, 1.0)
+
     day_diffs = np.abs(x.reshape((-1, 1)) - x.reshape((1, -1)))
     # The `kk`th diagonal will contain the time differences when using points `kk` indices apart
     # (e.g. the 2nd diagonal contains how many days apart are x[2]-x[0], x[3]-x[1],...)
@@ -282,12 +285,12 @@ def find_frac(x, min_x_weighted=None, how="all", min_points=50):
 
 
 @njit(cache=True, nogil=True)
-def bootstrap_mean_std(x, y, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
+def bootstrap_mean_std(y, x, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
     """Bootstrap mean and standard deviation of y
 
     Args:
-        x (ndarray): x values
         y (ndarray): y values
+        x (ndarray): x values
         frac (float, optional): fraction of data to use for lowess fit. Defaults to 0.3.
         n_iter (int, optional): number of LOWESS iterations to run to exclude outliers.
             Defaults to 2.
@@ -301,8 +304,8 @@ def bootstrap_mean_std(x, y, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
 
     """
     bootstraps = bootstrap_lowess(
-        x,
         y,
+        x,
         frac=frac,
         n_iter=n_iter,
         K=K,
@@ -314,12 +317,12 @@ def bootstrap_mean_std(x, y, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
 
 
 @njit(cache=True, nogil=True)
-def bootstrap_lowess(x, y, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
+def bootstrap_lowess(y, x, frac=0.3, n_iter=2, K=100, pct_bootstrap=1.0):
     """Repeatedly run lowess on a pixel, bootstrapping the data
 
     Args:
-        x (ndarray): x values
         y (ndarray): y values
+        x (ndarray): x values
         frac (float, optional): fraction of data to use for lowess fit. Defaults to 0.3.
         n_iter (int, optional): number of iterations to run lowess. Defaults to 2.
         K (int, optional): number of bootstrap samples to take. Defaults to 100.
@@ -356,6 +359,7 @@ def plot_bootstrap(
     xplot=None,
     mean=None,
     std=None,
+    ax=None,
 ):
     import matplotlib.pyplot as plt
 
@@ -374,7 +378,10 @@ def plot_bootstrap(
     if xplot is None:
         xplot = np.arange(len(y))
 
-    fig, ax = plt.subplots()
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
     ax.fill_between(xplot, mean - 1.96 * std, mean + 1.96 * std, alpha=0.25)
     ax.plot(xplot, mean, color="red")
     if y is not None:
@@ -558,7 +565,7 @@ def _write_attrs(da, K=None, n_iter=None, frac=None, pct_bootstrap=None):
 
 def demo_window(x, frac=0.4, min_x_weighted=None):
     if min_x_weighted:
-        frac = find_frac(x, min_x_weighted)
+        frac = find_frac(x, min_x_weighted, min_points=None)
     n = len(x)
     r = int(np.ceil(frac * n))
     if r == n:
