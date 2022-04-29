@@ -866,7 +866,7 @@ def map_background(
     image=None,
     pad_pct=0.3,
     bbox_image=None,
-    zoom_level=9,
+    zoom_level=8,
     fig=None,
     ax=None,
     coastlines=False,
@@ -887,7 +887,8 @@ def map_background(
     # tiler = img_tiles.Stamen("terrain-background")
     # tiler = img_tiles.GoogleTiles(style="satellite")
     mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
-    tiler = img_tiles.MapboxTiles(mykey, "satellite")
+    # https://github.com/SciTools/cartopy/issues/1965#issuecomment-992603403
+    tiler = img_tiles.MapboxTiles(map_id="satellite-v9", access_token=mykey)
     crs = tiler.crs
 
     # if fig is None and ax is None:
@@ -900,7 +901,7 @@ def map_background(
 
     if bbox is None:
         try:
-            bbox = image.rio.bounds()
+            bbox = _get_rio_bbox(image)
         except AttributeError:
             bbox = (0, 0, 1, 1)
     # matplotlib wants extent different than gdal/rasterio convention
@@ -1073,6 +1074,32 @@ def _get_rio_bbox(img):
     except:
         raise ValueError("bbox must be provided if `img` is not an xarray DataArray")
     return bbox
+
+
+def plot_rect(
+    ax,
+    lon=None,
+    lat=None,
+    w=0.05,
+    bbox=None,
+    edgecolor="k",
+    lw=3,
+    zorder=5,
+):
+    from matplotlib.patches import Rectangle
+
+    if lon is not None and lat is not None and w is not None:
+        xy = (lon - w / 2, lat - w / 2)
+        width = height = w
+    elif bbox is not None:
+        left, bot, right, top = bbox
+        xy = (left, bot)
+        width = right - left
+        height = top - bot
+    rect = Rectangle(
+        xy, width, height, facecolor="none", edgecolor=edgecolor, lw=lw, zorder=zorder
+    )
+    return ax.add_patch(rect)
 
 
 def map_img(
@@ -1341,7 +1368,9 @@ def scale_bar(
     # find lat/lon center to find best UTM zone
     x0, x1, y0, y1 = ax.get_extent(proj.as_geodetic())
     # Projection in metres
-    utm = ccrs.UTM(latlon.utm_zone_from_lon((x0 + x1) / 2), southern_hemisphere=(y0 < 0))
+    utm = ccrs.UTM(
+        latlon.utm_zone_from_lon((x0 + x1) / 2), southern_hemisphere=(y0 < 0)
+    )
     # Get the extent of the plotted area in coordinates in metres
     x0, x1, y0, y1 = ax.get_extent(utm)
     print(x0, x1, y0, y1)
