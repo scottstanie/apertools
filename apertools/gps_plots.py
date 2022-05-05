@@ -388,6 +388,8 @@ def plot_all_stations(
     outname=None,
     plot_std=False,
     std_nsigma=2,
+    alpha_std=0.5,
+    color_std=None,
     abc=False,
     return_lines=False,
     shift_gps=False,
@@ -424,7 +426,7 @@ def plot_all_stations(
             marker=".",
             linestyle="none",
             ms=1,
-            alpha=0.8,
+            alpha=alpha_gps,
             color=color_gps,
             rasterized=rasterize_gps,
         )
@@ -446,12 +448,14 @@ def plot_all_stations(
         # print(f"{plot_std = }, {c in df.columns}")
         if plot_std and f"{name}_std" in df.columns:
             std = df.loc[df_nona.index, f"{name}_std"]
-            ax.fill_between(
+            lf = ax.fill_between(
                 df_nona.index,
                 df_nona[insar_col] - std_nsigma * std,
                 df_nona[insar_col] + std_nsigma * std,
-                alpha=alpha_gps,
+                alpha=alpha_std,
+                color=color_std,
             )
+            lines.append(lf)
 
         l3 = ax.plot(
             df_nona.index,

@@ -785,6 +785,35 @@ def get_xr_transect(da, lon, lat, lon_name="lon", lat_name="lat"):
     da.sel(x=x_indexer, y=y_indexer, method="nearest")
 
 
+def shift_latlon(da, full_pixel=False, down_right=False, copy=True):
+    """Shift lat/lon coordinates by one pixel
+
+    Args:
+        da (xr.DataArray): input DataArray
+        full_pixel (bool, optional): Shift by 1 full pixel (as opposed to half). Defaults to False.
+        down_right (bool, optional): Shift latlon to southwest. Defaults to False.
+        copy (bool, optional): Return a copy of `da`. Defaults to True.
+
+    Returns:
+        xr.DataArray: Shifted version of `da`
+    """
+
+    denom = 1 if full_pixel else 2
+    if down_right:
+        denom *= -1
+
+    dlat = np.diff(da.lat)[0]
+    dlon = np.diff(da.lon)[0]
+    lats = da.lat.copy()
+    lons = da.lon.copy()
+    lats = lats - dlat / denom
+    lons = lons - dlon / denom
+
+    out_da = da if not copy else da.copy()
+    out_da["lon"] = lons
+    out_da["lat"] = lats
+    return out_da
+
 # Randoms using the sentinelapi
 def find_slc_products(api, gj_obj, date_start, date_end, area_relation="contains"):
     """Query for Sentinel 1 SLC products with common options
