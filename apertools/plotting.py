@@ -1103,7 +1103,7 @@ def plot_rect(
 
 
 def map_img(
-    img, bbox=None, pad_pct=0.0, ax=None, crs=None, add_colorbar=True, **imshow_kwargs
+    image=None, bbox=None, pad_pct=0.0, ax=None, crs=None, add_colorbar=True, **imshow_kwargs
 ):
     import cartopy.crs as ccrs
 
@@ -1115,11 +1115,11 @@ def map_img(
         ax = fig.add_subplot(1, 1, 1, projection=crs)
 
     if bbox is None:
-        bbox = _get_rio_bbox(img)
+        bbox = _get_rio_bbox(image)
 
     extent_img = padded_extent(bbox, 0.0)
     axim = ax.imshow(
-        img, transform=crs, extent=extent_img, origin="upper", **imshow_kwargs
+        image, transform=crs, extent=extent_img, origin="upper", **imshow_kwargs
     )
     # if add_colorbar:
     # ax.colorbar(axim, loc='r')

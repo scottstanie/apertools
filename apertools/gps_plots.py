@@ -37,7 +37,8 @@ def plot_gps_los(
     gps_color="#86b251",
     ms=7,
     los_map_file=LOS_FILENAME,
-    enu_coeffs=None,
+    los_enu_coeffs=None,
+    los_da=None,
 ):
     if labels is None:
         labels = repeat(None, len(insar_mm_list))
@@ -46,14 +47,15 @@ def plot_gps_los(
 
     df = gps.load_gps_los(
         station_name=name,
-        los_map_file=los_map_file,
         days_smooth=days_smooth,
         reference_station=ref,
         start_date=start_date,
         end_date=end_date,
         zero_start=zero_start,
         zero_mean=zero_mean,
-        enu_coeffs=enu_coeffs,
+        los_map_file=los_map_file,
+        enu_coeffs=los_enu_coeffs,
+        los_da=los_da,
     )
     dts = df.index
     day_nums = (dts - dts[0]).days
@@ -136,8 +138,10 @@ def plot_gps_enu(
         import proplot as pplt
 
         print(subplot_kw)
+
         fig, axes = pplt.subplots(
-            nrows=nrows, ncols=ncols, sharex=False, sharey=False, **subplot_kw
+            nrows=nrows, ncols=ncols, sharex=True, sharey=False, **subplot_kw
+
         )
     else:
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
@@ -169,7 +173,7 @@ def plot_gps_enu(
         )
     axes[2].grid(True)
     axes[2].set_ylim(ylim)
-    axes.format(xlabel="")
+    axes.format(xlabel="", yticks=axes[0].get_yticks())
     # remove_xticks(axes[2])
 
     # fig.suptitle(station)
