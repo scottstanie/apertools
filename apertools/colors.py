@@ -1,3 +1,4 @@
+"""Custom plotting colors, used for plotting.py"""
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 import matplotlib.pyplot as plt

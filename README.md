@@ -9,9 +9,17 @@ Other helping tools: [sentineleof](https://github.com/scottstanie/sentineleof) f
 ## Setup and installation
 
 ```bash
-pip install apertools
+pip install -e apertools
 ```
 
+There is a version on pypi, but it's pretty outdated. 
+I have not tried to keep track of all requirements throughout the entire package, so if you run into `ImportError`s, I have probably installed it using [mamba](https://mamba.readthedocs.io/en/latest/user_guide/mamba.html) into my existing conda environment.
+
+After installing, the `aper` command line tool is installed, which has multiple sub-commands.
+
+Also installs `asfdownload` for downloading many files from ASF.
+
+The most used modules are...
 
 #### sario.py
 
@@ -21,14 +29,20 @@ Contains methods to load Sentinel, UAVSAR and DEM files
 Main function: 
 
 ```python
-import apertools.sario
-my_slc = apertools.sario.load('/file/path/radar.slc')
-geocoded_slc = apertools.sario.load('/file/path/myslc.geo')
-my_int = apertools.sario.load('/file/path/interferogram.int')
-unwrapped_int = apertools.sario.load('/file/path/igram.unw')
-my_dem = apertools.sario.load('/file/path/elevation.dem')
-my_hgt = apertools.sario.load('/file/path/N20W100.hgt')
+from apertools import sario
+# Loads images from ROI_PAC format:
+my_slc = sario.load('/file/path/radar.slc')
+geocoded_slc = sario.load('/file/path/myslc.geo')
+my_int = sario.load('/file/path/interferogram.int')
+unwrapped_int = sario.load('/file/path/igram.unw')
+my_dem = sario.load('/file/path/elevation.dem')
+
+# Can also just pass through to GDAL for any other gdal-readable format.
+other_img = sario.load("gdal_readable_image.tif", use_gdal=True)
 ```
+
+#### gps.py
+Functions for using GPS data in conjunction with InSAR stacks.
 
 #### latlon.py
 Contains LatlonImage class, which loads metadata about an image and acts as a smart numpy array.
@@ -40,13 +54,13 @@ Also contains helper functions for maniuplating lat/lon data.
 Useful plotting functions, including center-shifted colormap (to make 0 values a neutral color), and 3D stack viewing function
 
 
-#### los.py
-Line of sight utilities
+```python
+from apertools import gps
+enu_dataframe = gps.load_station_enu("TXKM", start_date="2015-01-01")
 
-
-#### gps.py
-Several functions for using GPS data in conjunction with InSAR stacks
-
+from apertools import gps_plots
+gps_plots.plot_station_enu("TXKM")
+```
 
 #### parsers.py
 
