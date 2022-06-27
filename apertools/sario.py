@@ -588,6 +588,8 @@ def save(
         return
     if ext == ".grd":
         ext = _get_full_grd_ext(filename)
+    if ext == ".tif":
+        return save_as_geotiff(outfile=filename, array=data)
     if ext == ".png":  # TODO: or ext == '.jpg':
         # Normalize to be between 0 and 1
         if normalize:
@@ -1326,7 +1328,7 @@ def save_as_geotiff(outfile=None, array=None, rsc_data=None, nodata=0.0):
 
     if array.ndim == 3 and array.shape[2] == 3:
         array = np.moveaxis(array, 2, 0)
-    rows, cols = array[-2:].shape
+    rows, cols = array.shape[-2:]
     if rsc_data is not None and (
         rows != rsc_data["file_length"] or cols != rsc_data["width"]
     ):
