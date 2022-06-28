@@ -197,8 +197,16 @@ def load(
         # Use rasterio for easier loading of all bands into stack
         import rasterio as rio
 
+        row_looks, col_looks = looks
+        out_shape = (int(src.height / row_looks), int(src.width / col_looks))
+        if not kwargs.get("band"):
+            out_shape = (src.count,) + out_shape
+        resampling = rio.enums.Resampling.nearest
+
         with rio.open(filename) as src:
-            return src.read(kwargs.get("band"))
+            return src.read(
+                kwargs.get("band"), out_shape=out_shape, resampling=resampling
+            )
 
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
@@ -1992,7 +2000,8 @@ def save_xr_tif(
     units=None,
 ):
     """Save an xarray dataarray to a GeoTIFF, specifying the CRS and spatial dimensions"""
-    import rioxarray # noqa
+    import rioxarray  # noqa
+
     # import so that there's the .rio attribute of the xarray object
     if long_name:
         da.attrs["long_name"] = long_name
@@ -2058,8 +2067,8 @@ def netcdf_to_zarr(infile, outname=None, exclude_dsets=[]):
     with xr.open_dataset(infile) as ds:
         for d in exclude_dsets:
             del ds[d]
-        compressor = zarr.Blosc(cname='zstd', clevel=3)
-        encoding = {vname: {'compressor': compressor} for vname in ds.data_vars}
+        compressor = zarr.Blosc(cname="zstd", clevel=3)
+        encoding = {vname: {"compressor": compressor} for vname in ds.data_vars}
         ds.to_zarr(store=outname, encoding=encoding, consolidated=True)
 
 
