@@ -170,6 +170,7 @@ def load(
         ValueError: if sentinel files loaded without a .rsc file in same path
             to give the file width
     """
+    filename = str(filename)
     if not os.path.exists(filename):
         raise FileNotFoundError(f"No such file or directory: '{filename}'")
 
