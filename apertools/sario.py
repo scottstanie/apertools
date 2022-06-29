@@ -198,12 +198,12 @@ def load(
         import rasterio as rio
 
         row_looks, col_looks = looks
-        out_shape = (int(src.height / row_looks), int(src.width / col_looks))
-        if not kwargs.get("band"):
-            out_shape = (src.count,) + out_shape
         resampling = rio.enums.Resampling.nearest
 
         with rio.open(filename) as src:
+            out_shape = (int(src.height / row_looks), int(src.width / col_looks))
+            if not kwargs.get("band"):
+                out_shape = (src.count,) + out_shape
             return src.read(
                 kwargs.get("band"), out_shape=out_shape, resampling=resampling
             )
