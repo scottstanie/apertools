@@ -19,6 +19,8 @@ import matplotlib
 if in_screen():
     print("Currently in screen, using agg backend")
     matplotlib.use("agg")
+else:
+    matplotlib.use('Qt5Agg')
 
 from collections import Counter
 import sys

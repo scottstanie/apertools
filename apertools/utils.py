@@ -175,7 +175,26 @@ def take_looks_rsc(rsc_data, row_looks, col_looks):
 
 
 def moving_window_std(image, size):
-    # https://stackoverflow.com/a/25912169/4174466
+    """Calculate the standard deviation of a moving window of size `size`
+
+    Parameters
+    ----------
+    image : ndarray
+        input image
+    size : int or tuple of int
+        Window size. If a single int, the window is square. If a tuple,
+        the window is rectangular.
+
+    Returns
+    -------
+    ndarray
+        image the same size as `image`, where each pixel is the standard
+        deviation of the corresponding window.
+
+    Source
+    ------
+    https://stackoverflow.com/a/25912169/4174466
+    """
     from scipy.signal import convolve2d
 
     im = np.array(image, dtype=float)
@@ -476,20 +495,47 @@ def crossmul_gdal(outfile, file1, file2, row_looks, col_looks, format="ROI_PAC")
     os.remove(tmp)
 
 
-def clip(image):
-    """Convert float image to only range 0 to 1 (clips)"""
-    return np.clip(np.abs(image), 0, 1)
+def calc_igram_cor(slc1, slc2, *, row_looks=1, col_looks=1, deramp=False):
+    """Cross multiply two SLCs to compute an interferogram and correlation
+
+    The single looked version is ``I = slc1 * slc2.conj()``
+
+    Parameters
+    ----------
+    slc1 : ndarray
+        Reference SLC
+    slc2 : ndarray
+        Secondary SLC
+    row_looks : int, optional
+        Number of looks to take along row axis, by default 1
+    col_looks : int, optional
+        Number of looks to take along column axis, by default 1
+
+    Returns
+    -------
+    igram : ndarray
+        Interferogram image
+    cor : ndarray
+        Correlation image
+    """
+    def abs2(x):
+        return x.real ** 2 + x.imag ** 2
+    ifg_full = slc1 * np.conj(slc2)
+    if deramp:
+        ifg_full = deramp_wrapped_interferogram(ifg_full)
+    ifg = take_looks(ifg_full, row_looks, col_looks)
+    amp_slc1 = np.sqrt(take_looks(abs2(slc1), row_looks, col_looks))
+    amp_slc2 = np.sqrt(take_looks(abs2(slc2), row_looks, col_looks))
+    amp_ifg = np.abs(ifg)
+    cor = np.real(amp_ifg / (amp_slc1 * amp_slc2 + 1e-9))
+    return ifg, cor
 
 
-def log(image):
+def db(image):
     """Converts magnitude amplitude image to log scale"""
     if np.iscomplexobj(image):
         image = np.abs(image)
     return 20 * np.log10(image)
-
-
-# Alias: convert
-db = log
 
 
 def mag(db_image):

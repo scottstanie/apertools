@@ -422,7 +422,7 @@ def create_cor_from_int_amp(fname, verbose=False, mask=None):
     create_cor_image(cor_filename, shape, bands=1, access_mode="write")
 
 
-def create_phsig(ifg_file, cor_file=None):
+def create_phsig(ifg_file, cor_file=None, window=5, mask=None):
     from mroipac.icu.Icu import Icu
 
     logger.info("Estimating spatial coherence based phase sigma")
@@ -449,12 +449,23 @@ def create_phsig(ifg_file, cor_file=None):
     icuObj.configure()
     icuObj.unwrappingFlag = False
     icuObj.useAmplitudeFlag = False
+    icuObj.correlationBoxSize = window
+    icuObj.phaseSigmaBoxSize = window
+    icuObj.LPRangeWinSize = window
+    icuObj.LPAzimuthWinSize = window
 
     icuObj.icu(intImage=intImage, phsigImage=phsigImage)
     phsigImage.renderHdr()
 
     intImage.finalizeImage()
     phsigImage.finalizeImage()
+
+    if mask is not None:
+        with rio.open(phsigImage, "r+") as src:
+            data = src.read(1)
+            data[mask] = 0.0
+            src.write(data, 1)
+
 
 
 def multilook_configs(
