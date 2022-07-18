@@ -4,8 +4,6 @@ Input/Output functions for loading/saving SAR data in binary formats
 Email: scott.stanie@utexas.edu
 """
 
-from __future__ import division, print_function
-from collections.abc import Iterable
 import datetime
 import fileinput
 from glob import glob

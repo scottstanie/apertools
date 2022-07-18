@@ -113,7 +113,7 @@ if __name__ == "__main__":
         with rio.open(f) as src:
             try:
                 dt = datetime.datetime.fromisoformat(src.tags()["acquisition_datetime"])
-            except:
+            except KeyError:
                 logger.info(f"{f} does not have acquisition_datetime tag. Skipping")
                 continue
             time = dt.strftime("%H:%M:%S")
