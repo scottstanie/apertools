@@ -76,7 +76,7 @@ def set_style(
 
 
 def scale_mag(img, expval=0.3, max_pct=99.95):
-    """Scale the magnitude of complex radar iamge for better display"""
+    """Scale the magnitude of complex radar image for better display"""
     out = np.abs(img) ** expval
     max_val = np.percentile(out, max_pct)
     return np.clip(out, None, max_val)
@@ -877,7 +877,7 @@ def map_background(
 ):
     """Plot the raster `img` on top of background tiles
     Inputs:
-        img (ndarray): raster iamge
+        img (ndarray): raster image
         bbox (tuple[float]): (left, bottom, right, top)
         fig (matplotlib.figure): optional, existing figure to use
     """
