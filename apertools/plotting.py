@@ -78,7 +78,7 @@ def set_style(
 def scale_mag(img, expval=0.3, max_pct=99.95):
     """Scale the magnitude of complex radar image for better display"""
     out = np.abs(img) ** expval
-    max_val = np.percentile(out, max_pct)
+    max_val = np.nanpercentile(out, max_pct)
     return np.clip(out, None, max_val)
 
 
