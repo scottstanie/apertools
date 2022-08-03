@@ -1,7 +1,7 @@
-from xml.etree import ElementTree
 import os
-import numpy as np
+from xml.etree import ElementTree
 
+import numpy as np
 # TODO: lots of stuff here can be done with pyproj.Geod
 # https://pyproj4.github.io/pyproj/stable/api/geod.html
 from pyproj import Geod
@@ -788,6 +788,7 @@ def crop_rdr_by_bbox(
 ):
     """Crop an image in radar coordinates by a lat/lon bbox"""
     import numpy as np
+
     import apertools.sario
 
     if rdr_image is None:

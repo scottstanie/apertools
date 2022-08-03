@@ -1,26 +1,25 @@
 # adapted from components/isceobj/StripmapProc/runInterferogram.py
-import os
-import glob
 import datetime
+import glob
+import os
 import subprocess
-import numpy as np
-
-# from osgeo import gdal
-import rasterio as rio
-from tqdm import tqdm
 from copy import deepcopy
-import h5py
-from . import sario
 
+import h5py
 import isce  # noqa
 import isceobj
+import numpy as np
+# from osgeo import gdal
+import rasterio as rio
 from components.stdproc.stdproc import crossmul
 from iscesys.ImageUtil.ImageUtil import ImageUtil as IU
-from mroipac.looks.Looks import Looks
 from mroipac.filter.Filter import Filter
-
+from mroipac.looks.Looks import Looks
+from tqdm import tqdm
 
 from apertools.log import get_log
+
+from . import sario
 
 logger = get_log()
 
@@ -240,8 +239,8 @@ def get_square_pixel_looks(frame, posting, azlooks=None, rglooks=None):
     """
     Compute relevant number of looks.
     """
-    from isceobj.Planet.Planet import Planet
     from isceobj.Constants import SPEED_OF_LIGHT
+    from isceobj.Planet.Planet import Planet
 
     azFinal = None
     rgFinal = None

@@ -1,27 +1,27 @@
-#! /usr/bin/env python
 """Author: Scott Staniewicz
 Input/Output functions for loading/saving SAR data in binary formats
 Email: scott.stanie@utexas.edu
 """
-
 import datetime
 import fileinput
-from glob import glob
-import math
 import json
+import math
 import os
 import re
 import sys
-import numpy as np
 import warnings
+from glob import glob
+
+import numpy as np
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 import h5py
 
-import apertools.utils
 import apertools.parsers
-from .demloading import format_dem_rsc, load_dem_rsc, load_elevation
+import apertools.utils
 from apertools.log import get_log
+
+from .demloading import format_dem_rsc, load_dem_rsc, load_elevation
 
 logger = get_log()
 
@@ -1607,6 +1607,7 @@ def shift_by_pixel(in_f, out_f, full_pixel=False, down_right=False):
     Can fix problem of pixel center vs pixel edge convention differences
     """
     import copy
+
     import rasterio as rio
 
     denom = 1 if full_pixel else 2
@@ -1766,8 +1767,7 @@ def rsc_to_geotransform(rsc_data, half_shift=True):
 
 
 def set_unit(filename, unit="cm", band=None):
-    from osgeo import gdalconst
-    from osgeo import gdal
+    from osgeo import gdal, gdalconst
 
     ds = gdal.Open(str(filename), gdalconst.GA_Update)
     if isinstance(band, int):
@@ -1782,8 +1782,7 @@ def set_unit(filename, unit="cm", band=None):
 
 
 def set_description(filename, descriptions, band=None):
-    from osgeo import gdalconst
-    from osgeo import gdal
+    from osgeo import gdal, gdalconst
 
     ds = gdal.Open(str(filename), gdalconst.GA_Update)
     if isinstance(band, int):
@@ -1950,8 +1949,9 @@ def save_slc_amp_stack(
 def save_east_up_mat(east_up_fname, outname=None, units="cm"):
     """From los.solve_east_up results, save a new .mat file for MATLAB use"""
     import rasterio as rio
-    import apertools.latlon as latlon
     from scipy.io import savemat
+
+    import apertools.latlon as latlon
 
     if outname is None:
         outname = east_up_fname + ".mat"
@@ -2024,9 +2024,10 @@ def load_xr_tifs(
     Returns:
         xr.Dataset: 3D dataset from stacked tif files
     """
-    import xarray as xr
-    import pandas as pd
     import re
+
+    import pandas as pd
+    import xarray as xr
 
     def prep(ds):
         fname = ds.encoding["source"]
@@ -2057,8 +2058,8 @@ def load_xr_tifs(
 
 
 def netcdf_to_zarr(infile, outname=None, exclude_dsets=[]):
-    import zarr
     import xarray as xr
+    import zarr
 
     if outname is None:
         ext = os.path.splitext(infile)[1]
@@ -2072,8 +2073,8 @@ def netcdf_to_zarr(infile, outname=None, exclude_dsets=[]):
 
 
 def read_geopandas(csvfile, latcol=None, loncol=None):
-    import pandas as pd
     import geopandas as gpd
+    import pandas as pd
 
     df = pd.read_csv(csvfile)
     if latcol is None:

@@ -11,29 +11,30 @@ Note: ^^ This file is stored in the `STATION_LLH_FILE`
 
 """
 from __future__ import division, print_function
-from glob import glob
-import re
-import os
-import difflib  # For station name misspelling checks
+
 import datetime
+import difflib  # For station name misspelling checks
+import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
+from glob import glob
 from typing import List
 
-import requests
 import h5py
+import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
+import requests
 import xarray as xr
-import matplotlib.dates as mdates
 
 import apertools.latlon
 import apertools.los
-import apertools.utils
-import apertools.sario
-from apertools.sario import LOS_FILENAME
 import apertools.plotting
+import apertools.sario
+import apertools.utils
 from apertools.log import get_log
+from apertools.sario import LOS_FILENAME
 
 logger = get_log()
 
