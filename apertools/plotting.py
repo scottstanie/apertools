@@ -722,8 +722,8 @@ def plot_img_diff(
     vmin, vmax = _get_vminmax(arrays[0], vm=vm, vmin=vmin, vmax=vmax, twoway=twoway)
     # print(f"{vmin} {vmax}")
     if axes is None:
-        # fig, axes = plt.subplots(
-        fig, axes = pplt.subplots(
+        fig, axes = plt.subplots(
+        # fig, axes = pplt.subplots(
             ncols=ncols,
             sharex=share,
             sharey=share,
@@ -731,7 +731,7 @@ def plot_img_diff(
         )
     else:
         fig = axes.figure
-    # axes = axes.ravel()
+    axes = axes.ravel()
 
     for ii in range(n):
         if bbox:
@@ -750,10 +750,10 @@ def plot_img_diff(
             ax.set_title(titles[ii])
         # numbers: weird
         # https://stackoverflow.com/questions/18195758/set-matplotlib-colorbar-size-to-match-graph
-        # cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
-        # cbar.set_label(cbar_label)
-        # Proplot version:
-        ax.colorbar(axim, loc="r", label=cbar_label)
+        cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
+        cbar.set_label(cbar_label)
+        # # Proplot version:
+        # ax.colorbar(axim, loc="r", label=cbar_label)
         if axis_off:
             ax.set_axis_off()
         if aspect:
@@ -778,9 +778,9 @@ def plot_img_diff(
             ax.set_axis_off()
         if aspect:
             ax.set_aspect(aspect)
-        # cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
-        # cbar.set_label(cbar_label)
-        ax.colorbar(axim, loc="r", label=cbar_label)
+        cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
+        cbar.set_label(cbar_label)
+        # ax.colorbar(axim, loc="r", label=cbar_label)
     # [f.close() for f in files]
     if show:
         plt.show(block=False)
