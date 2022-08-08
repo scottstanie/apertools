@@ -6,6 +6,7 @@ from osgeo import gdal
 import apertools.utils as utils
 
 SENTINEL_WAVELENGTH = 0.05546576
+ALOS_WAVELENGTH = 299792458 / 1.270e9  # 0.23605705354330708
 
 
 def get_cli_args():

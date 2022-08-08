@@ -26,16 +26,34 @@ def main():
 
     for start, end in zip(biweekly_dates[:-1], biweekly_dates[1:]):
         logger.info(f"Downloading {start} to {end}")
-        asfdownload.download_data(
-            out_dir=".",
-            wkt_file=wkt_file,
-            start=start,
-            end=end,
-            processingLevel="METADATA_SLC",
-            maxResults=2000,
-            platform="S1",
-            beamMode="IW",
-        )
+        try:
+            asfdownload.download_data(
+                out_dir=".",
+                wkt_file=wkt_file,
+                start=start,
+                end=end,
+                processingLevel="METADATA_SLC",
+                maxResults=2000,
+                platform="S1",
+                beamMode="IW",
+            )
+        except Exception:
+            logger.error(f"Error downloading data from {start} to {end}", exc_info=True)
+            continue
+
+
+def get_exterior(xml_filename):
+    from bs4 import BeautifulSoup
+    from shapely import geometry
+    soup = BeautifulSoup(open(xml_filename), "xml")
+
+    coords = []
+    for c in soup.find(name='gml:LinearRing').children:
+        if not c.text.strip():
+            continue
+        coords.append(tuple(map(float, c.text.split())))
+    return geometry.Polygon(coords)
+    # poly.wkt
 
 
 if __name__ == "__main__":
