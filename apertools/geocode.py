@@ -88,6 +88,8 @@ def geocode(
         "Geocoding input %s to output %s , using driver %s", infile, outfile, driver
     )
 
+    # Other option:
+    # https://github.com/parosen/Geo-SInC/blob/main/UNAVCO2022/0.4_Geographic_Information_Science_using_GDAL/03_RasterProjection.ipynb
     cmd = (
         # use the geolocation array to geocode, set target extent w/ bbox
         f"gdalwarp -geoloc -te {bbox_str} "

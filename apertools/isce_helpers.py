@@ -9,6 +9,7 @@ import h5py
 import isce  # noqa
 import isceobj
 import numpy as np
+
 # from osgeo import gdal
 import rasterio as rio
 from components.stdproc.stdproc import crossmul
@@ -123,7 +124,7 @@ def generateIgram(slcFile1, slcFile2, ifgFile, azLooks, rgLooks, compute_cor=Tru
         # Make the isce headers
         create_cor_image(cor_filename, ifg.shape, access_mode="write")
         # calulate and save (not sure how to just save an array in isce)
-        cor = np.abs(ifg) / np.sqrt(amp1 ** 2 * amp2 ** 2)
+        cor = np.abs(ifg) / np.sqrt(amp1**2 * amp2**2)
         sario.save(cor_filename, np.stack((amp1 * amp2, cor)))
 
     return imageInt, imageAmp
@@ -288,8 +289,8 @@ def get_square_pixel_looks(frame, posting, azlooks=None, rglooks=None):
 
         Re = elp.pegRadCur
         H = sch[2]
-        cos_beta_e = (Re ** 2 + (Re + H) ** 2 - rng ** 2) / (2 * Re * (Re + H))
-        sin_bet_e = np.sqrt(1 - cos_beta_e ** 2)
+        cos_beta_e = (Re**2 + (Re + H) ** 2 - rng**2) / (2 * Re * (Re + H))
+        sin_bet_e = np.sqrt(1 - cos_beta_e**2)
         sin_theta_i = sin_bet_e * (Re + H) / rng
         print(
             "incidence angle at the middle of the swath: ",
@@ -464,7 +465,6 @@ def create_phsig(ifg_file, cor_file=None, window=5, mask=None):
             data = src.read(1)
             data[mask] = 0.0
             src.write(data, 1)
-
 
 
 def multilook_configs(

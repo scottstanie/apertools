@@ -32,7 +32,7 @@ def get_file_ext(filename):
     return os.path.splitext(filename)[1]
 
 
-def rewrap_to_2pi(phase):
+def rewrap_to_2pi(phase, n=2):
     """Converts phase results to be centered from -pi to pi
 
     The result from calculating, e.g., closure phase, will usually
@@ -45,7 +45,7 @@ def rewrap_to_2pi(phase):
     Returns:
         re-wrapped values within the interval -pi to pi
     """
-    return np.mod(phase + np.pi, 2 * np.pi) - np.pi
+    return np.mod(phase + np.pi * n / 2, n * np.pi) - (np.pi * n / 2)
 
 
 def to_datetime(dates, tzinfo=datetime.timezone.utc):
@@ -296,7 +296,7 @@ def filter_slclist_ifglist(
 
     # Now filter the rest by temp baseline or by "bandwidth" aka index distance
     if max_temporal_baseline is not None and max_bandwidth is not None:
-        raise ValueError("Only can filter by one of bandwith or temp. baseline")
+        raise ValueError("Only can filter by one of bandwidth or temp. baseline")
     if max_temporal_baseline is not None or min_temporal_baseline is not None:
         max_temporal_baseline = max_temporal_baseline or 10000
         min_temporal_baseline = min_temporal_baseline or 0
@@ -881,10 +881,6 @@ def find_slc_products(api, gj_obj, date_start, date_end, area_relation="contains
         producttype="SLC",
         area_relation=area_relation,
     )
-
-
-def show_titles(products):
-    return [p["title"] for p in products.values()]
 
 
 def fullpath(path):

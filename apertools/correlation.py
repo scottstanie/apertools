@@ -1,21 +1,24 @@
 """Module for exploting the full coherence/correlation matrix per pixel
 """
-from datetime import datetime
 import itertools
-import numpy as np
-import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
-
-from scipy import linalg
-import xarray as xr
-from pandas import to_datetime
+from datetime import datetime
 
 import h5py
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import numpy as np
+import pymp
+import xarray as xr
+from pandas import to_datetime
+from scipy import linalg
+from tqdm import tqdm
+
 import apertools.sario as sario
 import apertools.utils as utils
 from apertools.log import get_log
 
 logger = get_log()
+
 
 # TODO: lat, lon...
 def create_cor_matrix(
@@ -155,6 +158,54 @@ def plot_bandwidth(ifg_dates):
                 out[idx, jdx] = out[jdx, idx] = False
 
     return out
+
+
+def phsig(ifg, window=5):
+    """Estimate correlation using the phase sigma (phsig routine in isce)
+
+    Parameters
+    ----------
+    ifg : ndarray
+        interferogram, or interferogram phase
+    window : int or tuple of ints
+        size of window to use for correlation estimation
+
+    Returns
+    -------
+    ndarray
+        correlation
+    """
+    if isinstance(window, int):
+        window = (window, window)
+    winy, winx = window
+
+    # local coordinates for defringe
+    yy, xx = np.mgrid[0 : winy - 1 : winy * 1j, 0 : winx - 1 : winx * 1j]
+
+    # initiate output matrix
+    nyi, nxi = ifg.shape
+    nyo, nxo = int(nyi / winy), int(nxi / winx)
+    coh_est = np.zeros((nyo, nxo), dtype=np.float32)
+
+    # calculate pixel-by-pixel
+    for y in range(0, nyo):
+        y0 = winy * y
+        y1 = winy * (y + 1)
+        for x in range(0, nxo):
+            x0 = winx * x
+            x1 = winx * (x + 1)
+            win_data = np.array(ifg[y0:y1, x0:x1])
+
+            # defringe (Zebker and Chen, 2005, IEEE-TGRS)
+            rate_x = np.angle(np.sum(win_data[:, 1:] * np.conj(win_data[:, :-1])))
+            rate_y = np.angle(np.sum(win_data[1:, :] * np.conj(win_data[:-1, :])))
+            win_data *= np.exp(-1j * (rate_x * xx + rate_y * yy))
+
+            # coherence without considering amplitude variation
+            # a.k.a. we do not weight the pixels according to their brightness
+            coh_est[y, x] = np.abs(np.mean(win_data / np.abs(win_data)))
+
+    return coh_est
 
 
 def cov_matrix_tropo(ifg_date_list, sar_date_variances):
@@ -338,9 +389,6 @@ def phase_residue(ifg, window_size=11):
     return ifg * np.conj(ifg_filtered) / (1e-6 + np.abs(ifg_filtered))
 
 
-import pymp
-
-
 def solve_cor_eigval(
     cor_filename="cor_stack.h5",
     ifg_filename="ifg_stack.h5",
@@ -376,7 +424,9 @@ def solve_cor_eigval(
         # ifglist_chunks.append(ifglist)
         # valid_idx_chunks.append(valid_idxs)
 
-        logger.info(f"Loading {len(ifglist)} ifgs from {ngeos} SLCs, {min_date} through {max_date}")
+        logger.info(
+            f"Loading {len(ifglist)} ifgs from {ngeos} SLCs, {min_date} through {max_date}"
+        )
         with h5py.File(cor_filename) as hf_cor, h5py.File(ifg_filename) as hf_ifg:
             cor_stack = hf_cor[dset][valid_idxs, :, :]
             ifg_stack = hf_ifg[dset][valid_idxs, :, :]
@@ -417,7 +467,7 @@ def solve_cor_eigval(
             dims=["date", "lat", "lon"],
         ).to_dataset(name="evd_stack")
         out_xr["lambda_max"] = (("lat", "lon"), out_lambdas.reshape((nrows, ncols)))
-        
+
         out_name = (
             f"evd_stack_{min_date.strftime('%Y%m%d')}_{max_date.strftime('%Y%m%d')}.nc"
         )
@@ -432,7 +482,11 @@ def form_cor_matrix(
     ifg_values,
     fill_val=0.0,
 ):
-    if np.sum(ifg_values) == 0 or np.any(np.isnan(cor_values)) or np.any(np.isnan(ifg_values)):
+    if (
+        np.sum(ifg_values) == 0
+        or np.any(np.isnan(cor_values))
+        or np.any(np.isnan(ifg_values))
+    ):
         return 0.0, np.zeros(len(slclist), dtype=np.complex64)
 
     full_igram_list = np.array(utils.full_igram_list(slclist))

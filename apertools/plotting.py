@@ -1,6 +1,5 @@
 """plotting.py: functions for visualizing insar products
 """
-from __future__ import division, print_function
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -707,6 +706,7 @@ def plot_img_diff(
     extent=None,
     share=True,
     use_proplot=True,
+    imshow_kwargs={},
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
@@ -745,6 +745,7 @@ def plot_img_diff(
             vmin=vmin,
             interpolation=interpolation,
             extent=extent,
+            **imshow_kwargs,
         )
         if titles:
             ax.set_title(titles[ii])
@@ -772,6 +773,7 @@ def plot_img_diff(
             vmin=vmax,
             interpolation=interpolation,
             extent=extent,
+            **imshow_kwargs,
         )
         ax.set_title("left - middle")
         if axis_off:
@@ -962,7 +964,6 @@ def _make_line_collections(ax, *, ticks=None, loc="bottom", lw=2, **kwargs):
     from matplotlib.collections import LineCollection
 
     left, right, bot, top = ax.get_extent()
-    print(ax.get_extent())
     if ticks is None:
         if loc in ["top", "bottom", "bot"]:
             ticks = [left, *ax.get_xticks(), right]

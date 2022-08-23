@@ -218,7 +218,7 @@ def load(
                 try:
                     return f[kwargs["dset"]][:]
                 except KeyError:
-                    print("sario.load for h5 requres `dset` kwarg")
+                    print("sario.load for h5 requires `dset` kwarg")
                     raise
             else:
                 return f[list(f)[0]][:]
