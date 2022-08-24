@@ -239,8 +239,10 @@ def cmap_to_qgis(cmap_rgba_arr):
 
 
 def make_qgis_cmap(cmap_rgba_arr, outfile, cmap_name):
-    # EXAMPLE:
-    # make_qgis_cmap(make_dismph_colors().T[::3], "dismph_colors.xml", "dismph")
+    """
+    EXAMPLE:
+    make_qgis_cmap(make_dismph_colors().T[::3], "dismph_colors.xml", "dismph")
+    """
     c1 = ",".join(map(str, cmap_rgba_arr[0].astype(int)))
     c2 = ",".join(map(str, cmap_rgba_arr[-1].astype(int)))
     stops = cmap_to_qgis(cmap_rgba_arr)

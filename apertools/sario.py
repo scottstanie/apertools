@@ -193,19 +193,7 @@ def load(
 
     # Pass though and load with gdal
     if ext in GDAL_FORMATS or use_gdal:
-        # Use rasterio for easier loading of all bands into stack
-        import rasterio as rio
-
-        row_looks, col_looks = looks
-        resampling = rio.enums.Resampling.nearest
-
-        with rio.open(filename) as src:
-            out_shape = (int(src.height / row_looks), int(src.width / col_looks))
-            if not kwargs.get("band"):
-                out_shape = (src.count,) + out_shape
-            return src.read(
-                kwargs.get("band"), out_shape=out_shape, resampling=resampling
-            )
+        return load_gdal(filename, looks=looks, **kwargs)
 
     # Elevation and rsc files can be immediately loaded without extra data
     if ext in ELEVATION_EXTS:
@@ -368,6 +356,24 @@ def _get_full_grd_ext(filename):
         return ext
     else:
         return ".grd"
+
+def load_gdal(filename, looks=(1, 1), **kwargs):
+    import rasterio as rio
+    # Use rasterio for easier loading of all bands into stack
+
+    row_looks, col_looks = looks
+    if "resampling" in kwargs:
+        resampling = getattr(rio.enums.Resampling, kwargs["resampling"])
+    else:
+        resampling = rio.enums.Resampling.average
+
+    with rio.open(filename) as src:
+        out_shape = (int(src.height / row_looks), int(src.width / col_looks))
+        if not kwargs.get("band"):
+            out_shape = (src.count,) + out_shape
+        return np.squeeze(src.read(
+            kwargs.get("band"), out_shape=out_shape, resampling=resampling
+        ))
 
 
 def find_rsc_file(filename=None, directory=None, verbose=False):

@@ -7,7 +7,6 @@ import h5py
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
-import pymp
 import xarray as xr
 from pandas import to_datetime
 from scipy import linalg
@@ -400,6 +399,7 @@ def solve_cor_eigval(
     n_jobs=20,
 ):
 
+    import pymp
     slclist_full, ifglist_full = sario.load_slclist_ifglist(h5file=cor_filename)
     # First ignore all ones that have bad data
     slclist2, _, _ = utils.filter_slclist_ifglist(
