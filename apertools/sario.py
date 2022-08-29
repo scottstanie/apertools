@@ -357,8 +357,10 @@ def _get_full_grd_ext(filename):
     else:
         return ".grd"
 
+
 def load_gdal(filename, looks=(1, 1), **kwargs):
     import rasterio as rio
+
     # Use rasterio for easier loading of all bands into stack
 
     row_looks, col_looks = looks
@@ -371,9 +373,9 @@ def load_gdal(filename, looks=(1, 1), **kwargs):
         out_shape = (int(src.height / row_looks), int(src.width / col_looks))
         if not kwargs.get("band"):
             out_shape = (src.count,) + out_shape
-        return np.squeeze(src.read(
-            kwargs.get("band"), out_shape=out_shape, resampling=resampling
-        ))
+        return np.squeeze(
+            src.read(kwargs.get("band"), out_shape=out_shape, resampling=resampling)
+        )
 
 
 def find_rsc_file(filename=None, directory=None, verbose=False):

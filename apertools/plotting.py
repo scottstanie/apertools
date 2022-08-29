@@ -169,6 +169,19 @@ def plot_ifg(
     return axes
 
 
+def get_unique_cm(arr, name="jet"):
+    """Get a colormap with unique colors for each value in arr."""
+    return mpl.cm.get_cmap(name, len(np.unique(arr)))
+
+
+def plot_cc(cc, ax, title="", cmap="jet"):
+    """Plot a connected component image with unique colors."""
+    axim = ax.imshow(cc, cmap=get_unique_cm(cc, name=cmap), interpolation="nearest")
+    fig = ax.figure
+    fig.colorbar(axim, ax=ax, ticks=np.arange(np.min(cc), np.max(cc) + 1))
+    ax.set_title(title)
+
+
 def plot_rewrapped(unw, ax=None, cmap="dismph", show_cbar=True, wrap_level=3 * np.pi):
     # Rewrap the unwrapped for easiest visual of differences
     if ax is None:
@@ -723,7 +736,7 @@ def plot_img_diff(
     # print(f"{vmin} {vmax}")
     if axes is None:
         fig, axes = plt.subplots(
-        # fig, axes = pplt.subplots(
+            # fig, axes = pplt.subplots(
             ncols=ncols,
             sharex=share,
             sharey=share,
@@ -1104,7 +1117,13 @@ def plot_rect(
 
 
 def map_img(
-    image=None, bbox=None, pad_pct=0.0, ax=None, crs=None, add_colorbar=True, **imshow_kwargs
+    image=None,
+    bbox=None,
+    pad_pct=0.0,
+    ax=None,
+    crs=None,
+    add_colorbar=True,
+    **imshow_kwargs,
 ):
     import cartopy.crs as ccrs
 
