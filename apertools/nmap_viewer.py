@@ -22,7 +22,7 @@ def plot(
     slc = _load_slc(slc_stack_filename, slc_bands, slc_filename)
 
     fig, ax = plt.subplots()
-    axim_slc = ax.imshow(_scale_mag(slc), cmap="gray", vmax=np.percentile(slc, 99))
+    axim_slc = ax.imshow(_scale_mag(slc), cmap="gray")
 
     ny, nx = _get_windows(nmap_filename)
 
