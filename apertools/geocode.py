@@ -87,8 +87,9 @@ def geocode(
     logger.info(
         "Geocoding input %s to output %s , using driver %s", infile, outfile, driver
     )
+    suffix_option = "-co SUFFIX=ADD" if driver == "ENVI" else ""
 
-    # Other option:
+    # Other option for this
     # https://github.com/parosen/Geo-SInC/blob/main/UNAVCO2022/0.4_Geographic_Information_Science_using_GDAL/03_RasterProjection.ipynb
     cmd = (
         # use the geolocation array to geocode, set target extent w/ bbox
@@ -100,7 +101,8 @@ def geocode(
         # Add warp option: run on multiple threads. Give the output a latlon projection
         ' -multi -wo GDAL_NUM_THREADS=ALL_CPUS -t_srs "+proj=longlat +datum=WGS84 +nodefs"'
         # Add ENVI header suffix, not replace (.unw.geo.hdr, not .unw.hdr)
-        f" -of {driver} -co SUFFIX=ADD"
+        f" -of {driver} "
+        f"{suffix_option}"
         # set nodata values on source and destination
         f" -srcnodata {nodata} -dstnodata {nodata} "
         f" {tmp_vrt_in_file} {outfile}"
@@ -212,7 +214,11 @@ def prepare_lat_lon(lat_file, lon_file, looks=None):
     temp_lat = os.path.join(dirname, "temp_geoloc_lat.vrt")
     temp_lon = os.path.join(dirname, "temp_geoloc_lon.vrt")
 
-    target_res = f"-tr {col_looks} {row_looks}" if "HDF5" not in lat_file else ""
+    if row_looks == col_looks == 1:
+        target_res = ""
+    else:
+        target_res = f"-tr {col_looks} {row_looks}" if "HDF5" not in lat_file else ""
+
     cmd = f"gdal_translate -of VRT -a_nodata 0 {target_res} {lat_file} {temp_lat} "
     _log_and_run(cmd)
     cmd = f"gdal_translate -of VRT -a_nodata 0 {target_res} {lon_file} {temp_lon} "
