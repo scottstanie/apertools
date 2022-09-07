@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+import argparse
 from os import fspath
 
 import matplotlib.pyplot as plt
@@ -9,7 +11,7 @@ from osgeo import gdal
 def plot(
     nmap_filename,
     slc_stack_filename=None,
-    slc_bands=[1, 2, 3],
+    slc_stack_bands=[1, 2, 3],
     slc_filename=None,
     alpha_nmap=0.8,
     cmap_nmap="Reds_r",
@@ -19,7 +21,7 @@ def plot(
 
     Click on a pixel to see the neighborhood map.
     """
-    slc = _load_slc(slc_stack_filename, slc_bands, slc_filename)
+    slc = _load_slc(slc_stack_filename, slc_stack_bands, slc_filename)
 
     fig, ax = plt.subplots()
     axim_slc = ax.imshow(_scale_mag(slc), cmap="gray")
@@ -53,7 +55,7 @@ def plot(
         # Remove old neighborhood images
         [img.remove() for img in event.inaxes.get_images() if img != axim_slc]
 
-        axim_nmap = ax.imshow(
+        ax.imshow(
             n_img,
             cmap=cmap_nmap,
             alpha=alpha_nmap,
@@ -157,3 +159,65 @@ def _scale_mag(img, exponent=0.3, max_pct=99.95):
     out = np.abs(img) ** exponent
     max_val = np.nanpercentile(out, max_pct)
     return np.clip(out, None, max_val)
+
+
+def get_cli_args():
+    """Get command line arguments"""
+    parser = argparse.ArgumentParser(
+        description="Interactively view neighborhood maps over an SLC."
+    )
+    parser.add_argument(
+        "-n",
+        "--nmap",
+        help="Neighborhood map file",
+        required=True,
+    )
+    parser.add_argument(
+        "--slc-stack-file",
+        help="SLC stack file",
+    )
+    parser.add_argument(
+        "--slc-stack-bands",
+        nargs="+",
+        type=int,
+        default=[1, 2],
+        help="Bands to use from SLC stack file",
+    )
+    parser.add_argument(
+        "--slc-file",
+        help="Alternative background: a single SLC filename.",
+    )
+    parser.add_argument(
+        "--cmap-nmap",
+        default="Reds_r",
+        help="Colormap for neighborhood map",
+    )
+    parser.add_argument(
+        "--alpha-nmap",
+        type=float,
+        default=0.8,
+        help="Alpha value for neighborhood map",
+    )
+    parser.add_argument(
+        "--no-block",
+        action="store_true",
+        help="Don't block the matplotlib window (default is blocking)",
+    )
+    return parser.parse_args()
+
+
+def run_cli():
+    args = get_cli_args()
+    plot(
+        nmap_filename=args.nmap,
+        slc_stack_filename=args.slc_stack_file,
+        slc_stack_bands=args.slc_stack_bands,
+        slc_filename=args.slc_file,
+        cmap_nmap=args.cmap_nmap,
+        alpha_nmap=args.alpha_nmap,
+        block=not args.no_block,
+    )
+
+
+if __name__ == "__main__":
+    run_cli()
