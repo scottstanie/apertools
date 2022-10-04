@@ -60,21 +60,25 @@ def form_url(
     relativeOrbit=None,
     absoluteOrbit=None,
     flightLine=None,
+    flightDirection=None,
     maxResults=2000,
     query_filetype="geojson",
     platform="S1",
     beamMode="IW",
     **kwargs,
 ):
-    """
-    dem (str): Name of DEM filename (will parse bbox)
+    """Form the url for the ASF query.
+
     bbox(tuple): lower left lon, lat, upper right format
         e.g. bbox=(-150.2,65.0,-150.1,65.5)
+    dem (str): Name of DEM filename (will parse bbox)
     processingLevel (str): options, "RAW", "SLC" for sentinel
     start (str): Starting time for search. Many acceptable inputs
         e.g. "3 months and a day ago" "May 30, 2018", "2010-10-30T11:59:59UTC"
     end (str): Ending time for search, see "start" for options
     query_filetype (str): default="geojson". options: "csv", "kml", "geojson"
+
+    See https://docs.asf.alaska.edu/api/keywords/ for other keywords.
     """
     if dem is not None:
         bbox = get_dem_bbox(dem)
@@ -92,6 +96,7 @@ def form_url(
         processingLevel=processingLevel,
         relativeOrbit=relativeOrbit,
         absoluteOrbit=absoluteOrbit,
+        flightDirection=flightDirection.upper(),
         flightLine=flightLine,
         maxResults=maxResults,
         output=query_filetype.upper(),
@@ -262,6 +267,12 @@ def cli():
         "--relativeOrbit",
         type=int,
         help="Limit to one path / relativeOrbit",
+    )
+    p.add_argument(
+        "--flightDirection",
+        type=str.lower,
+        help="Satellite orbit direction during acquisition",
+        choices=["a", "d", "ascending", "descending"],
     )
     p.add_argument(
         "--flightLine",
