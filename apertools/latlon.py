@@ -877,3 +877,41 @@ def xyz_to_enu_proj(xs, ys, zs, xyz0=None):
     )
     pipe_trans = Transformer.from_pipeline(proj_str)
     return pipe_trans.transform(xs, ys, zs)
+
+
+def convert_bbox_to_lonlat(bbox_xy, epsg=None, utm_zone=None):
+    """Convert an X/Y bounding box from UTM coordinates to lon/lat.
+
+    Parameters
+    ----------
+    bbox_xy : tuple
+        Bounding box in projected coordinates (xmin, ymin, xmax, ymax)
+    epsg : int, optional
+        EPSG code of the bbox
+    utm_zone : str, optional
+        UTM zone, alternative to providing epsg
+        Example: "32N"
+
+    Returns
+    -------
+    tuple
+        Bounding box in lat/lon coordinates (west, south, east, north)
+    """
+    from pyproj import Transformer
+
+    if epsg is None:
+        if utm_zone is None:
+            raise ValueError("need either epsg or utm_zon")
+        zone, hemi = utm_zone[:-1], utm_zone[-1] 
+        zone = int(zone)
+        if hemi.upper() == "N":
+            epsg = 32600 + zone
+        elif hemi.upper() == "S":
+            epsg = 32700 + zone
+        else:
+            raise ValueError("utm_zone must be '[zone number][N/S]'")
+    t = Transformer.from_crs(epsg, 4326, always_xy=True)
+    xmin, ymin, xmax, ymax = bbox_xy
+    lons, lats = t.transform([xmin, xmax], [ymin, ymax])
+    bbox_lonlat = [lons[0], lats[0], lons[1], lats[1]]
+    return bbox_lonlat 

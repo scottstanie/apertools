@@ -9,7 +9,7 @@ PHASE_TO_CM_UA = UAVSAR_WAVELENGTH / (4 * pi)
 P2MM_UA = PHASE_TO_CM_UA * 10 * 365
 
 
-# Dfault: Sentinel1
+# Default: Sentinel1
 PHASE_TO_CM = PHASE_TO_CM_S1
 P2MM = P2MM_S1
 

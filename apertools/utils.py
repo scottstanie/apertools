@@ -129,7 +129,7 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
         return arr
     if isinstance(arr, dict):
         return take_looks_rsc(arr, row_looks, col_looks)
-    if arr.ndim == 3:
+    if arr.ndim >= 3:
         return np.stack(
             [
                 take_looks(
@@ -409,7 +409,7 @@ def take_looks_gdal(outname, src_filename, row_looks, col_looks, format="ROI_PAC
     NOTE: For complex data, looks on the magnitude are done separately
     from looks on the phase
 
-    See https://github.com/OSGeo/gdal/blob/master/gdal/swig/python/osgeo/gdal.py#L328
+    See https://github.com/OSGeo/gdal/blob/master/swig/python/osgeo/gdal.py#L328
     for options
 
     Args:
@@ -1274,14 +1274,15 @@ def memmap_blocks(
 def get_stack_block_shape(
     h5_stack_file, dset, target_block_size=100e6, default_chunk_size=(None, 10, 10)
 ):
-    """Find a shape of blocks to load from `h5_stack_file` with memory size < `target_block_size`
+    """Find shape to load from `h5_stack_file` with memory size < `target_block_size`.
 
     Args:
         h5_stack_file (str): HDF5 file name containing 3D dataset
         dset (str): name of 3D dataset within `h5_stack_file`
-        target_block_size (float, optional): target size of memory for blocks. Defaults to 100e6.
-        default_chunk_size (tuple/list, optional): If `dset` is not chunked, size to use as chunks.
-            Defaults to (None, 10, 10).
+        target_block_size (float, optional): target size of memory for blocks.
+            Defaults to 100e6.
+        default_chunk_size (tuple/list, optional): If `dset` is not chunked,
+            size to use as chunks.  Defaults to (None, 10, 10).
 
     Returns:
         [type]: [description]

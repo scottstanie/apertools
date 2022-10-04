@@ -888,6 +888,8 @@ def map_background(
     show_ticks=True,
     tickside="left",
     img_zorder=2,
+    figsize=None,
+    crs_name="PlateCarree",
     **imshow_kwargs,
 ):
     """Plot the raster `img` on top of background tiles
@@ -909,7 +911,7 @@ def map_background(
     # if fig is None and ax is None:
     # print('ADDED FIG')
     if ax is None:
-        fig = plt.figure()
+        fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(1, 1, 1, projection=crs)
     else:
         fig = ax.figure
@@ -922,7 +924,16 @@ def map_background(
     # matplotlib wants extent different than gdal/rasterio convention
     pad_pct = pad_pct or 0.0
     extent = padded_extent(bbox, pad_pct)
-    ax.set_extent(extent, crs=ccrs.PlateCarree())
+    try:
+        import rasterio as rio
+        from cartopy.crs import Projection
+        crs_rio = image.rio.crs
+        with rio.Env(OSR_WKT_FORMAT="WKT2_2018"):
+            rio_crs = rio.crs.CRS.from_epsg(32613)
+            crs = Projection(rio_crs)
+    except AttributeError:
+        crs = getattr(ccrs, crs_name)()
+    ax.set_extent(extent, crs=crs)
 
     ax.add_image(tiler, zoom_level)
     if image is not None:
@@ -931,7 +942,7 @@ def map_background(
         extent_img = padded_extent(bbox_image, 0.0)
         axim = ax.imshow(
             image,
-            transform=ccrs.PlateCarree(),
+            transform=crs,
             extent=extent_img,
             origin="upper",
             zorder=img_zorder,
