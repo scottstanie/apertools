@@ -3,11 +3,12 @@ Utilities for parsing file names of SAR products for relevant info.
 
 """
 
-from genericpath import exists
-import re
-from datetime import datetime, timezone
 import os
 import pprint
+import re
+import tempfile
+import zipfile
+from datetime import datetime, timezone
 
 from apertools.log import get_log
 
@@ -28,7 +29,7 @@ class Base(object):
             filename (str): name of SAR/InSAR product
             verbose (bool): print extra logging into about file loading
         """
-        self.filename = filename
+        self.filename = str(filename)
         self.full_parse()  # Run a parse to check validity of filename
         self.verbose = verbose
 
@@ -270,11 +271,21 @@ class Sentinel(Base):
         fname = str(self.filename).rstrip("/").replace(".zip", "").replace(".geo", "")
         root, _ = os.path.splitext(fname)
         _safe_dir = root + ".SAFE"
-        _preview_folder = os.path.join(_safe_dir, "preview")
-        map_overlay_kml = os.path.join(_preview_folder, "map-overlay.kml")
+        _zip_dir = root + ".zip"
+        if os.path.exists(_zip_dir):
+            tmp_dir = tempfile.mkdtemp()
+            with zipfile.ZipFile(_zip_dir, "r") as zip_ref:
+                zname = [zi for zi in zip_ref.infolist() if "preview/map-overlay.kml" in zi.filename][0]
+                map_overlay_kml = zip_ref.extract(zname, path=tmp_dir)
+        elif os.path.exists(_safe_dir):
+            _preview_folder = os.path.join(_safe_dir, "preview")
+            map_overlay_kml = os.path.join(_preview_folder, "map-overlay.kml")
+        else:
+            raise FileNotFoundError(f"Could not find .zip or .SAFE for {self.filename}")
+
         # Check that they have all the necessary kmls
         if not os.path.exists(map_overlay_kml):
-            raise ValueError(f"{map_overlay_kml} does not exist to get extent")
+            raise ValueError(f"{map_overlay_kml} does not exist to get extent.")
 
         etree = ElementTree.parse(map_overlay_kml)
 
@@ -297,8 +308,8 @@ class Sentinel(Base):
         return (min(lons), min(lats), max(lons), max(lats))
 
     def overlaps(self, filename):
-        from shapely import geometry
         import rasterio as rio
+        from shapely import geometry
 
         self_extent = geometry.Polygon(self.get_overlay_extent())
         with rio.open(filename) as src:
