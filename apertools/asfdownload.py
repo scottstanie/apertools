@@ -96,7 +96,7 @@ def form_url(
         processingLevel=processingLevel,
         relativeOrbit=relativeOrbit,
         absoluteOrbit=absoluteOrbit,
-        flightDirection=flightDirection.upper(),
+        flightDirection=flightDirection,
         flightLine=flightLine,
         maxResults=maxResults,
         output=query_filetype.upper(),
@@ -270,9 +270,9 @@ def cli():
     )
     p.add_argument(
         "--flightDirection",
-        type=str.lower,
+        type=str.upper,
         help="Satellite orbit direction during acquisition",
-        choices=["a", "d", "ascending", "descending"],
+        choices=["A", "D", "ASCENDING", "DESCENDING"],
     )
     p.add_argument(
         "--flightLine",
