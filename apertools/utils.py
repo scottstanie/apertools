@@ -47,6 +47,10 @@ def rewrap_to_2pi(phase, n=2):
     """
     return np.mod(phase + np.pi * n / 2, n * np.pi) - (np.pi * n / 2)
 
+def round_to(x, step):
+    """Round `x` to the nearest `step`."""
+    return step * np.round(x / step)
+
 
 def to_datetime(dates, tzinfo=datetime.timezone.utc):
     """Convert a single (or list of) `datetime.date` to timezone-aware `datetime.datetime`"""
