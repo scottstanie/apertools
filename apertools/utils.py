@@ -100,6 +100,25 @@ def which(program):
     return None
 
 
+def variable_sizes(n=20):
+    """Returns the sizes of the top n local variables"""
+
+    def sizeof_fmt(num, suffix="B"):
+        # https://stackoverflow.com/a/1094933/1870254
+        for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+            if abs(num) < 1024.0:
+                return "%3.1f %s%s" % (num, unit, suffix)
+            num /= 1024.0
+        return "%.1f %s%s" % (num, "Yi", suffix)
+
+    out_str = ""
+    for size, name in sorted(
+        ((sys.getsizeof(value), name) for name, value in locals().items()),
+    )[:n]:
+        out_str += f"{name:>30}: {sizeof_fmt(size):>8}"
+    return out_str
+
+
 # NOTE: now possible in numpy 1.20:
 # def take_looks(x, rl, cl, func=np.mean):
 #    from numpy.lib.stride_tricks import sliding_window_view
@@ -198,14 +217,14 @@ def moving_window_std(image, size):
     from scipy.signal import convolve2d
 
     im = np.array(image, dtype=float)
-    im2 = im ** 2
+    im2 = im**2
     ones = np.ones(im.shape)
 
     kernel = np.ones((size, size))
     s = convolve2d(im, kernel, mode="same")
     s2 = convolve2d(im2, kernel, mode="same")
     ns = convolve2d(ones, kernel, mode="same")
-    return np.sqrt((s2 - (s ** 2 / ns)) / ns)
+    return np.sqrt((s2 - (s**2 / ns)) / ns)
 
 
 def get_looks_rdr(filename: str):
@@ -518,8 +537,10 @@ def calc_igram_cor(slc1, slc2, *, row_looks=1, col_looks=1, deramp=False):
     cor : ndarray
         Correlation image
     """
+
     def abs2(x):
-        return x.real ** 2 + x.imag ** 2
+        return x.real**2 + x.imag**2
+
     ifg_full = slc1 * np.conj(slc2)
     if deramp:
         ifg_full = deramp_wrapped_interferogram(ifg_full)
@@ -860,6 +881,7 @@ def shift_latlon(da, full_pixel=False, down_right=False, copy=True):
     out_da["lat"] = lats
     return out_da
 
+
 # Randoms using the sentinelapi
 def find_slc_products(api, gj_obj, date_start, date_end, area_relation="contains"):
     """Query for Sentinel 1 SLC products with common options
@@ -1121,7 +1143,7 @@ def enu_to_az_inc_array(los_enu, to_deg=True):
     Channel 2: Azimuth angle is measured from North in the anti-clockwise direction.
     """
     E, N, U = los_enu
-    inc = np.arctan2(np.sqrt(E ** 2 + N ** 2), np.abs(U))
+    inc = np.arctan2(np.sqrt(E**2 + N**2), np.abs(U))
     if to_deg:
         inc = np.rad2deg(inc)
     az = -90 + np.rad2deg(np.arctan2(-N, -E))
@@ -1471,8 +1493,10 @@ def cross_section(data, start, end, steps=100, interp_type="linear", crs="epsg:4
     # Return the interpolated data
     return interpolate_to_slice(data, points_cross, interp_type=interp_type)
 
+
 # alias
 transect = cross_section
+
 
 def interpolate_to_slice(data, points, x="lon", y="lat", interp_type="linear"):
     """Obtain an interpolated slice through data using xarray.

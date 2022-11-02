@@ -337,6 +337,39 @@ def get_cor_mask(
     return (mask, cor_image) if return_smoothed else mask
 
 
+def ccg(n, seed=None, rng=None, scale=1):
+    """Simulate complex Gaussian noise
+
+    Args:
+        n (int): number of samples
+
+    Returns:
+        np.ndarray: complex Gaussian noise
+    """
+    if rng is None:
+        rng = np.random.default_rng(seed)
+    # Summing the 2 parts, you need to sum the variance
+    s2 = scale / np.sqrt(2)
+
+    return rng.normal(size=n, scale=s2) + 1j * rng.normal(size=n, scale=s2)
+
+def temporal_coherence(C, z):
+    """Calculate the temporal coherence of a complex image
+
+    Args:
+        C (np.ndarray): complex image
+        z (np.ndarray): complex noise
+
+    Returns:
+        float: temporal coherence
+    """
+    t = 0
+    count = 0
+    for i in range(len(C)):
+        for j in range(i + 1, len(C)):
+            dphi = z[i] * np.conj(z[j])
+            t += np.exp(1j * np.angle(dphi)) * C[i, j].conj()
+
 def filt_local_cor(cor_image, ratio_threshold=1.5, win_size=9):
     """Compare the correlation at each point with a moving median filtered version
 
@@ -400,6 +433,7 @@ def solve_cor_eigval(
 ):
 
     import pymp
+
     slclist_full, ifglist_full = sario.load_slclist_ifglist(h5file=cor_filename)
     # First ignore all ones that have bad data
     slclist2, _, _ = utils.filter_slclist_ifglist(
