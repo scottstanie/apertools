@@ -32,15 +32,17 @@ import itertools
 import subprocess
 
 from tqdm import tqdm
+from rich import inspect, pretty, print
+pretty.install()
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 # import hdf5plugin
-import h5py
+# import h5py
 import rasterio as rio
-import xarray as xr
+# import xarray as xr
 
 plt.ion()
 
