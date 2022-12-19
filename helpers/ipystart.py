@@ -34,6 +34,7 @@ import subprocess
 from tqdm import tqdm
 from rich import inspect, pretty, print
 pretty.install()
+from icecream import ic
 
 import matplotlib.pyplot as plt
 import numpy as np
