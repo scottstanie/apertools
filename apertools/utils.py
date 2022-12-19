@@ -9,6 +9,7 @@ import datetime
 import copy
 import errno
 import sys
+import psutil
 import os
 import subprocess
 import numpy as np
@@ -103,6 +104,20 @@ def which(program):
 
     return None
 
+
+def get_open_handles(file_pattern=""):
+    out = []
+    for proc in psutil.process_iter():
+        try:
+            ofs = proc.open_files()
+            if len(ofs) == 0:
+                continue
+            if any(file_pattern in pp.path for pp in ofs):
+                out.append(proc, ofs)
+        except Exception as e:
+            continue
+    return out
+    
 
 def variable_sizes(n=20):
     """Returns the sizes of the top n local variables"""
