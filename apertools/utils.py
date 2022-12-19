@@ -13,6 +13,7 @@ import psutil
 import os
 import subprocess
 import numpy as np
+import inspect
 import itertools
 
 from apertools.log import get_log
@@ -47,6 +48,7 @@ def rewrap_to_2pi(phase, n=2):
         re-wrapped values within the interval -pi to pi
     """
     return np.mod(phase + np.pi * n / 2, n * np.pi) - (np.pi * n / 2)
+
 
 def round_to(x, step):
     """Round `x` to the nearest `step`."""
@@ -114,14 +116,15 @@ def get_open_handles(file_pattern=""):
                 continue
             if any(file_pattern in pp.path for pp in ofs):
                 out.append(proc, ofs)
-        except Exception as e:
+        except Exception:
             continue
     return out
-    
 
-def variable_sizes(n=20):
-    """Returns the sizes of the top n local variables"""
 
+def variable_sizes(n=20, min_size=1):
+    """Returns sizes of top n local variables larger than min_size MB"""
+
+    # Get the variables one scope up (whatever is calling this function)
     def sizeof_fmt(num, suffix="B"):
         # https://stackoverflow.com/a/1094933/1870254
         for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
@@ -130,11 +133,14 @@ def variable_sizes(n=20):
             num /= 1024.0
         return "%.1f %s%s" % (num, "Yi", suffix)
 
+    outer_vars = inspect.currentframe().f_back.f_locals
     out_str = ""
     for size, name in sorted(
-        ((sys.getsizeof(value), name) for name, value in locals().items()),
+        ((sys.getsizeof(value), name) for name, value in outer_vars.items()),
+        reverse=True,
     )[:n]:
-        out_str += f"{name:>30}: {sizeof_fmt(size):>8}"
+        if size > min_size * 1024 * 1024:
+            out_str += f"{name:>30}: {sizeof_fmt(size):>8}\n"
     return out_str
 
 
@@ -1215,7 +1221,7 @@ def pprint_lon_lat(lon, lat, decimals=0):
     return f"{lat_str}{lon_str}"
 
 
-def block_iterator(arr_shape, block_shape, overlaps=(0, 0), start_offsets=(0, 0)):
+def block_slices(arr_shape, block_shape, overlaps=(0, 0), start_offsets=(0, 0)):
     """Iterator to get indexes for accessing blocks of a raster
 
     Args:
@@ -1232,10 +1238,10 @@ def block_iterator(arr_shape, block_shape, overlaps=(0, 0), start_offsets=(0, 0)
         It will return the edges as smaller blocks, rather than skip them
 
     Examples:
-    >>> list(block_iterator((180, 250), (100, 100)))
+    >>> list(block_slices((180, 250), (100, 100)))
     [((0, 100), (0, 100)), ((0, 100), (100, 200)), ((0, 100), (200, 250)), \
 ((100, 180), (0, 100)), ((100, 180), (100, 200)), ((100, 180), (200, 250))]
-    >>> list(block_iterator((180, 250), (100, 100), overlaps=(10, 10)))
+    >>> list(block_slices((180, 250), (100, 100), overlaps=(10, 10)))
     [((0, 100), (0, 100)), ((0, 100), (90, 190)), ((0, 100), (180, 250)), \
 ((90, 180), (0, 100)), ((90, 180), (90, 190)), ((90, 180), (180, 250))]
     """
@@ -1270,14 +1276,14 @@ def block_iterator(arr_shape, block_shape, overlaps=(0, 0), start_offsets=(0, 0)
         col_off = 0
 
 
-def read_blocks(
+def iter_blocks(
     filename, band=1, window_shape=(None, None), overlaps=(0, 0), start_offsets=(0, 0)
 ):
     from rasterio.windows import Window
     import rasterio as rio
 
     with rio.open(filename) as src:
-        block_iter = block_iterator(
+        block_iter = block_slices(
             src.shape,
             window_shape,
             overlaps=overlaps,
@@ -1292,7 +1298,7 @@ def memmap_blocks(
     filename, full_shape, block_rows, dtype, overlaps=(0, 0), start_offsets=(0, 0)
 ):
     total_rows, total_cols = full_shape
-    block_iter = block_iterator(
+    block_iter = block_slices(
         full_shape,
         (block_rows, total_cols),
         overlaps=overlaps,
@@ -1312,21 +1318,21 @@ def memmap_blocks(
         yield cur_block
 
 
-def get_stack_block_shape(
-    h5_stack_file, dset, target_block_size=100e6, default_chunk_size=(None, 10, 10)
+def get_h5stack_block_shape(
+    h5_stack_file, dset, max_bytes=100e6, default_chunk_size=(None, 10, 10)
 ):
-    """Find shape to load from `h5_stack_file` with memory size < `target_block_size`.
+    """Find shape to load from `h5_stack_file` with memory size < `max_bytes`.
 
     Args:
         h5_stack_file (str): HDF5 file name containing 3D dataset
         dset (str): name of 3D dataset within `h5_stack_file`
-        target_block_size (float, optional): target size of memory for blocks.
+        max_bytes (float, optional): target size of memory for blocks.
             Defaults to 100e6.
         default_chunk_size (tuple/list, optional): If `dset` is not chunked,
             size to use as chunks.  Defaults to (None, 10, 10).
 
     Returns:
-        [type]: [description]
+        tuple[int]: (num_rows, num_cols) of block shape to load
     """
     import h5py
 
@@ -1339,8 +1345,42 @@ def get_stack_block_shape(
 
         nbytes = hf[dset].dtype.itemsize
 
-    # Figure out how much to load at 1 time, staying at ~`target_block_size` bytes of RAM
-    chunks_per_block = target_block_size / (np.prod(chunk_size) * nbytes)
+    return _get_stack_block_shape(full_shape, chunk_size, nbytes, max_bytes)
+
+
+def get_gdal_block_shape(
+    filename, max_bytes=100e6, default_chunk_size=(None, 128, 128)
+):
+    """Find shape to load from GDAL-readable `filename` with memory size < `max_bytes`.
+
+    Args:
+        vrt_file (str): VRT file name containing 3D dataset
+        max_bytes (float, optional): target size of memory (in Bytes)
+            for each block.
+            Defaults to 100e6.
+        default_chunk_size (tuple/list, optional): If `filename` is not chunked/blocked,
+            size to use as chunks.  Defaults to (None, 128, 128).
+
+    Returns:
+        tuple[int]: (num_rows, num_cols) shape of blocks to load from `vrt_file`
+    """
+    import rasterio as rio
+
+    with rio.open(filename) as src:
+        full_shape = src.shape
+        if src.block_shapes:
+            chunk_size = [src.count, *src.block_shapes[0]]
+        else:
+            chunk_size = default_chunk_size
+
+        nbytes = np.dtype(src.dtypes[0]).itemsize
+
+    return _get_stack_block_shape(full_shape, chunk_size, nbytes, max_bytes)
+
+
+def _get_stack_block_shape(full_shape, chunk_size, nbytes, max_bytes):
+    """Figure out how much to load at 1 time, staying at ~`max_bytes` bytes of RAM"""
+    chunks_per_block = max_bytes / (np.prod(chunk_size) * nbytes)
     row_chunks, col_chunks = 1, 1
     cur_block_shape = list(copy.copy(chunk_size))
     while chunks_per_block > 1:
@@ -1348,13 +1388,13 @@ def get_stack_block_shape(
         if row_chunks * chunk_size[1] < full_shape[1]:
             row_chunks += 1
             cur_block_shape[1] = min(row_chunks * chunk_size[1], full_shape[1])
-        # Then increase the column size if still haven't hit `target_block_size`
+        # Then increase the column size if still haven't hit `max_bytes`
         elif col_chunks * chunk_size[2] < full_shape[2]:
             col_chunks += 1
             cur_block_shape[2] = min(col_chunks * chunk_size[2], full_shape[2])
         else:
             break
-        chunks_per_block = target_block_size / (np.prod(cur_block_shape) * nbytes)
+        chunks_per_block = max_bytes / (np.prod(cur_block_shape) * nbytes)
     return cur_block_shape
 
 
