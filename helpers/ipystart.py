@@ -12,6 +12,7 @@ def in_screen():
 
 get_ipython().run_line_magic("load_ext", "autoreload")
 get_ipython().run_line_magic("autoreload", "2")
+get_ipython().run_line_magic("load_ext", "rich")
 
 # Need to do this BEFORE pyplot
 import matplotlib
@@ -32,7 +33,6 @@ import itertools
 import subprocess
 
 from tqdm import tqdm
-from rich import inspect, pretty, print
 pretty.install()
 from icecream import ic
 
