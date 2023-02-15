@@ -1307,13 +1307,15 @@ def memmap_blocks(
     dtype = np.dtype(dtype)
     for block_idxs in block_iter:
         row_start = block_idxs[0][0]
+        # Make sure we don't ask for beyond end of file
+        cur_rows = min(block_rows, total_rows - row_start) 
         offset = total_cols * row_start * dtype.itemsize
         cur_block = np.memmap(
             filename,
             mode="r",
             dtype=dtype,
             offset=offset,
-            shape=(block_rows, total_cols),
+            shape=(cur_rows, total_cols),
         )
         yield cur_block
 
