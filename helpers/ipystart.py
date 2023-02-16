@@ -33,7 +33,6 @@ import itertools
 import subprocess
 
 from tqdm import tqdm
-pretty.install()
 from icecream import ic
 
 import matplotlib.pyplot as plt
