@@ -37,7 +37,7 @@ class Base(object):
         return "{} product: {}".format(self.__class__.__name__, self.filename)
 
     def __repr__(self):
-        return str(self)
+        return f"{self.__class__.__name__}('{self.filename}')"
 
     def __lt__(self, other):
         return self.filename < other.filename
@@ -134,6 +134,14 @@ class Sentinel(Base):
             self.__class__.__name__, self.mission, self.path, self.date
         )
 
+    def __rich_repr__(self):
+        yield "filename", self.filename
+        yield "start_time", self.start_time
+        yield "stop_time", self.stop_time
+        yield "relative_orbit", self.relative_orbit
+        yield "polarization", self.polarization
+        yield "mission", self.mission
+
     def __lt__(self, other):
         return (self.start_time, self.filename) < (other.start_time, other.filename)
 
@@ -195,7 +203,7 @@ class Sentinel(Base):
 
     @property
     def level(self):
-        """Alias for product type/level """
+        """Alias for product type/level"""
         return self.product_type
 
     @property
@@ -275,7 +283,11 @@ class Sentinel(Base):
         if os.path.exists(_zip_dir):
             tmp_dir = tempfile.mkdtemp()
             with zipfile.ZipFile(_zip_dir, "r") as zip_ref:
-                zname = [zi for zi in zip_ref.infolist() if "preview/map-overlay.kml" in zi.filename][0]
+                zname = [
+                    zi
+                    for zi in zip_ref.infolist()
+                    if "preview/map-overlay.kml" in zi.filename
+                ][0]
                 map_overlay_kml = zip_ref.extract(zname, path=tmp_dir)
         elif os.path.exists(_safe_dir):
             _preview_folder = os.path.join(_safe_dir, "preview")
@@ -370,6 +382,12 @@ class SentinelOrbit(Base):
             self.orbit_type, self.__class__.__name__, self.start_time, self.stop_time
         )
 
+    def __rich_repr__(self):
+        yield "filename", self.filename
+        yield "orbit_type", self.orbit_type
+        yield "start_time", self.start_time
+        yield "stop_time", self.stop_time
+
     def __lt__(self, other):
         return (self.start_time, self.filename) < (other.start_time, other.filename)
 
@@ -378,7 +396,12 @@ class SentinelOrbit(Base):
         return self.start_time < dt < self.stop_time
 
     def __eq__(self, other):
-        return (self.mission, self.start_time, self.stop_time, self.orbit_type,) == (
+        return (
+            self.mission,
+            self.start_time,
+            self.stop_time,
+            self.orbit_type,
+        ) == (
             other.mission,
             other.start_time,
             other.stop_time,

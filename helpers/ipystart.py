@@ -12,7 +12,9 @@ def in_screen():
 
 get_ipython().run_line_magic("load_ext", "autoreload")
 get_ipython().run_line_magic("autoreload", "2")
-get_ipython().run_line_magic("load_ext", "rich")
+# get_ipython().run_line_magic("load_ext", "rich")
+from rich import print, pretty
+pretty.install()
 
 # Need to do this BEFORE pyplot
 import matplotlib
