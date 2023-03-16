@@ -2064,6 +2064,59 @@ def load_xr_tifs(
         ds.attrs["units"] = units
     return ds
 
+def load_xr_nc(slcs, chunk_depth: bool = True):
+    """Load stack of 1-band NetCDF rasters into 3D xarray.Dataset.
+
+    Assumes the filenames have `YYYYmmdd` date string somewhere in the name,
+    which will be extracted for the "date" coordinate.
+
+    Parameters
+    ----------
+    slcs : List[str] or str
+        list of filenames, or glob matching filenames to load into data cube
+    chunk_depth : bool, optional
+        Chunk the depth dimension, by default True
+
+    Notes
+    -----
+    This functions requires `rioxarray` to be installed.
+
+    Returns
+    -------
+    xr.DataArray
+        3D DataArray from stacked NetCDF files
+    """
+    from glob import glob
+    import pandas as pd
+    import xarray as xr
+    import rioxarray
+    from dolphin.utils import get_dates
+
+    def prep(ds):
+        fname = ds.encoding["source"]
+        date = get_dates(fname)[0]
+        if hasattr(ds, "band") and len(ds.band) == 1:
+            ds = ds.sel(band=ds.band[0]).drop("band")
+        return ds.expand_dims(date=[pd.to_datetime(date)])
+
+    chunk_cols, chunk_rows = get_raster_chunk_size(slcs[0])
+    if isinstance(slcs, str):
+        slcs = glob(slcs)
+
+    ds_list = [
+        prep(rioxarray.open_rasterio(f, chunks={"x": chunk_cols, "y": chunk_rows}))
+        for f in slcs
+    ]
+
+    ds = xr.combine_by_coords(
+        ds_list,
+        combine_attrs="no_conflicts",
+    )
+    if chunk_depth:
+        ds = ds.chunk({"date": len(ds_list)})
+    # Return the DataArray instead of dataset
+    return ds[list(ds.data_vars)[0]]
+
 
 def netcdf_to_zarr(infile, outname=None, exclude_dsets=[]):
     import xarray as xr

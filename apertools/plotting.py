@@ -60,6 +60,8 @@ def set_style(
     weight="bold",
     minor_ticks=False,
 ):
+    import scienceplots  # noqa: F401
+    # As of version 2.0.0, you need to add import scienceplots before setting the style
     style = ["science", "no-latex"] if nolatex else "science"
     plt.style.use(style)
     style_dict = get_style(
