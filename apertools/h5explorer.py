@@ -81,7 +81,7 @@ def create_explorer_widget(hf: h5py.File, load_less_than: float = 1e3):
         # Display the thumbnail in an Image widget
         return widgets.Image(value=buf.read(), format='png')
 
-    def _add_widgets(item: Any, level: int = 0):
+    def _add_widgets(item, level: int = 0):
         """Recursively add widgets to the accordion widget."""
         if isinstance(item, h5py.Group):
             # Add a new accordion widget for the group
