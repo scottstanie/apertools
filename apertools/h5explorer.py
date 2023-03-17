@@ -1,4 +1,9 @@
+from io import BytesIO
+
 import h5py
+import ipywidgets as widgets
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 class HDF5Explorer:
@@ -55,3 +60,56 @@ class HDF5GroupExplorer:
     def __dir__(self):
         return list(self._attr_cache.keys())
 
+
+def create_explorer_widget(hf: h5py.File, load_less_than: float = 1e3):
+    """Make a widget in Jupyter to explore a h5py file.
+
+    Example
+    -------
+    >>> hf = h5py.File("file.h5", "r")
+    >>> create_explorer_widget(hf)
+    """
+    def _make_thumbnail(image):
+        # Create a thumbnail of the dataset
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.imshow(image, cmap="gray", vmax=np.nanpercentile(image, 99))
+        ax.axis("off")
+        buf = BytesIO()
+        plt.savefig(buf, format="png", dpi=150)
+        plt.close(fig)
+        buf.seek(0)
+        # Display the thumbnail in an Image widget
+        return widgets.Image(value=buf.read(), format='png')
+
+    def _add_widgets(item: Any, level: int = 0):
+        """Recursively add widgets to the accordion widget."""
+        if isinstance(item, h5py.Group):
+            # Add a new accordion widget for the group
+            accordion = widgets.Accordion(selected_index=None)
+            for key, value in item.items():
+                widget = _add_widgets(value, level + 1)
+                accordion.children += (widget,)
+                accordion.set_title(len(accordion.children) - 1, key)
+            return accordion
+
+        # Once we're at a leaf node, add a widget for the dataset
+        elif isinstance(item, h5py.Dataset):
+            attributes = [f"<b>{k}:</b> {v}" for k, v in item.attrs.items()]
+            content = f"Type: {item.dtype}<br>Shape: {item.shape}<br>"
+            content += "<br>".join(attributes)
+            if item.size < load_less_than:
+                content += f"<br>Value: {item[()]}"
+            html_widget = widgets.HTML(content)
+
+            if not item.ndim == 2 or not item.dtype == np.complex64:
+                return html_widget
+            # If the dataset is a 2D complex array, make a thumbnail
+            image_widget = _make_thumbnail(np.abs(item[::5, ::10]))
+            return widgets.VBox([image_widget, html_widget])
+
+        else:
+            # Other types of items
+            return widgets.HTML(f"{item}")
+
+    # Now add everything starting at the root
+    return _add_widgets(hf, 0)
