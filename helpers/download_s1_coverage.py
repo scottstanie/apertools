@@ -1,34 +1,65 @@
 #!/usr/bin/env python
-import sys
+from __future__ import annotations
+
+import argparse
 
 import pandas as pd
+import backoff
 
 from apertools import asfdownload, log
 
 
-def main():
+@backoff.on_exception(backoff.expo, Exception, max_tries=3)
+def download_with_retry(
+    out_dir: str,
+    wkt_file: str,
+    start: str,
+    end: str,
+    processingLevel: str,
+    maxResults: int,
+    platform: str,
+    beamMode: str,
+) -> None:
+    asfdownload.download_data(
+        out_dir=out_dir,
+        wkt_file=wkt_file,
+        start=start,
+        end=end,
+        processingLevel=processingLevel,
+        maxResults=maxResults,
+        platform=platform,
+        beamMode=beamMode,
+    )
+
+
+def main() -> None:
+    """Download Sentinel-1 metadata from a WKT file."""
     logger = log.get_log()
-    try:
-        wkt_file = sys.argv[1]
-    except IndexError:
-        logger.error("No WKT file provided")
-        raise
-    try:
-        out_dir = sys.argv[2]
-    except IndexError:
-        out_dir = "."
+
+    parser = argparse.ArgumentParser(
+        description="Download S1 metadata from a WKT file."
+    )
+    parser.add_argument("wkt_file", help="Input WKT file.")
+    parser.add_argument("--out-dir", default=".", help="Output directory.")
+    parser.add_argument("--start-date", default="2014-09-01", help="Start date in YYYY-mm-dd format.")
+    parser.add_argument("--end-date", default=str(pd.Timestamp.today().date()), help="End date in YYYY-mm-dd format.")
+
+    args = parser.parse_args()
+
+    wkt_file = args.wkt_file
+    out_dir = args.out_dir
+
     logger.info(f"Downloading S1 metadata from WKT file {wkt_file} into {out_dir}")
 
-    today = str(pd.Timestamp.today().date())
-    biweekly_dates = pd.date_range(start="2014-09-01", end=today, freq="2W").strftime(
+    biweekly_dates = pd.date_range(start=args.start_date, end=args.end_date, freq="2W").strftime(
         "%Y-%m-%d"
     )
 
     for start, end in zip(biweekly_dates[:-1], biweekly_dates[1:]):
         logger.info(f"Downloading {start} to {end}")
         try:
-            asfdownload.download_data(
-                out_dir=".",
+            download_with_retry(
+                out_dir=out_dir,
                 wkt_file=wkt_file,
                 start=start,
                 end=end,
@@ -40,20 +71,6 @@ def main():
         except Exception:
             logger.error(f"Error downloading data from {start} to {end}", exc_info=True)
             continue
-
-
-def get_exterior(xml_filename):
-    from bs4 import BeautifulSoup
-    from shapely import geometry
-    soup = BeautifulSoup(open(xml_filename), "xml")
-
-    coords = []
-    for c in soup.find(name='gml:LinearRing').children:
-        if not c.text.strip():
-            continue
-        coords.append(tuple(map(float, c.text.split())))
-    return geometry.Polygon(coords)
-    # poly.wkt
 
 
 if __name__ == "__main__":

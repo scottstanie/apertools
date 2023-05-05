@@ -34,6 +34,7 @@ import datetime
 import os
 import subprocess
 from collections import Counter
+from pathlib import Path
 
 # import apertools.geojson
 # from osgeo import gdal
@@ -125,10 +126,10 @@ def download_data(query_filetype="metalink", out_dir=".", **kwargs):
     outname = query_only(query_filetype=query_filetype, **kwargs)
 
     aria2_conf = os.path.expanduser("~/.aria2/asf.conf")
-    download_cmd = (
-        f"aria2c --http-auth-challenge=true --continue=true "
-        f"--conf-path={aria2_conf} --dir={out_dir} {outname}"
-    )
+    download_cmd = f"aria2c --http-auth-challenge=true --continue=true --dir={out_dir} "
+    if Path(aria2_conf).exists():
+        download_cmd += f"--conf-path={aria2_conf} "
+    download_cmd += f" {outname}"
     print("Running command:")
     print(download_cmd)
     subprocess.check_call(download_cmd, shell=True)
