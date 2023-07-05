@@ -16,13 +16,15 @@ Statistical Association, September 1988, volume 83, number 403, pp. 596-610.
 # License: BSD (3-clause)
 
 import os
-import numpy as np
-from numba import njit
-from matplotlib.dates import date2num
-import pymp
+from datetime import datetime
 
+import numpy as np
+import pymp
+from matplotlib.dates import date2num
+from numba import njit, prange
 
 from apertools.log import get_log, log_runtime
+from apertools.utils import block_slices
 
 logger = get_log()
 
@@ -61,24 +63,39 @@ def lowess_stack(stack, x, frac=0.4, min_x_weighted=None, n_iter=2, n_jobs=-1):
         raise ValueError("stack must be 1D or 3D")
 
     ns, nrows, ncols = stack.shape
-    # Make each depth-wise pixel into a column (so there's only 1 OMP loop)
-    stack_cols = stack.reshape((ns, -1))
 
+    # in_stack = np.moveaxis(stack, 0, 2)
     if min_x_weighted:
         frac = find_frac(x, min_x_weighted)
 
+    # Make each depth-wise pixel into a column (so there's only 1 OMP loop)
+    stack_cols = stack.reshape((ns, -1))
     # stack_out = np.zeros(stack_cols.shape, dtype=stack.dtype)
     # for index in range(0, stack_cols.shape[1]):
-    stack_out = pymp.shared.array(stack_cols.shape, dtype=stack.dtype)
+    n_pixels = stack_cols.shape[1]
+    stack_out = pymp.shared.array((ns, n_pixels), dtype=stack.dtype)
     with pymp.Parallel(n_jobs) as p:
-        for index in p.range(0, stack_cols.shape[1]):
+        for index in p.range(0, n_pixels):
             y = stack_cols[:, index]
             stack_out[:, index] = lowess_pixel(y, x, frac, n_iter)
 
     return stack_out.reshape((ns, nrows, ncols))
 
+    # reshaping so it's contiguous in last dimension
+    # out = np.zeros((rows, cols, ns), dtype=stack.dtype)
+    # _numba_loop(in_stack, x, frac, n_iter, out)
+    # return np.moveaxis(out, 2, 0)
 
-@njit
+
+@njit(nogil=True, parallel=True)
+def _numba_loop(in_stack, x, frac, n_iter, out):
+    for r in prange(in_stack.shape[0]):
+        for c in range(in_stack.shape[1]):
+            y = in_stack[r, c, :]
+            out[r, c, :] = lowess_pixel(y, x, frac, n_iter)
+
+
+@njit(nogil=True)
 def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False, x_out=None):
     """Run LOWESS smoothing on a single pixel.
 
@@ -104,7 +121,7 @@ def lowess_pixel(y, x, frac=0.4, n_iter=2, do_sort=False, x_out=None):
     n = len(x)
     if x_out is None:
         x_out = x
-    x_out = np.ascontiguousarray(x_out)
+    # x_out = np.ascontiguousarray(x_out)
 
     if np.any(np.isnan(y)) or np.all(y == 0.0):
         return np.zeros(len(x_out))
@@ -140,7 +157,9 @@ def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
         r -= 1
 
     # Get the matrix of local weights for each step
-    xc = np.ascontiguousarray(x)  # make contiguous (necessary for `reshape` for numba)
+    # xc = np.ascontiguousarray(x)  # make contiguous (necessary for `reshape` for numba)
+    xc = x
+
     # Find the distance to the rth furthest point from each x value
     h = np.array([np.sort(np.abs(xc - xc[i]))[r] for i in range(n)])
     # Get the relative distance to the rth furthest point
@@ -149,7 +168,7 @@ def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
     # Clip to 0, 1 (`np.clip` not available in numba)
     w = np.minimum(1.0, np.maximum(w, 0.0))
     # tricube weighting
-    w = (1 - w ** 3) ** 3
+    w = (1 - w**3) ** 3
 
     yest = np.zeros(n_out)
     for _ in range(n_iter):
@@ -174,7 +193,7 @@ def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
             break
         # delta = np.clip(residuals / (6.0 * s), -1.0, 1.0)
         delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
-        delta = (1 - delta ** 2) ** 2
+        delta = (1 - delta**2) ** 2
 
     return yest, delta
 
@@ -213,6 +232,75 @@ def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=
 
     out_da = _write_attrs(out_da, frac=frac, n_iter=n_iter)
     return out_da
+
+
+@log_runtime
+def lowess_mintpy(
+    filename,
+    in_dset="timeseries",
+    out_dset="lowess",
+    min_days_weighted=2 * 365.25,
+    frac=0.7,
+    n_iter=2,
+    overwrite=False,
+    block_shape=(256, 256),
+    n_jobs: int = -1,
+):
+    """Run lowess on a MintPy timeseries file.
+
+    Writes output to `out_dset` in `filename`.
+
+    Args:
+        filename (str): Path to MintPy timeseries file.
+        min_days_weighted (float, optional): Minimum time period of data to include in smoothing.
+            See notes. Defaults to 365.25*2 (2 years of data).
+        n_iter (int, optional): Number of LOWESS iterations to run to exclude outliers.
+            Defaults to 2.
+        overwrite (bool, optional): Whether to overwrite existing /lowess dataset. Defaults to False.
+        block_shape (tuple, optional): Shape of blocks to read from file. Defaults to (256, 256).
+        n_jobs (int, optional): Number of jobs to run in parallel. Defaults to -1 (all cores).
+
+    """
+    # TODO:
+    # record attrs used to lowess smooth
+    # copy attrs from original dataset
+    # add x/y geocoding (if available)
+    import h5py
+
+    with h5py.File(filename, "r+") as fid:
+        if out_dset in fid:
+            if overwrite:
+                del fid[out_dset]
+            else:
+                raise ValueError(
+                    f"{out_dset} already exists in {filename}. Use `overwrite=True` to overwrite."
+                )
+        # Get the date strings
+        dates = np.array(fid["date"][:]).astype(str)
+        # convert to datetimes
+        dates = [datetime.strptime(d, "%Y%m%d") for d in dates]
+        # Convert to days
+        x = np.array(date2num(dates))
+        # Find the fraction of data to use
+        if min_days_weighted and min_days_weighted > 0:
+            frac = find_frac(x, min_days_weighted)
+
+        shape = fid[in_dset].shape
+        fid.create_dataset(out_dset, shape=shape, dtype=fid[in_dset].dtype, chunks=True)
+
+        logger.info(
+            f"Running lowess on {filename} with {n_jobs} jobs, {n_iter} iterations, and {frac} fraction of data"
+        )
+
+        # Iterate in blocks using block_slices
+        for rows, cols in block_slices(shape[-2:], block_shape=block_shape):
+            logger.info(f"Running lowess on block {rows} {cols}")
+            cur_block = fid[in_dset][:, slice(*rows), slice(*cols)]
+
+            # Run lowess
+            out_stack = lowess_stack(cur_block, x, frac=frac, n_iter=n_iter, n_jobs=n_jobs)
+            # Write to file
+            fid[out_dset][:, slice(*rows), slice(*cols)] = out_stack
 
 
 def find_frac(x, min_x_weighted=None, how="all", min_points=50):
@@ -582,7 +670,7 @@ def demo_window(x, frac=0.4, min_x_weighted=None):
     # Clip to 0, 1 (`np.clip` not available in numba)
     w = np.minimum(1.0, np.maximum(w, 0.0))
     # tricube weighting
-    w = (1 - w ** 3) ** 3
+    w = (1 - w**3) ** 3
     return w
 
 
@@ -615,5 +703,5 @@ def demo_residual(x, y, w, i, delta=None):
         return np.ones_like(x)
     # delta = np.clip(residuals / (6.0 * s), -1.0, 1.0)
     delta = np.minimum(1.0, np.maximum(residuals / (6.0 * s), -1.0))
-    delta = (1 - delta ** 2) ** 2
+    delta = (1 - delta**2) ** 2
     return delta
