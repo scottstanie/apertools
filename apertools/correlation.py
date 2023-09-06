@@ -207,6 +207,31 @@ def phsig(ifg, window=5):
     return coh_est
 
 
+def phsig_bn(ifg, window=5, strides=(1, 1)):
+    # doesn't do the defringing
+    ifg_move_mean =  utils.take_looks_bn(np.exp(1j * np.angle(ifg)), window, window, *strides)
+    return np.abs(ifg_move_mean)
+
+
+def circ_std(image, window_size=10):
+    from scipy.signal import convolve2d
+    from scipy.stats import circstd
+
+    # Define the kernel that defines the moving window box
+    kernel = np.ones((window_size, window_size)) / (window_size**2)
+
+    # Compute the circular standard deviation using convolve2d
+    phase_std = np.angle(image)
+    phase_std = np.where(
+        phase_std < 0, phase_std + 2 * np.pi, phase_std
+    )  # Map phase values to [0, 2*pi)
+    phase_mean = convolve2d(phase_std, kernel, mode="same")
+    phase_std = convolve2d(np.sin(phase_std - phase_mean) ** 2, kernel, mode="same")
+    phase_std = np.sqrt(-2 * np.log(phase_std))
+    return phase_std
+
+
+
 def cov_matrix_tropo(ifg_date_list, sar_date_variances):
     """Create a covariance matrix for tropospheric noise for 1 pixel
 
@@ -228,8 +253,8 @@ def cov_matrix_tropo(ifg_date_list, sar_date_variances):
         assert len(sar_date_list) == len(sar_date_variances)
 
     Sigma = np.zeros((M, M))
-    for (colidx, ig2) in enumerate(ifg_date_list):
-        for (rowidx, ig1) in enumerate(ifg_date_list):
+    for colidx, ig2 in enumerate(ifg_date_list):
+        for rowidx, ig1 in enumerate(ifg_date_list):
             if colidx > rowidx:
                 Sigma[rowidx, colidx] = Sigma[colidx, rowidx]
                 continue  # symmetric, so just copy over
@@ -353,6 +378,7 @@ def ccg(n, seed=None, rng=None, scale=1):
 
     return rng.normal(size=n, scale=s2) + 1j * rng.normal(size=n, scale=s2)
 
+
 def temporal_coherence(C, z):
     """Calculate the temporal coherence of a complex image
 
@@ -369,6 +395,7 @@ def temporal_coherence(C, z):
         for j in range(i + 1, len(C)):
             dphi = z[i] * np.conj(z[j])
             t += np.exp(1j * np.angle(dphi)) * C[i, j].conj()
+
 
 def filt_local_cor(cor_image, ratio_threshold=1.5, win_size=9):
     """Compare the correlation at each point with a moving median filtered version
@@ -431,7 +458,6 @@ def solve_cor_eigval(
     ministack_size=10,
     n_jobs=20,
 ):
-
     import pymp
 
     slclist_full, ifglist_full = sario.load_slclist_ifglist(h5file=cor_filename)
