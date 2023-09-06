@@ -76,7 +76,7 @@ def plot_gps_los(
         rasterized=rasterized,
     )
 
-    for (label, insar_mm, c) in zip(labels, insar_mm_list, insar_colors):
+    for label, insar_mm, c in zip(labels, insar_mm_list, insar_colors):
         insar_cm_day = insar_mm / 365 / 10
         full_defo = insar_cm_day * (dts[-1] - dts[0]).days
         bias = -full_defo / 2 if offset else 0
@@ -141,7 +141,6 @@ def plot_gps_enu(
 
         fig, axes = pplt.subplots(
             nrows=nrows, ncols=ncols, sharex=True, sharey=False, **subplot_kw
-
         )
     else:
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
@@ -492,7 +491,7 @@ def plot_all_stations(
 
 
 def rms(x):
-    return np.sqrt(np.nanmean(x ** 2))
+    return np.sqrt(np.nanmean(x**2))
 
 
 def maxabs(x):
@@ -509,18 +508,42 @@ def _find_rms_shift(gps, insar, gps_rolling_window=30, search_range=(-1, 1)):
 def plot_stations_on_image(
     df_diff,
     ax,
-    ms=10,
-    marker="X",
+    ms=50,
+    marker="o",
     add_labels=True,
+    vm=None,
+    cmap="RdBu_r",
+    add_colorbar=False,
 ):
+    # Prepare color map
+    cmap = plt.get_cmap(cmap)
+    if vm is not None:
+        vmin, vmax = -vm, vm
+    else:
+        vmin, vmax = df_diff.min().min(), df_diff.max().max()
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+
     plotted_points = []
     for idx, n in enumerate(df_diff.index):
         lon, lat = gps.station_lonlat(n)
-        ax.plot(lon, lat, ms=ms, marker=marker)
+        velo_diff = df_diff.loc[n, "velo_diff"]
+        color = cmap(norm(velo_diff))
+        ax.scatter(lon, lat, c=color, s=ms, marker=marker)
+
+        # ax.plot(lon, lat, ms=ms, marker=marker)
         plotted_points.append((lon, lat))
+
     if add_labels:
         for idx, (lon, lat) in enumerate(plotted_points):
-            ax.annotate(df_diff.index[idx], (lon, lat), fontsize=10)
+            txt = f"{df_diff.index[idx]}: {df_diff.iloc[idx, 0]:.2f}"
+            ax.annotate(txt, (lon, lat), fontsize=10)
+
+    # Add color bar for points
+    if add_colorbar:
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        plt.colorbar(sm, ax=ax, orientation="vertical")
+
     return plotted_points
 
 
@@ -623,7 +646,6 @@ def _plot_latlon_with_labels(
         fig.colorbar(axim)
 
     for label, x, y in zip(labels, xs, ys):
-
         ax.annotate(
             label,
             xy=(x, y),
