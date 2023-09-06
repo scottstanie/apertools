@@ -10,7 +10,7 @@ Note: ^^ This file is stored in the `STATION_LLH_FILE`
 3. Map of stations: http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html
 
 """
-from __future__ import division, print_function
+from __future__ import annotations, division, print_function
 
 import datetime
 import difflib  # For station name misspelling checks
@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from glob import glob
-from typing import List
+from typing import List, Optional, Union
 
 import h5py
 import matplotlib.dates as mdates
@@ -85,6 +85,7 @@ class InsarGPSCompare:
     insar_std_dset: str = None
     gps_kind: str = "los"
 
+    los_da: Optional[xr.DataArray] = None
     los_dset: str = LOS_FILENAME.replace(".tif", "")
     # to measure GPS relative to some other station, set the reference station
     reference_station: str = None
@@ -93,6 +94,7 @@ class InsarGPSCompare:
     # These will get used by in the GPS df creation; they're set using the InSAR data
     start_date: datetime.date = None
     end_date: datetime.date = None
+    dates: Union[List[datetime.date], np.ndarray] = None
     # To limit stations that have at least 60% coverage over the
     # time period we care about, set a nan threshold of 0.4
     max_nan_pct: float = 0.4
@@ -133,7 +135,7 @@ class InsarGPSCompare:
     def create_df(self):
         """Set days_smooth to None or 0 to avoid any data smoothing
 
-        If refernce station is specified, all timeseries will subtract
+        If reference station is specified, all timeseries will subtract
         that station's data
         """
         if self.insar_ds is None:
@@ -165,6 +167,7 @@ class InsarGPSCompare:
         if self.reference_station is not None:
             self.reference_station = self.reference_station.upper()
             df = self._subtract_reference(df)
+        df = df.copy()
         if self.create_diffs:
             for stat in df_gps_locations["name"]:
                 df[f"{stat}_diff"] = df[f"{stat}_gps"] - df[f"{stat}_insar"]
@@ -172,8 +175,6 @@ class InsarGPSCompare:
         self.df = self._remove_bad_cols(df)
         # TODO: any time this won't be true?
         self.df.attrs["units"] = "cm"
-
-        return self.df
 
     def compare_velocities(self, median=None, to_mm_year=True, print_summary=True):
         """Given the combine insar/gps dataframe, fit and compare slopes
@@ -238,22 +239,24 @@ class InsarGPSCompare:
         if "date" in insar_da.coords:
             # 3D option
             is_2d = False
-            dates = insar_da.indexes["date"]
+            if self.dates is None:
+                self.dates = insar_da.indexes["date"]
         else:
             # 2D: just the average ground velocity
             is_2d = True
-            dates = self.insar_ds.indexes["date"]
+            if self.dates is None:
+                self.dates = self.insar_ds.indexes["date"]
         if self.insar_std_dset is not None:
             insar_std_da = self.insar_ds[self.insar_std_dset]
         else:
             insar_std_da = None
 
-        df_insar = pd.DataFrame({"date": dates})
+        df_insar = pd.DataFrame({"date": self.dates})
         for row in df_gps_locations.itertuples():
             ts = apertools.utils.window_stack_xr(
                 insar_da, lon=row.lon, lat=row.lat, window_size=self.window_size
             )
-            day_nums = (dates - dates[0]).days
+            day_nums = (self.dates - self.dates[0]).days
             if is_2d:
                 # Make a cum_defo from the linear trend
                 v_cm_yr = ts.item()
@@ -348,6 +351,8 @@ class InsarGPSCompare:
         return df_gps
 
     def _get_los_da(self):
+        if self.los_da is not None:
+            return self.los_da
         if self.insar_ds is not None:
             return self.insar_ds.get(self.los_dset)
 
