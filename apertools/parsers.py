@@ -802,3 +802,42 @@ def parse_ann_file(ann_filename, filename=None, ext=None, verbose=False):
         logger.info(pprint.pformat(ann_data))
 
     return ann_data
+
+
+class OperaCslc(Base):
+    """OPERA L2 CSLC Sentinel-1 product.
+
+
+    Example: OPERA_L2_CSLC_S1A_IW_078_165495_IW3_VV_20190906T232711_1.0_20230101T100506.h5
+
+    Filename format:
+        Project: OPERA
+        Level: L2
+        ProductType: CSLC
+        Sensor: Sensor that acquired input data i.e., S1A or S1B
+        Mode: S1-A/B acquisition mode (e.g., IW)
+        BurstID: Unique burst identification string consistent with ESA burst map
+            convention in the form of trackNumber-id-swath (e.g., 078_165495_IW3)
+        Pol: polarization of the burst (e.g., VV or VH)
+        DateTime: The acquisition sensing start date and time of the input satellite
+            imagery for this product in the format YYYYMMDDTHHMMSSZ
+        ProductVersion: OPERA CSLC-S1 product version number with four characters,
+            including the letter “v” and two digits indicating the major and minor
+            versions, which are delimited by a period
+        ProductGenerationDateTime: The date and time at which the product was generated
+            by OPERA with the format of YYYYMMDDTHHMMSSZ
+        Ext: file extension
+    """
+    FILE_REGEX = (
+        r"(?P<project>OPERA)_"
+        r"(?P<level>L2)_"
+        r"(?P<product_type>CSLC)_"
+        r"(?P<sensor>S1[AB])_"
+        r"(?P<mode>\w+)_"
+        r"(?P<burst_id>\d{3}_\d+_\w{2}\d)_"  # Example: 078_165495_IW3
+        r"(?P<polarization>VV|VH)_"
+        r"(?P<date_time>\d{8}T\d{6})_"  # Example: 20190906T232711Z
+        r"(?P<product_version>\d{2}\.\d{1})_"  # Example: 1.0
+        r"(?P<created_time>\d{8}T\d{6}Z)"  # Example: 20230101T100506
+    )
+    TIME_FMT = "%Y%m%dT%H%M%S"
