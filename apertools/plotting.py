@@ -513,6 +513,81 @@ def view_stack(
     imagefig.canvas.mpl_connect("button_press_event", onclick)
     plt.show(block=True)
 
+from ipywidgets import interact, widgets
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import numpy as np
+from datetime import datetime
+
+def view_stack_improved(stack, display_img, slclist=None, label="Centimeters",
+                        cmap='seismic', perform_shift=False, title="",
+                            vmin=None, vmax=None,
+                        legend_loc="upper left", lat_lon=False, rsc_data=None,
+                        line_plot_kwargs=None, timeline_callback=None):
+    """Displays an image from a stack, allows you to click for timeseries"""
+
+    if slclist is None:
+        slclist = np.arange(stack.shape[0])
+    else:
+        slclist = [s.date() for s in slclist]
+    slclist = np.array(slclist)
+
+    if isinstance(display_img, int):
+        img = stack[display_img, :, :]
+    elif np.ndim(display_img) == 2:
+        img = display_img
+    else:
+        raise ValueError("display_img must be an int or ndarray-like obj")
+
+    title = title or "Deformation Time Series"
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
+
+    ax1.set_title(title)
+    im = ax1.imshow(img, cmap=cmap, vmax=vmax, vmin=vmin,)
+    fig.colorbar(im, ax=ax1, label=label)
+    
+    # ipywidgets slider
+    date_slider = widgets.SelectionSlider(
+        options=[(date.strftime('%Y-%m-%d'), idx) for idx, date in enumerate(slclist)],
+        description='Date:',
+        orientation='horizontal',
+        layout=widgets.Layout(width='80%')
+    )
+
+    def update_slider(idx):
+        im.set_data(stack[idx])
+        fig.canvas.draw()
+
+    interact(update_slider, idx=date_slider)
+
+    def onclick(event):
+        if event.button != 1 or not event.inaxes:
+            return
+        ax2.clear()
+        row, col = int(event.ydata), int(event.xdata)
+        if row >= img.shape[0] or col >= img.shape[1]:
+            return
+        timeline = stack[:, row, col]
+
+        if timeline_callback is not None:
+            timeline_callback(timeline, row, col)
+
+        if lat_lon:
+            lat, lon = latlon.rowcol_to_latlon(row, col, rsc_data)
+            legend_label = "Lat {:.3f}, Lon {:.3f}".format(lat, lon)
+        else:
+            legend_label = "Row %s, Col %s" % (row, col)
+
+        ax2.plot(slclist, timeline, **(line_plot_kwargs or {}))
+        ax2.legend([legend_label], loc=legend_loc)
+        x_axis_str = "SAR image date" if slclist is not None else "Image number"
+        ax2.set_xlabel(x_axis_str)
+        ax2.set_ylabel(label)
+
+    fig.canvas.mpl_connect("button_press_event", onclick)
+
+
+
 
 def equalize_and_mask(image, low=1e-6, high=2, fill_value=np.inf, db=True):
     """Clips an image to increase contrast"""
@@ -709,6 +784,7 @@ def plot_img_diff(
     titles=[],
     show_diff=True,
     vdiff=1,
+    diff_title="left - middle",
     cmap=DEFAULT_CMAP,
     axes=None,
     axis_off=False,
@@ -745,8 +821,11 @@ def plot_img_diff(
             figsize=figsize,
         )
     else:
-        fig = axes.figure
-    axes = axes.ravel()
+        try:
+            axes = axes.ravel()
+        except AttributeError:
+            pass
+        fig = axes[0].figure
 
     for ii in range(n):
         if bbox:
@@ -767,7 +846,6 @@ def plot_img_diff(
         # numbers: weird
         # https://stackoverflow.com/questions/18195758/set-matplotlib-colorbar-size-to-match-graph
         cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
-        cbar.set_label(cbar_label)
         # # Proplot version:
         # ax.colorbar(axim, loc="r", label=cbar_label)
         if axis_off:
@@ -790,12 +868,14 @@ def plot_img_diff(
             extent=extent,
             **imshow_kwargs,
         )
-        ax.set_title("left - middle")
+        ax.set_title(diff_title)
         if axis_off:
             ax.set_axis_off()
         if aspect:
             ax.set_aspect(aspect)
         cbar = fig.colorbar(axim, ax=ax, fraction=0.033, pad=0.04)
+        cbar.set_label(cbar_label)
+    else:
         cbar.set_label(cbar_label)
         # ax.colorbar(axim, loc="r", label=cbar_label)
     # [f.close() for f in files]
@@ -892,6 +972,7 @@ def map_background(
     img_zorder=2,
     figsize=None,
     crs_name="PlateCarree",
+    img_epsg=None,
     **imshow_kwargs,
 ):
     """Plot the raster `img` on top of background tiles
@@ -907,7 +988,8 @@ def map_background(
     # tiler = img_tiles.GoogleTiles(style="satellite")
     mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
     # https://github.com/SciTools/cartopy/issues/1965#issuecomment-992603403
-    tiler = img_tiles.MapboxTiles(map_id="satellite-v9", access_token=mykey)
+    # tiler = img_tiles.MapboxTiles(map_id="satellite-v9", access_token=mykey)
+    tiler = img_tiles.GoogleTiles(style="satellite")
     crs = tiler.crs
 
     # if fig is None and ax is None:
@@ -929,9 +1011,11 @@ def map_background(
     try:
         import rasterio as rio
         from cartopy.crs import Projection
-        crs_rio = image.rio.crs
         with rio.Env(OSR_WKT_FORMAT="WKT2_2018"):
-            rio_crs = rio.crs.CRS.from_epsg(32613)
+            if img_epsg is not None:
+                rio_crs = rio.crs.CRS.from_epsg(img_epsg)
+            else:
+                rio_crs = image.rio.crs
             crs = Projection(rio_crs)
     except AttributeError:
         crs = getattr(ccrs, crs_name)()
@@ -956,6 +1040,35 @@ def map_background(
 
     if coastlines:
         ax.coastlines("10m")
+    return fig, ax
+
+
+def plot_image_with_background(image, figsize=None, cbar_label=None, **imshow_kwargs):
+    import cartopy.crs as ccrs
+    from cartopy.io import img_tiles
+    # Read the raster image and get its extent
+
+    # Create a figure and add a GeoAxes with a projection
+    # import proplot as pplt
+    # fig = pplt.figure(figsize=figsize)
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+
+    # Add the satellite imagery from Google Tiles
+    # tiler = img_tiles.GoogleTiles(style="satellite")
+    tiler = img_tiles.Stamen(style="terrain")
+    ax.add_image(tiler, 8, interpolation='bicubic')
+
+    extent = padded_extent(image.rio.bounds(), 0.0)
+    # Plot the raster image on top of the satellite background
+    axim = ax.imshow(image, origin='upper', extent=extent, transform=ccrs.PlateCarree(), zorder=2, **imshow_kwargs)
+    cbar = fig.colorbar(axim)
+    cbar.set_label(cbar_label)
+
+    # Set the extent for the GeoAxes to the raster image's extent
+    ax.set_extent(extent, crs=ccrs.PlateCarree())
+
     return fig, ax
 
 
