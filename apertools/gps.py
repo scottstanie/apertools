@@ -84,6 +84,8 @@ class InsarGPSCompare:
     insar_ds: xr.DataArray = None
     insar_std_dset: str = None
     gps_kind: str = "los"
+    # If 2d, the pixels are cumulative defo., not velocities
+    is_2d_cumulative: bool = False
 
     los_dset: str = LOS_FILENAME.replace(".tif", "")
     # to measure GPS relative to some other station, set the reference station
@@ -242,7 +244,8 @@ class InsarGPSCompare:
         else:
             # 2D: just the average ground velocity
             is_2d = True
-            dates = self.insar_ds.indexes["date"]
+            # dates = self.insar_ds.indexes["date"]
+            dates = pd.DatetimeIndex([self.start_date, self.end_date])
         if self.insar_std_dset is not None:
             insar_std_da = self.insar_ds[self.insar_std_dset]
         else:
@@ -255,12 +258,16 @@ class InsarGPSCompare:
             )
             day_nums = (dates - dates[0]).days
             if is_2d:
-                # Make a cum_defo from the linear trend
-                v_cm_yr = ts.item()
-                coeffs = [v_cm_yr / 365.25, 0]
-                df_insar[row.name] = linear_trend(coeffs=coeffs, x=day_nums)
-                # NOTE: To recover the linear velocity used here:
-                # gps.fit_line(df_insar[station_name])[0] * 365.25
+                if self.is_2d_cumulative:
+                    df_insar[row.name] = ts.item()
+                    print(row.name, ts.item())
+                else:
+                    # Make a cum_defo from the linear trend
+                    v_cm_yr = ts.item()
+                    coeffs = [v_cm_yr / 365.25, 0]
+                    df_insar[row.name] = linear_trend(coeffs=coeffs, x=day_nums)
+                    # NOTE: To recover the linear velocity used here:
+                    # gps.fit_line(df_insar[station_name])[0] * 365.25
             else:
                 df_insar[row.name] = ts
 
