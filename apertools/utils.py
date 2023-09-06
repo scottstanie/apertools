@@ -218,6 +218,90 @@ def take_looks_rsc(rsc_data, row_looks, col_looks):
     return out_rsc
 
 
+def take_looks_bn(
+    arr, row_looks, col_looks, row_stride=None, col_stride=None, func_type="mean"
+):
+    """Multi-look window with different step sizes than look sizes."""
+    import bottleneck as bn
+
+    if row_stride is None:
+        row_stride = row_looks
+    if col_stride is None:
+        col_stride = col_looks
+
+    func_name = func_type.replace("nan", "")  # bottleneck always ignores nans
+    if func_name not in ("sum", "mean", "median", "max"):
+        raise ValueError(f"func_type {func_type} not supported")
+
+    func = getattr(bn, f"move_{func_name}")
+
+    # Pad at the end so we can get a centered mean
+    r_pad = row_looks - row_looks // 2 - 1
+    c_pad = col_looks - col_looks // 2 - 1
+    # dont pad the earlier dimensions, just the last two we'll be multilooking
+    pad_widths = (arr.ndim - 2) * ((0, 0),) + ((0, r_pad), (0, c_pad))
+    arr0 = np.pad(arr, pad_width=pad_widths, mode="constant", constant_values=np.nan)
+    # bottleneck doesn't support multi-axis, so we have to do it in two steps:
+    # across cols
+    a1 = func(arr0, col_looks, axis=-1, min_count=1)[..., :, c_pad:]
+    # then rows
+    a2 = func(a1, row_looks, axis=-2, min_count=1)[..., r_pad:, :]
+    # note: if there are less than min_count non-nan values in the window, returns nan
+
+    # if we dont pad:
+    # return a2[..., (row_stride - 1) :: row_stride, (col_stride - 1) :: col_stride]
+    r_start = row_stride // 2
+    c_start = col_stride // 2
+    return a2[..., r_start::row_stride, c_start::col_stride]
+
+
+
+def moving_window_mean(image, size):
+    """Calculate the mean of a moving window of size `size`
+
+    Parameters
+    ----------
+    image : ndarray
+        input image
+    size : int or tuple of int
+        Window size. If a single int, the window is square. 
+        If a tuple of (row_size, col_size), the window can be rectangular.
+
+    Returns
+    -------
+    ndarray
+        image the same size as `image`, where each pixel is the mean
+        of the corresponding window.
+    """
+    if isinstance(size, int):
+        size = (size, size)
+    if len(size) != 2:
+        raise ValueError("size must be a single int or a tuple of 2 ints")
+    if size[0] % 2 == 0 or size[1] % 2 == 0:
+        raise ValueError("size must be odd in both dimensions")
+
+    row_size, col_size = size
+    # Pad the image with zeros
+    image = np.pad(
+        image,
+        ((row_size // 2, row_size // 2), (col_size // 2, col_size // 2)),
+        mode="constant",
+        constant_values=np.nan,
+    )
+
+    # Calculate the cumulative sum of the image in 2 dimensions
+    cumsum = np.nancumsum(np.nancumsum(image, axis=0), axis=1)
+    win_size = size[0] * size[1]
+
+    # Use the integral image to calculate the moving window average
+    return (
+        cumsum[size[0] :, size[1] :]
+        + cumsum[: -size[0], : -size[1]]
+        - cumsum[size[0] :, : -size[1]]
+        - cumsum[: -size[0], size[1] :]
+    ) / win_size
+
+
 def moving_window_std(image, size):
     """Calculate the standard deviation of a moving window of size `size`
 
@@ -796,8 +880,8 @@ def window_stack_xr(
                 # out of bounds (could be on a diagonal corner of the bbox)
                 raise ValueError(f"({lon}, {lat}) is out of bounds for {da}")
         else:
-            col = da.indexes[lon_name].get_loc(lon, method="nearest")
-            row = da.indexes[lat_name].get_loc(lat, method="nearest")
+            col = da.indexes[lon_name].get_indexer([lon], method="nearest")[0]
+            row = da.indexes[lat_name].get_indexer([lat], method="nearest")[0]
 
     return window_stack(da, row, col, window_size=window_size, func=func)
 
@@ -1308,7 +1392,7 @@ def memmap_blocks(
     for block_idxs in block_iter:
         row_start = block_idxs[0][0]
         # Make sure we don't ask for beyond end of file
-        cur_rows = min(block_rows, total_rows - row_start) 
+        cur_rows = min(block_rows, total_rows - row_start)
         offset = total_cols * row_start * dtype.itemsize
         cur_block = np.memmap(
             filename,
@@ -1452,7 +1536,7 @@ def values_per_date(values, ifg_date_list, as_dataframe=False):
     values = np.array(values)
     sar_date_list = list(sorted(set(itertools.chain.from_iterable(ifg_date_list))))
     out_dict = {}
-    for (idx, cur_date) in enumerate(sar_date_list):
+    for idx, cur_date in enumerate(sar_date_list):
         cur_data = [
             (idx, date_pair)
             for idx, date_pair in enumerate(ifg_date_list)
