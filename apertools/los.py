@@ -29,7 +29,9 @@ def solve_east_up(
     desc_dset=DEFO_DSET,
     date=None,
     los_dset="los_enu",
+    nodata=0,
     crs="EPSG:4326",
+    res=None,
     outfile=None,
     unit="centimeters",
     asc_shift=0.0,
@@ -51,7 +53,9 @@ def solve_east_up(
         desc_da.rio.set_spatial_dims(xdim, ydim).rio.set_crs(crs).rio.to_raster(
             desc_img_fname
         )
-        asc_img, desc_img = subset.read_intersections(asc_img_fname, desc_img_fname)
+        asc_img, desc_img = subset.read_intersections(
+            asc_img_fname, desc_img_fname, target_crs=crs, res=res
+        )
 
         # Save and read in the LOS stack overlap
         name_asc2, name_desc2 = "tmp_asc_los.tif", "tmp_desc_los.tif"
@@ -65,10 +69,20 @@ def solve_east_up(
 
     elif asc_img_fname is not None:
         asc_enu_stack, desc_enu_stack = subset.read_intersections(
-            asc_enu_fname, desc_enu_fname
+            asc_enu_fname,
+            desc_enu_fname,
+            target_crs=crs,
+            nodata=nodata,
+            res=res,
         )
         asc_img, desc_img = subset.read_intersections(
-            asc_img_fname, desc_img_fname, asc_band, desc_band
+            asc_img_fname,
+            desc_img_fname,
+            asc_band,
+            desc_band,
+            target_crs=crs,
+            nodata=nodata,
+            res=res,
         )
 
     east, up = solve_east_up_imgs(
@@ -76,16 +90,20 @@ def solve_east_up(
         desc_img,
         asc_enu_stack,
         desc_enu_stack,
+        nodata=nodata,
         asc_shift=asc_shift,
         desc_shift=desc_shift,
         deramp_order=deramp_order,
         deramp_mask_thresh=deramp_mask_thresh,
     )
 
+
     if outfile:
-        transform = subset.get_intersect_transform(asc_img_fname, desc_img_fname)
-        crs = subset.get_crs(asc_img_fname)
-        nodata = subset.get_nodata(asc_img_fname)
+        transform = subset.get_intersect_transform(asc_img_fname, desc_img_fname, target_crs=crs)
+        if crs is None:
+            crs = subset.get_crs(asc_img_fname)
+        if nodata is not None:
+            nodata = subset.get_nodata(asc_img_fname)
         out_stack = np.stack([east, up], axis=0)
         subset.write_outfile(
             outfile,
@@ -114,8 +132,13 @@ def solve_east_up_imgs(
     asc_shift=0.0,
     desc_shift=0.0,
     deramp_order=0,
+    nodata=0,
     deramp_mask_thresh=3,
 ):
+    if np.isnan(nodata):
+        mask = np.logical_or(np.isnan(asc_img), np.isnan(desc_img))
+    else:
+        mask = np.logical_or(asc_img == 0, desc_img == 0)
 
     if deramp_order:
         asc_img = _deramp(asc_img, deramp_order, deramp_mask_thresh)
@@ -128,6 +151,13 @@ def solve_east_up_imgs(
         raise ValueError("asc_img not same shape as desc_img")
     if asc_enu_stack.shape != desc_enu_stack.shape:
         raise ValueError("asc_enu_stack not same shape as desc_enu_stack")
+    # if asc_enu_stack.shape[1:] != asc_img.shape:
+    #     raise ValueError("LOS stack not same shape as image")
+    # TODO: change this to warp better
+    rows, cols = asc_img.shape
+    asc_enu_stack = asc_enu_stack[:, :rows, :cols]
+    desc_enu_stack = desc_enu_stack[:, :rows, :cols]
+    # ###
 
     # Form a (2, 2, npixels) array of system matrices A
     # each (2,2) is [asc_east  asc_up; desc_east  desc_up]
@@ -145,9 +175,8 @@ def solve_east_up_imgs(
     east = east_up_rows[:, 0].reshape(asc_img.shape).astype(np.float32)
     up = east_up_rows[:, 1].reshape(asc_img.shape).astype(np.float32)
 
-    mask = np.logical_or(asc_img == 0, desc_img == 0)
-    east[mask] = 0
-    up[mask] = 0
+    east[mask] = nodata
+    up[mask] = nodata
 
     return east, up
 
@@ -192,7 +221,6 @@ def find_enu_coeffs(
         raise ValueError("los_map_file or los_da is required")
 
     with rio.open(los_map_file) as src:
-
         # src.index(-121.915628095, 37.87857542)  # (1250, -566)
         if coordinates == "rdr":
             from apertools import latlon
