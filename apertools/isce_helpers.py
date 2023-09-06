@@ -4,12 +4,12 @@ import glob
 import os
 import subprocess
 from copy import deepcopy
+from pathlib import Path
 
 import h5py
 import isce  # noqa
 import isceobj
 import numpy as np
-
 # from osgeo import gdal
 import rasterio as rio
 from components.stdproc.stdproc import crossmul
@@ -480,9 +480,9 @@ def multilook_configs(
 
     row_looks, col_looks = looks
     new_igrams_dir = f"Igrams_{row_looks}_{col_looks}"
-    utils.mkdir_p(new_igrams_dir)
+    Path(new_igrams_dir).mkdir(exist_ok=True, parent=True)
     new_configs_dir = f"configs_{row_looks}_{col_looks}"
-    utils.mkdir_p(new_configs_dir)
+    Path(new_configs_dir).mkdir(exist_ok=True, parent=True)
 
     new_run_file = f"run_igram_{row_looks}_{col_looks}.sh"
     with open(new_run_file, "w") as f_run:
@@ -536,7 +536,7 @@ def multilook_geom(looks=(15, 9), geom_dir="geom_reference", overwrite=False):
     out_cols = in_cols // extra_col_looks
 
     geom_dir_new = geom_dir.rstrip("/") + f"_{looks[0]}_{looks[1]}"
-    utils.mkdir_p(geom_dir_new)
+    Path(geom_dir_new).mkdir(exist_ok=True, parent=True)
 
     for f in tqdm(geom_files):
         try:
