@@ -73,40 +73,6 @@ def to_datetime(dates, tzinfo=datetime.timezone.utc):
         return datetime.datetime(*dates.timetuple()[:6], tzinfo=tzinfo)
 
 
-def mkdir_p(path):
-    """Emulates bash `mkdir -p`, in python style
-    Used for igrams directory creation
-    """
-    try:
-        os.makedirs(path)
-    except OSError as exc:
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else:
-            raise
-
-
-def which(program):
-    """Mimics UNIX which
-
-    Used from https://stackoverflow.com/a/377028"""
-
-    def is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
-
-    fpath, fname = os.path.split(program)
-    if fpath:
-        if is_exe(program):
-            return program
-    else:
-        for path in os.environ["PATH"].split(os.pathsep):
-            exe_file = os.path.join(path, program)
-            if is_exe(exe_file):
-                return exe_file
-
-    return None
-
-
 def get_open_handles(file_pattern=""):
     out = []
     for proc in psutil.process_iter():

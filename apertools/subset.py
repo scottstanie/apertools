@@ -1,19 +1,21 @@
+import datetime
 import os
 import re
-import datetime
+import subprocess
+from glob import glob
 from pathlib import Path
 from pprint import pprint
-from glob import glob
-import subprocess
-from tqdm import tqdm
+
 import numpy as np
-from shapely import geometry
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
-from apertools.log import get_log
-from apertools.latlon import km_to_deg
-from apertools.deramp import remove_ramp
-from apertools.utils import mkdir_p, chdir_then_revert
+from shapely import geometry
+from tqdm import tqdm
+
 from apertools import geojson
+from apertools.deramp import remove_ramp
+from apertools.latlon import km_to_deg
+from apertools.log import get_log
+from apertools.utils import chdir_then_revert
 
 logger = get_log()
 
@@ -90,7 +92,6 @@ def copy_vrt(
 
     # if not out_fname:
     # out_fname = in_fname + ".vrt"
-
     # Using Translate... but would use Warp if every reprojecting
     if bbox:
         left, bottom, right, top = bbox
@@ -407,7 +408,7 @@ def crop_isce_project(
         bbox_rdr = rgmin, azbot, rgmax, aztop
     # else:
     # rgmin, azbot, rgmax, aztop = bbox_rdr
-    mkdir_p(output_dir)
+    Path(output_dir).mkdir(exist_ok=True, parents=True)
     with open(os.path.join(output_dir, "bbox_rdr.wkt"), "w") as f:
         f.write(geojson.bbox_to_wkt(bbox_rdr) + "\n")
 
@@ -422,7 +423,7 @@ def crop_isce_project(
         tqdm.write(
             "Found %s files to subset for %s/%s" % (len(filelist), dirname, fileglob)
         )
-        mkdir_p(os.path.join(output_dir, dirname))
+        Path(os.path.join(output_dir, dirname)).mkdir(exist_ok=True, parents=True)
         for f in tqdm(filelist, position=1):
             if transform is None:
                 with rio.open(f) as src:
@@ -435,7 +436,7 @@ def crop_isce_project(
                 match = re.search(pat, f)
                 subfolder = match.group()
                 newdir = os.path.join(output_dir, dirname, subfolder)
-                mkdir_p(newdir)
+                Path(newdir).mkdir(exist_ok=True, parents=True)
             else:
                 newdir = os.path.join(output_dir, dirname)
             outname = os.path.join(newdir, filename)
@@ -532,7 +533,7 @@ def crop_geocoded_project(
     if bbox_file:
         bbox = geojson.load_bbox(bbox_file)
 
-    mkdir_p(output_dir)
+    Path(output_dir).mkdir(exist_ok=True, parents=True)
     with open(os.path.join(output_dir, "bbox.geojson"), "w") as f:
         f.write(geojson.bbox_to_geojson(bbox) + "\n")
     with open(os.path.join(output_dir, "bbox.wkt"), "w") as f:
@@ -631,6 +632,7 @@ def crop_stacks_by_date(
         output_dir (str): path to save the output subsetted dataset
     """
     import xarray as xr
+
     from apertools import sario, utils
 
     fmt = "%Y%m%d"
