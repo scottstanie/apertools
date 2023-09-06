@@ -4,22 +4,22 @@ import datetime
 import glob
 import os
 import subprocess
+from pathlib import Path
 
-import numpy as np
-import matplotlib.pyplot as plt
-import shapely.geometry
-import rasterio as rio
-import pandas as pd
 import geopandas as gpd
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import rasterio as rio
+import shapely.geometry
 
 import apertools.coseismic_stack as coseismic_stack
-import apertools.sario as sario
 import apertools.latlon as latlon
-import apertools.utils as utils
+import apertools.sario as sario
 import apertools.subset as subset
-
-from apertools.deramp import remove_ramp
+import apertools.utils as utils
 from apertools.constants import PHASE_TO_CM
+from apertools.deramp import remove_ramp
 
 # TODO: merge overlapping date/areas... aftershocks means 3/26,27,29 all there
 
@@ -262,7 +262,7 @@ def run_jackknife(
             extra_geo_ignores=extra_geo_ignores + [g],
         )
         od = f"outdir{idx}"
-        utils.mkdir_p(od)
+        Path(od).mkdir(exist_ok=True, parents=True)
         vrts = subset_unws(src_fullpaths, od, bbox, verbose=False)
         img = calculate_stack(vrts, outname=None)
         imgs.append(img)
@@ -521,8 +521,7 @@ def get_eqs_in_bounds(insar_fname, eqdf, mag_thresh=3):
 
 
 def download_and_process(df, xrate=7, yrate=2, looks=3):
-    from apertools import asfdownload
-    from apertools import createdem
+    from apertools import asfdownload, createdem
 
     #                     event_id  mag lat lon depth geometry bbox
     # dt
@@ -544,7 +543,7 @@ def download_and_process(df, xrate=7, yrate=2, looks=3):
     new_dirs = []
     for path_num, direction in path_nums.keys():
         dirname = f"path_{path_num}_{direction}"
-        utils.mkdir_p(dirname)
+        Path(dirname).mkdir(exist_ok=True, parents=True)
         new_dirs.append(dirname)
 
     for dirname in new_dirs:

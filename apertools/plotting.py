@@ -61,6 +61,7 @@ def set_style(
     minor_ticks=False,
 ):
     import scienceplots  # noqa: F401
+
     # As of version 2.0.0, you need to add import scienceplots before setting the style
     style = ["science", "no-latex"] if nolatex else "science"
     plt.style.use(style)
@@ -268,7 +269,7 @@ def plot_image(
     nrows, ncols = img.shape
     if not extent:
         if bbox:
-            extent = [bbox[0], bbox[2], bbox[1], bbox[3]]
+            extent = _bbox_to_extent(bbox)  # [bbox[0], bbox[2], bbox[1], bbox[3]]
         elif rsc_data:
             extent = latlon.grid_extent(**rsc_data)
         else:
@@ -310,6 +311,10 @@ def plot_image(
 def _abs_max(img):
     """Find largest absolute value ignoring nans"""
     return np.nanmax(np.abs(img))
+
+
+def _bbox_to_extent(bbox):
+    return [bbox[0], bbox[2], bbox[1], bbox[3]]
 
 
 def _get_vminmax(img, vm=None, vmin=None, vmax=None, twoway=True):
@@ -1011,6 +1016,7 @@ def map_background(
     try:
         import rasterio as rio
         from cartopy.crs import Projection
+
         with rio.Env(OSR_WKT_FORMAT="WKT2_2018"):
             if img_epsg is not None:
                 rio_crs = rio.crs.CRS.from_epsg(img_epsg)
@@ -1174,7 +1180,7 @@ def add_zebra_frame(ax, lw=2, crs="pcarree", zorder=None):
 
             # For first and lastlines, used the "projecting" effect
             capstyle = "butt" if idx not in (0, len(ticks) - 2) else "projecting"
-            for (xx, yy) in zip(xs, ys):
+            for xx, yy in zip(xs, ys):
                 ax.plot(
                     xx,
                     yy,
@@ -1482,7 +1488,6 @@ def _point_along_line(ax, start, distance, angle=0, tol=0.01):
 
 def scale_bar(
     ax,
-    proj,
     length,
     location=(0.5, 0.05),
     scalewidth=3,
@@ -1490,12 +1495,15 @@ def scale_bar(
     m_per_unit=1000,
     zorder=1,
     lw=5,
+    proj=None,
+    utm_zone=None,
+    utm_extent=None,
 ):
     """
     http://stackoverflow.com/a/35705477/1072212
     ax is the axes to draw the scalebar on.
-    proj is the projection the axes are in
     location is center of the scalebar in axis coordinates ie. 0.5 is the middle of the plot
+    proj is the projection the axes are in
     length is the length of the scalebar in km.
     scalewidth is the thickness of the scalebar.
     units is the name of the unit
@@ -1511,14 +1519,22 @@ def scale_bar(
     import cartopy.crs as ccrs
     from matplotlib import patheffects
 
-    # find lat/lon center to find best UTM zone
-    x0, x1, y0, y1 = ax.get_extent(proj.as_geodetic())
-    # Projection in metres
-    utm = ccrs.UTM(
-        latlon.utm_zone_from_lon((x0 + x1) / 2), southern_hemisphere=(y0 < 0)
-    )
-    # Get the extent of the plotted area in coordinates in metres
-    x0, x1, y0, y1 = ax.get_extent(utm)
+    if utm_zone is None or utm_extent is None:
+        # find lat/lon center to find best UTM zone
+        x0, x1, y0, y1 = ax.get_extent(proj.as_geodetic())
+        # Projection in metres
+        utm = ccrs.UTM(
+            latlon.utm_zone_from_lon((x0 + x1) / 2), southern_hemisphere=(y0 < 0)
+        )
+        # Get the extent of the plotted area in coordinates in metres
+        x0, x1, y0, y1 = ax.get_extent(utm)
+    else:
+        if isinstance(utm_zone, int):
+            utm = ccrs.UTM(utm_zone)
+        else:
+            utm = ccrs.CRS(utm_zone)
+        x0, x1, y0, y1 = utm_extent
+
     print(x0, x1, y0, y1)
     # Turn the specified scalebar location into coordinates in metres
     sbcx = x0 + (x1 - x0) * location[0]

@@ -84,6 +84,8 @@ class InsarGPSCompare:
     insar_ds: xr.DataArray = None
     insar_std_dset: str = None
     gps_kind: str = "los"
+    # If 2d, the pixels are cumulative defo., not velocities
+    is_2d_cumulative: bool = False
 
     los_da: Optional[xr.DataArray] = None
     los_dset: str = LOS_FILENAME.replace(".tif", "")
@@ -236,16 +238,14 @@ class InsarGPSCompare:
         else:
             insar_da = self.insar_ds[self.dset]
 
+        if self.dates is None:
+            self.dates = self.insar_ds.indexes["date"]
         if "date" in insar_da.coords:
             # 3D option
             is_2d = False
-            if self.dates is None:
-                self.dates = insar_da.indexes["date"]
         else:
             # 2D: just the average ground velocity
             is_2d = True
-            if self.dates is None:
-                self.dates = self.insar_ds.indexes["date"]
         if self.insar_std_dset is not None:
             insar_std_da = self.insar_ds[self.insar_std_dset]
         else:
@@ -258,12 +258,16 @@ class InsarGPSCompare:
             )
             day_nums = (self.dates - self.dates[0]).days
             if is_2d:
-                # Make a cum_defo from the linear trend
-                v_cm_yr = ts.item()
-                coeffs = [v_cm_yr / 365.25, 0]
-                df_insar[row.name] = linear_trend(coeffs=coeffs, x=day_nums)
-                # NOTE: To recover the linear velocity used here:
-                # gps.fit_line(df_insar[station_name])[0] * 365.25
+                if self.is_2d_cumulative:
+                    df_insar[row.name] = ts.item()
+                    print(row.name, ts.item())
+                else:
+                    # Make a cum_defo from the linear trend
+                    v_cm_yr = ts.item()
+                    coeffs = [v_cm_yr / 365.25, 0]
+                    df_insar[row.name] = linear_trend(coeffs=coeffs, x=day_nums)
+                    # NOTE: To recover the linear velocity used here:
+                    # gps.fit_line(df_insar[station_name])[0] * 365.25
             else:
                 df_insar[row.name] = ts
 

@@ -81,7 +81,6 @@ def plot_gps_los(
         full_defo = insar_cm_day * (dts[-1] - dts[0]).days
         bias = -full_defo / 2 if offset else 0
 
-        # ipdb.set_trace()
         ax.plot(dts, bias + day_nums * insar_cm_day, "-", c=c, lw=lw, label=label)
 
     ax.grid(which="major", alpha=0.5)
@@ -376,7 +375,7 @@ def _plot_line_df(
 
 def plot_all_stations(
     df,
-    df_diff,
+    df_diff=None,
     ncols=2,
     days_smooth_gps=30,
     ylim=None,
@@ -397,10 +396,18 @@ def plot_all_stations(
     return_lines=False,
     shift_gps=False,
     return_rms=False,
+    return_shifts=False,
 ):
     import proplot as pplt
 
-    nplots = len(df_diff.index)
+    names = sorted(
+        set(
+            n.replace("_gps", "").replace("_insar", "").replace("_diff", "")
+            for n in df.columns
+        )
+    )
+    # nplots = len(df_diff.index)
+    nplots = len(names)
     # fig, axes = plt.subplots(
     fig, axes = pplt.subplots(
         nrows=int(np.ceil(nplots / ncols)),
@@ -413,7 +420,9 @@ def plot_all_stations(
     )
     # axes = axes.ravel()
     rms_dict = {}
-    for idx, name in enumerate(df_diff.index):
+    shift_dict = {}
+    # for idx, name in enumerate(df_diff.index):
+    for idx, name in enumerate(names):
         lines = []
         # ax = axes.ravel()[idx]
         ax = axes[idx]
@@ -422,6 +431,7 @@ def plot_all_stations(
             shift = _find_rms_shift(df[gps_col], df[insar_col], gps_rolling_window=360)
         else:
             shift = 0
+        shift_dict[name] = shift
 
         l1 = ax.plot(
             df.index,
@@ -487,6 +497,8 @@ def plot_all_stations(
         ret.append(lines)
     if return_rms:
         ret.append(rms_dict)
+    if return_shifts:
+        ret.append(shift_dict)
     return ret
 
 

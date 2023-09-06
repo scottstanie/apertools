@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-import re
 import argparse
 import os
+import re
+from pathlib import Path
+
 from osgeo import gdal
-import apertools.utils as utils
 
 SENTINEL_WAVELENGTH = 0.05546576
 ALOS_WAVELENGTH = 299792458 / 1.270e9  # 0.23605705354330708
@@ -200,7 +201,7 @@ if __name__ == "__main__":
     print("Number of SLCs Used: ", num_slc)
 
     # Set up single stack file
-    utils.mkdir_p(args.out_dir)
+    Path(args.out_dir).mkdir(exist_ok=True, parents=True)
     outfile = os.path.join(args.out_dir, args.out_vrt_name)
     # create_vrt_stack(file_list, outfile=outfile)
     create_vrt_stack_manual(
