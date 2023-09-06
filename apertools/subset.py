@@ -9,6 +9,7 @@ from tqdm import tqdm
 import numpy as np
 from shapely import geometry
 import rasterio as rio  # TODO: figure out if i want rio or gdal...
+from rasterio.vrt import WarpedVRT
 from apertools.log import get_log
 from apertools.latlon import km_to_deg
 from apertools.deramp import remove_ramp
@@ -19,6 +20,7 @@ logger = get_log()
 
 COMP_DICT_BLOSC = {"compression": 32001, "compression_opts": (0, 0, 0, 0, 5, 1, 1)}
 COMP_DICT_LZF = {"compressions": "LZF"}
+CRS_LATLON = "EPSG:4326"
 
 
 def read_intersections(
@@ -28,14 +30,16 @@ def read_intersections(
     band2=None,
     nodata=0,
     mask_intersection=True,
+    target_crs=None,
     verbose=False,
+    res=None,
 ):
     """Read in the intersection of 2 files as an array"""
-    bounds = get_intersection_bounds(fname1, fname2)
+    bounds = get_intersection_bounds(fname1, fname2, target_crs=target_crs)
     if verbose:
         logger.info(f"bounds: {bounds}")
-    im1 = copy_vrt(fname1, out_fname="", bbox=bounds, band=band1)
-    im2 = copy_vrt(fname2, out_fname="", bbox=bounds, band=band2)
+    im1 = copy_vrt(fname1, out_fname="", bbox=bounds, band=band1, dst_crs=target_crs, res=res)
+    im2 = copy_vrt(fname2, out_fname="", bbox=bounds, band=band2, dst_crs=target_crs, res=res)
     if mask_intersection:
         nodata1 = get_nodata(fname1)
         nodata2 = get_nodata(fname2)
@@ -81,22 +85,18 @@ def write_intersections(
 
 # TODO: this is basically the same as copy_subset... def merge these
 def copy_vrt(
-    in_fname, out_fname="", bbox=None, verbose=False, band=None, dst_crs="EPSG:4326"
+    in_fname,
+    out_fname="",
+    bbox=None,
+    verbose=False,
+    band=None,
+    dst_crs=CRS_LATLON,
+    res=None,
 ):
     """Create a VRT for (a subset of) a gdal-readable file
 
     bbox format: (left, bottom, right, top)"""
     from osgeo import gdal
-
-    # if not out_fname:
-    # out_fname = in_fname + ".vrt"
-
-    # Using Translate... but would use Warp if every reprojecting
-    if bbox:
-        left, bottom, right, top = bbox
-        projwin = (left, top, right, bottom)  # unclear why Translate does UL LR
-    else:
-        projwin = None
 
     if verbose:
         msg = ""
@@ -108,10 +108,17 @@ def copy_vrt(
     if not out_fname:
         out_fname = ""
 
+    # projwin = (left, top, right, bottom)  # unclear why Translate does UL LR
     # out_ds = gdal.Translate(out_fname, in_fname, projWin=projwin)
     # ds_in = gdal.Open(in_fname)
     out_ds = gdal.Warp(
-        str(out_fname), str(in_fname), outputBounds=bbox, format="VRT", dstSRS=dst_crs
+        str(out_fname),
+        str(in_fname),
+        outputBounds=bbox,
+        format="VRT",
+        dstSRS=dst_crs,
+        xRes=res,
+        yRes=res,
     )
     out_arr = out_ds.ReadAsArray()
     if band and out_arr.ndim == 3:
@@ -202,17 +209,30 @@ def write_outfile(
 
 
 def _get_img_bounds(
-    fname1=None, fname2=None, ds1=None, ds2=None, xdim="lon", ydim="lat"
+    fname1=None,
+    fname2=None,
+    ds1=None,
+    ds2=None,
+    xdim="lon",
+    ydim="lat",
+    target_crs=CRS_LATLON,
 ):
     """Read 2 arrays and make sure they are on the same projection"""
     if fname1 is not None and fname2 is not None:
         with rio.open(fname1) as src1, rio.open(fname2) as src2:
-            if src1.crs != src2.crs:
-                raise ValueError(
-                    f"{fname1} has crs {src1.crs}, but {fname2} has csr {src2.crs}"
-                )
-            b1 = geometry.box(*src1.bounds)
-            b2 = geometry.box(*src2.bounds)
+            if target_crs is not None:
+                with WarpedVRT(src1, crs=target_crs) as wsrc2, WarpedVRT(
+                    src2, crs=target_crs
+                ) as wsrc1:
+                    b1 = geometry.box(*wsrc1.bounds)
+                    b2 = geometry.box(*wsrc2.bounds)
+            else:
+                if src1.crs != src2.crs:
+                    raise ValueError(
+                        f"{fname1} has CRS {src1.crs}, but {fname2} has CRS {src2.crs}"
+                    )
+                b1 = geometry.box(*src1.bounds)
+                b2 = geometry.box(*src2.bounds)
             return b1, b2
     elif ds1 is not None and ds2 is not None:
         s1 = ds1.rio.set_spatial_dims(xdim, ydim)
@@ -234,36 +254,56 @@ def get_bounds(fname=None, ds=None, xdim="lon", ydim="lat"):
 
 
 def get_intersection_bounds(
-    fname1=None, fname2=None, ds1=None, ds2=None, xdim="lon", ydim="lat"
+    fname1=None,
+    fname2=None,
+    ds1=None,
+    ds2=None,
+    xdim="lon",
+    ydim="lat",
+    target_crs=None,
 ):
     """Find the (left, bot, right, top) bounds of intersection of fname1 and fname2
     or 2 xarray.Datasets ds1 and ds1"""
-    b1, b2 = _get_img_bounds(fname1, fname2, ds1, ds2, xdim, ydim)
+    b1, b2 = _get_img_bounds(
+        fname1, fname2, ds1, ds2, xdim, ydim, target_crs=target_crs
+    )
     return b1.intersection(b2).bounds
 
 
 def get_union_bounds(
-    fname1=None, fname2=None, ds1=None, ds2=None, xdim="lon", ydim="lat"
+    fname1=None,
+    fname2=None,
+    ds1=None,
+    ds2=None,
+    xdim="lon",
+    ydim="lat",
+    target_crs=None,
 ):
     """Find the (left, bot, right, top) bounds of union of fname1 and fname2"""
-    b1, b2 = _get_img_bounds(fname1, fname2, ds1, ds2, xdim, ydim)
+    b1, b2 = _get_img_bounds(
+        fname1, fname2, ds1, ds2, xdim, ydim, target_crs=target_crs
+    )
     return b1.union(b2).bounds
 
 
-def get_transform(in_fname, driver=None, bbox=None):
+def get_transform(in_fname, driver=None, bbox=None, target_crs=None):
     with rio.open(in_fname, driver=driver) as src:
-        transform = src.window_transform(src.window(*bbox)) if bbox else src.transform
+        if target_crs is None:
+            s = src
+        else:
+            s = WarpedVRT(src, crs=target_crs)
+        transform = s.window_transform(s.window(*bbox)) if bbox else s.transform
         return transform
 
 
-def get_intersect_transform(fname1, fname2):
-    bbox = get_intersection_bounds(fname1, fname2)
-    return get_transform(fname1, bbox=bbox)
+def get_intersect_transform(fname1, fname2, target_crs=None):
+    bbox = get_intersection_bounds(fname1, fname2, target_crs=target_crs)
+    return get_transform(fname1, bbox=bbox, target_crs=target_crs)
 
 
-def get_union_transform(fname1, fname2):
-    bbox = get_union_bounds(fname1, fname2)
-    return get_transform(fname1, bbox=bbox)
+def get_union_transform(fname1, fname2, target_crs=None):
+    bbox = get_union_bounds(fname1, fname2, target_crs=target_crs)
+    return get_transform(fname1, bbox=bbox, target_crs=target_crs)
 
 
 def get_crs(fname, driver=None):
@@ -334,13 +374,19 @@ def create_merged_files(
         merged = np.zeros_like(img_left)
         for idx in range(img_left.shape[0]):
             ramp_left = np.zeros(img_left.shape[1])
-            start, end = np.where(~mask_left[idx])[0][[0, -1]]
+            good_idxs_left = np.where(~mask_left[idx])[0]
+            if len(good_idxs_left) < 2:
+                continue
+            start, end = good_idxs_left[[0, -1]]
             ramp_left[start:end] = np.linspace(1, 0, end - start)
             # ramp_left = np.linspace(1, 0, img_left.shape[1])
             ramp_left[mask_left[idx]] = 0.0
 
             ramp_right = np.zeros(img_right.shape[1])
-            start, end = np.where(~mask_right[idx])[0][[0, -1]]
+            good_idxs_right = np.where(~mask_right[idx])[0]
+            if len(good_idxs_right) < 2:
+                continue
+            start, end = good_idxs_right[[0, -1]]
             ramp_right[start:end] = np.linspace(0, 1, end - start)
             # ramp_right = np.linspace(1, 0, img_left.shape[1])
             ramp_right[mask_right[idx]] = 0.0
@@ -719,7 +765,7 @@ def read_intersections_xr(
     date=None,
     xdim="lon",
     ydim="lat",
-    crs="EPSG:4326",
+    crs=CRS_LATLON,
     asc_img_fname="tmp_asc.tif",
     desc_img_fname="tmp_desc.tif",
 ):
