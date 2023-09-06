@@ -1,4 +1,5 @@
 """Custom plotting colors, used for plotting.py"""
+import matplotlib as mpl
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 import matplotlib.pyplot as plt
@@ -14,6 +15,17 @@ MATLAB_COLORS = [
     [0.3010, 0.7450, 0.9330, 1],
     [0.6350, 0.0780, 0.1840, 1],
 ]
+
+def register_cmap(name, cmap):
+    try:
+        if not mpl.colormaps.get(name):
+            mpl.colormaps.register(cmap, name=name)
+    except AttributeError:
+        # Older MPL, < 3.7
+        try:
+            cm.get_cmap(name)
+        except ValueError:
+            plt.register_cmap(name, cmap)
 
 
 def discrete_seismic_colors(n=5):
@@ -85,7 +97,7 @@ SEISMIC_WIDE2 = LinearSegmentedColormap.from_list(
     ],
     N=250,
 )
-plt.register_cmap("seismic_wider", SEISMIC_WIDE2)
+register_cmap("seismic_wider", SEISMIC_WIDE2)
 
 seismic_widy_y_list = [
     (0, 0, 0.7, 1),
@@ -109,32 +121,28 @@ SEISMIC_WIDE_Y = LinearSegmentedColormap.from_list(
     seismic_widy_y_list,
     N=256,
 )
-plt.register_cmap("seismic_wide_y", SEISMIC_WIDE_Y)
+register_cmap("seismic_wide_y", SEISMIC_WIDE_Y)
 # Also add the reverse colormap with _r in name
 SEISMIC_WIDE_Y_R = LinearSegmentedColormap.from_list(
     "seismic_wide_y_r",
     seismic_widy_y_list[::-1],
     N=256,
 )
-plt.register_cmap("seismic_wide_y_r", SEISMIC_WIDE_Y_R)
+register_cmap("seismic_wide_y_r", SEISMIC_WIDE_Y_R)
 
 DISCRETE_SEISMIC5 = LinearSegmentedColormap.from_list(
     "discrete_seismic5", discrete_seismic_colors(5), N=5
 )
-plt.register_cmap(cmap=DISCRETE_SEISMIC5)
+register_cmap("discrete_seicmic5", cmap=DISCRETE_SEISMIC5)
 DISCRETE_SEISMIC7 = LinearSegmentedColormap.from_list(
     "discrete_seismic7", discrete_seismic_colors(7), N=7
 )
-plt.register_cmap(cmap=DISCRETE_SEISMIC7)
+register_cmap("discrete_seismic7", cmap=DISCRETE_SEISMIC7)
 
 SEISMIC_Y = LinearSegmentedColormap.from_list(
     "seismic_y", discrete_seismic_colors(7), N=250
 )
-plt.register_cmap(cmap=SEISMIC_Y)
-SEISMIC_Y2 = LinearSegmentedColormap.from_list(
-    "seismic_y2", discrete_seismic_colors(5), N=250
-)
-plt.register_cmap(cmap=SEISMIC_Y2)
+register_cmap("seismic_y", cmap=SEISMIC_Y)
 SEISMIC_WIDE = LinearSegmentedColormap.from_list(
     "seismic_wide",
     [
@@ -150,7 +158,7 @@ SEISMIC_WIDE = LinearSegmentedColormap.from_list(
     ],  # Extra white in middle from seismic
     N=250,
 )
-plt.register_cmap(cmap=SEISMIC_WIDE)
+register_cmap("seismic_wide", cmap=SEISMIC_WIDE)
 
 
 def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
@@ -288,7 +296,7 @@ def make_dismph_colors():
 
 
 DISMPH = LinearSegmentedColormap.from_list("dismph", make_dismph_colors().T / 256)
-plt.register_cmap(cmap=DISMPH)
+register_cmap("dismph", cmap=DISMPH)
 
 
 def test_rgbmat(plot=True):
