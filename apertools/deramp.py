@@ -16,7 +16,13 @@ def remove_ramp(
         z (ndarray): 2D array, interpreted as heights
         deramp_order (int): degree of surface estimation
             deramp_order = 1 removes linear ramp, deramp_order = 2 fits quadratic surface
-
+        mask: np.ndarray
+            mask array, where True pixels are excluded from ramp estimation.
+        copy: bool
+            If True, makes a copy and does not modify. If False, modifies in place.
+        dem (ndarray): 2D array, heights of DEM, same shape as z
+            Used remove a linear elevation-phase trend.
+            if None, will ignore and not remove trend.
     Returns:
         ndarray: flattened 2D array with estimated surface removed
     """
