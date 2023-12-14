@@ -428,7 +428,9 @@ class InsarGPSCompare:
                 continue
             df_out.drop(col, axis=1, inplace=True)
             station = col.replace("_gps", "").replace("_insar", "")
-            col_list = [f"{station}_{suffix}" for suffix in ["gps", "insar", "diff", "std"]]
+            col_list = [
+                f"{station}_{suffix}" for suffix in ["gps", "insar", "diff", "std"]
+            ]
             df_out.drop(columns=col_list, inplace=True, errors="ignore")
         return df_out
 
@@ -714,7 +716,7 @@ def get_stations_within_image(
     bad_vals=[0],
     mask_invalid=True,
     to_geodataframe=True,
-    exclude_stations=[]
+    exclude_stations=[],
 ):
     """Given an image, find gps stations contained in area
 
@@ -780,7 +782,9 @@ def get_stations_within_image(
         if isinstance(exclude_stations, str):
             exclude_stations = [exclude_stations]
         exclude_stations = [s.upper() for s in exclude_stations]
-        gdf_within = gdf_within[~gdf_within.name.isin(exclude_stations)].reset_index(drop=True)
+        gdf_within = gdf_within[~gdf_within.name.isin(exclude_stations)].reset_index(
+            drop=True
+        )
     return gdf_within
 
 
@@ -805,6 +809,9 @@ def read_station_llas(filename=None, to_geodataframe=False):
         df = pd.read_csv(lla_path, sep=r"\s+", engine="c", header=None)
 
     df.columns = ["name", "lat", "lon", "alt"]
+    # Make sure the longitude is wrapped between -180 and 180
+    # It comes in the range (-360, 0)
+    df.loc[:, "lon"] = df.lon - (np.round(df.lon / (360)) * 360)
     if to_geodataframe:
         import geopandas as gpd
 
