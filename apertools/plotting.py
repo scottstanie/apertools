@@ -1815,7 +1815,7 @@ def plot_2d_arrays(
         imshow_kw = imshow_kwargs[i] if imshow_kwargs is not None else {}
 
         # Create the plot
-        im = axes[i].imshow(arr, cmap=cmap, vmin=vmin, vmax=vmax, **imshow_kw[i])
+        im = axes[i].imshow(arr, cmap=cmap, vmin=vmin, vmax=vmax, **imshow_kw)
 
         # Add colorbar
         fig.colorbar(im, ax=axes[i])
