@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import logging
 from concurrent.futures import ProcessPoolExecutor
+from itertools import chain
 from pathlib import Path
 
 import backoff
@@ -21,7 +22,7 @@ logging.getLogger("asfsmd").setLevel(logging.WARNING)
 def download_safe_metadata(
     product_name: str,
     pol: str = "vv",
-    outdir: str | Path=Path("."),
+    outdir: str | Path = Path("."),
     skip_if_exists: bool = True,
 ):
     out_product = (Path(outdir) / product_name).with_suffix(".SAFE")
@@ -48,6 +49,22 @@ def _download_safe_metadata(
     download_annotations([product_name], patterns=patterns, outdir=outdir)
 
 
+def _get_product_list(search_dir: str):
+    iso_xml_files = list(Path(search_dir).glob("*.iso.xml"))
+    logger.info(f"Found {len(iso_xml_files)} iso XML files.")
+
+    # remove all suffixes, only product name left
+    return [p.name.split(".")[0] for p in iso_xml_files]
+
+
+def _get_product_list_cmr(search_dir: str):
+    safe_lists = Path(search_dir).glob("safes-*.txt")
+    logger.info(f"Found {len(safe_lists)} text files of SAFE products.")
+    return list(
+        chain.from_iterable(path.read_text().splitlines() for path in safe_lists)
+    )
+
+
 def main() -> None:
     """Download Sentinel-1 metadata from a WKT file."""
 
@@ -59,16 +76,13 @@ def main() -> None:
     parser.add_argument(
         "--max-jobs", type=int, default=10, help="Number of parallel calls to `asfsmd`"
     )
-    parser.add_argument(
-        "--orbit-dir", default="~/dev/orbits", help="Directory containing POEORB files"
-    )
     args = parser.parse_args()
 
-    iso_xml_files = list(Path(args.search_dir).glob("*.iso.xml"))
-    logger.info(f"Found {len(iso_xml_files)} iso XML files.")
-
-    # remove all suffixes, only product name left
-    product_name_list = [p.name.split(".")[0] for p in iso_xml_files]
+    product_name_list = _get_product_list(args.search_dir)
+    if not product_name_list:
+        product_name_list = _get_product_list_cmr(args.search_dir)
+    if not product_name_list:
+        raise ValueError(f"Found no products in {args.search_dir}")
 
     # with ProcessPoolExecutor(max_workers=args.max_jobs) as exc:
     #     list(exc.map(download_safe_metadata, product_name_list))
