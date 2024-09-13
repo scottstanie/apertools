@@ -1749,6 +1749,7 @@ def plot_2d_arrays(
     vmins: list[float] | None = None,
     vmaxes: list[float] | None = None,
     figsize: tuple[float, float] = (12, 12),
+    imshow_kwargs: list[dict] | None = None,
 ) -> None:
     """Plot a list of 2D arrays in a grid of subplots with shared axes and colorbars.
 
@@ -1811,9 +1812,10 @@ def plot_2d_arrays(
         cmap = cmaps[i] if cmaps and i < len(cmaps) else "viridis"
         vmin = vmins[i] if vmins and i < len(vmins) else None
         vmax = vmaxes[i] if vmaxes and i < len(vmaxes) else None
+        imshow_kw = imshow_kwargs[i] if imshow_kwargs is not None else {}
 
         # Create the plot
-        im = axes[i].imshow(arr, cmap=cmap, vmin=vmin, vmax=vmax)
+        im = axes[i].imshow(arr, cmap=cmap, vmin=vmin, vmax=vmax, **imshow_kw[i])
 
         # Add colorbar
         fig.colorbar(im, ax=axes[i])
