@@ -1,5 +1,5 @@
-"""plotting.py: functions for visualizing insar products
-"""
+"""plotting.py: functions for visualizing insar products"""
+
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -518,17 +518,30 @@ def view_stack(
     imagefig.canvas.mpl_connect("button_press_event", onclick)
     plt.show(block=True)
 
+
 from ipywidgets import interact, widgets
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
 from datetime import datetime
 
-def view_stack_improved(stack, display_img, slclist=None, label="Centimeters",
-                        cmap='seismic', perform_shift=False, title="",
-                            vmin=None, vmax=None,
-                        legend_loc="upper left", lat_lon=False, rsc_data=None,
-                        line_plot_kwargs=None, timeline_callback=None):
+
+def view_stack_improved(
+    stack,
+    display_img,
+    slclist=None,
+    label="Centimeters",
+    cmap="seismic",
+    perform_shift=False,
+    title="",
+    vmin=None,
+    vmax=None,
+    legend_loc="upper left",
+    lat_lon=False,
+    rsc_data=None,
+    line_plot_kwargs=None,
+    timeline_callback=None,
+):
     """Displays an image from a stack, allows you to click for timeseries"""
 
     if slclist is None:
@@ -548,15 +561,20 @@ def view_stack_improved(stack, display_img, slclist=None, label="Centimeters",
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
 
     ax1.set_title(title)
-    im = ax1.imshow(img, cmap=cmap, vmax=vmax, vmin=vmin,)
+    im = ax1.imshow(
+        img,
+        cmap=cmap,
+        vmax=vmax,
+        vmin=vmin,
+    )
     fig.colorbar(im, ax=ax1, label=label)
-    
+
     # ipywidgets slider
     date_slider = widgets.SelectionSlider(
-        options=[(date.strftime('%Y-%m-%d'), idx) for idx, date in enumerate(slclist)],
-        description='Date:',
-        orientation='horizontal',
-        layout=widgets.Layout(width='80%')
+        options=[(date.strftime("%Y-%m-%d"), idx) for idx, date in enumerate(slclist)],
+        description="Date:",
+        orientation="horizontal",
+        layout=widgets.Layout(width="80%"),
     )
 
     def update_slider(idx):
@@ -590,8 +608,6 @@ def view_stack_improved(stack, display_img, slclist=None, label="Centimeters",
         ax2.set_ylabel(label)
 
     fig.canvas.mpl_connect("button_press_event", onclick)
-
-
 
 
 def equalize_and_mask(image, low=1e-6, high=2, fill_value=np.inf, db=True):
@@ -806,7 +822,7 @@ def plot_img_diff(
     **kwargs,
 ):
     """Plot two images for comparison, (and their difference if `show_diff`)"""
-    import proplot as pplt
+    # import proplot as pplt
 
     if arrays is None:
         from apertools import sario
@@ -1049,7 +1065,9 @@ def map_background(
     return fig, ax
 
 
-def plot_image_with_background(image, figsize=None, cbar_label=None, **imshow_kwargs):
+def plot_image_with_background(
+    image, figsize=None, cbar_label=None, tile_zoom_level=9, **imshow_kwargs
+):
     import cartopy.crs as ccrs
     from cartopy.io import img_tiles
     # Read the raster image and get its extent
@@ -1062,13 +1080,21 @@ def plot_image_with_background(image, figsize=None, cbar_label=None, **imshow_kw
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
     # Add the satellite imagery from Google Tiles
-    # tiler = img_tiles.GoogleTiles(style="satellite")
-    tiler = img_tiles.Stamen(style="terrain")
-    ax.add_image(tiler, 8, interpolation='bicubic')
+    tiler = img_tiles.GoogleTiles(style="satellite")
+    # tiler = img_tiles.Stamen(style="terrain")
+    ax.add_image(tiler, tile_zoom_level, interpolation="bicubic")
 
     extent = padded_extent(image.rio.bounds(), 0.0)
+    print(extent)
     # Plot the raster image on top of the satellite background
-    axim = ax.imshow(image, origin='upper', extent=extent, transform=ccrs.PlateCarree(), zorder=2, **imshow_kwargs)
+    axim = ax.imshow(
+        image,
+        origin="upper",
+        extent=extent,
+        transform=ccrs.PlateCarree(),
+        zorder=2,
+        **imshow_kwargs,
+    )
     cbar = fig.colorbar(axim)
     cbar.set_label(cbar_label)
 
@@ -1086,13 +1112,17 @@ def padded_extent(bbox, pad_pct):
     return (left - padx, right + padx, bot - pady, top + pady)
 
 
-def add_ticks(ax, side="right"):
+def add_ticks(ax, side="right", resolution: float = 1):
     import cartopy.crs as ccrs
     from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 
     left, right, bot, top = ax.get_extent(ccrs.PlateCarree())
-    lon_ticks = np.arange(np.ceil(left), np.floor(right))
-    lat_ticks = np.arange(np.ceil(bot), np.floor(top))
+    # print(left, bot, right, top)
+    # lon_ticks = np.arange(np.ceil(left), np.floor(right), step=resolution)
+    # lat_ticks = np.arange(np.ceil(bot), np.floor(top), step=resolution)
+    bounds = (left, bot, right, top)
+    lon_ticks, lat_ticks = generate_ticks(bounds, resolution=resolution)
+    print(lon_ticks, lat_ticks)
     ax.set_xticks(lon_ticks, crs=ccrs.PlateCarree())
     ax.set_yticks(lat_ticks, crs=ccrs.PlateCarree())
     lon_formatter = LongitudeFormatter(zero_direction_label=True)
@@ -1102,6 +1132,64 @@ def add_ticks(ax, side="right"):
     ax.yaxis.tick_left()
     # print("added ticks")
     ax.xaxis.tick_bottom()
+
+
+def generate_ticks(bounds, resolution, offset=0):
+    """
+    Generate xticks and yticks for a raster image based on given bounds, resolution, and offset.
+
+    Parameters
+    ----------
+    bounds : tuple of float
+        The bounds of the raster image in the form (left, bottom, right, top).
+    resolution : float
+        The spacing/rounding resolution for the ticks.
+    offset : float, optional
+        The offset to be added to the tick positions, by default 0.
+
+    Returns
+    -------
+    xticks : numpy.ndarray
+        The generated xticks adjusted to the specified resolution and offset.
+    yticks : numpy.ndarray
+        The generated yticks adjusted to the specified resolution and offset.
+
+    Examples
+    --------
+    >>> bounds = (10, 20, 50, 70)
+    >>> resolution = 5
+    >>> generate_ticks(bounds, resolution)
+    (array([10, 15, 20, 25, 30, 35, 40, 45, 50]),
+     array([20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]))
+
+    >>> generate_ticks(bounds, resolution, offset=2)
+    (array([12, 17, 22, 27, 32, 37, 42, 47]),
+     array([22, 27, 32, 37, 42, 47, 52, 57, 62]))
+    """
+
+    def _snap_bounds_to_res(bounds, resolution):
+        left, bottom, right, top = bounds
+        # Adjust the extents
+        new_left = np.ceil(left / resolution) * resolution
+        new_right = np.floor(right / resolution) * resolution
+        new_bottom = np.ceil(bottom / resolution) * resolution
+        new_top = np.floor(top / resolution) * resolution
+
+        return [new_left, new_bottom, new_right, new_top]
+
+    left, bottom, right, top = _snap_bounds_to_res(bounds, resolution)
+
+    # Generate xticks from left to right bounds
+    xticks = np.arange(left, right + resolution, resolution) + offset
+    # Filter xticks to be within the bounds
+    xticks = xticks[(xticks >= left) & (xticks <= right)]
+
+    # Generate yticks from bottom to top bounds
+    yticks = np.arange(bottom, top + resolution, resolution) + offset
+    # Filter yticks to be within the bounds
+    yticks = yticks[(yticks >= bottom) & (yticks <= top)]
+
+    return xticks, yticks
 
 
 def _make_line_collections(ax, *, ticks=None, loc="bottom", lw=2, **kwargs):
@@ -1195,6 +1283,69 @@ def add_zebra_frame(ax, lw=2, crs="pcarree", zorder=None):
                         pe.Normal(),
                     ],
                 )
+
+
+import itertools
+from matplotlib.patheffects import Stroke, Normal
+import numpy as np
+import cartopy.mpl.geoaxes
+import cartopy.crs as ccrs
+
+
+def zebra_frame(self, lw=3, crs=None, zorder=None, iFlag_outer_frame_in=None):
+    # Alternate black and white line segments
+    print("???????")
+    bws = itertools.cycle(["k", "w"])
+    self.spines["geo"].set_visible(False)
+
+    if iFlag_outer_frame_in is not None:
+        # get the map spatial reference
+        left, right, bottom, top = self.get_extent()
+        crs_map = self.projection
+        xticks = np.arange(left, right + (right - left) / 9, (right - left) / 8)
+        yticks = np.arange(bottom, top + (top - bottom) / 9, (top - bottom) / 8)
+        # check spatial reference are the same
+        print(xticks, yticks)
+        pass
+    else:
+        crs_map = crs
+        xticks = sorted([*self.get_xticks()])
+        xticks = np.unique(np.array(xticks))
+        yticks = sorted([*self.get_yticks()])
+        yticks = np.unique(np.array(yticks))
+
+    print(xticks, yticks, crs_map)
+    for ticks, which in zip([xticks, yticks], ["lon", "lat"]):
+        for idx, (start, end) in enumerate(zip(ticks, ticks[1:])):
+            bw = next(bws)
+            if which == "lon":
+                xs = [[start, end], [start, end]]
+                ys = [[yticks[0], yticks[0]], [yticks[-1], yticks[-1]]]
+            else:
+                xs = [[xticks[0], xticks[0]], [xticks[-1], xticks[-1]]]
+                ys = [[start, end], [start, end]]
+
+            # For first and last lines, used the "projecting" effect
+            capstyle = "butt" if idx not in (0, len(ticks) - 2) else "projecting"
+            for xx, yy in zip(xs, ys):
+                self.plot(
+                    xx,
+                    yy,
+                    color=bw,
+                    linewidth=max(0, lw - self.spines["geo"].get_linewidth() * 2),
+                    clip_on=False,
+                    transform=crs_map or ccrs.PlateCarree(),
+                    zorder=zorder,
+                    solid_capstyle=capstyle,
+                    # Add a black border to accentuate white segments
+                    path_effects=[
+                        Stroke(linewidth=lw, foreground="black"),
+                        Normal(),
+                    ],
+                )
+
+
+setattr(cartopy.mpl.geoaxes.GeoAxes, "zebra_frame", zebra_frame)
 
 
 def get_data_offset(ax, dx_pix=0.01, dy_pix=0.01, lw=5):

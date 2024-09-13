@@ -15,6 +15,7 @@ import subprocess
 import numpy as np
 import inspect
 import itertools
+from pathlib import Path
 
 from apertools.log import get_log
 
@@ -221,7 +222,6 @@ def take_looks_bn(
     return a2[..., r_start::row_stride, c_start::col_stride]
 
 
-
 def moving_window_mean(image, size):
     """Calculate the mean of a moving window of size `size`
 
@@ -230,7 +230,7 @@ def moving_window_mean(image, size):
     image : ndarray
         input image
     size : int or tuple of int
-        Window size. If a single int, the window is square. 
+        Window size. If a single int, the window is square.
         If a tuple of (row_size, col_size), the window can be rectangular.
 
     Returns
@@ -581,9 +581,7 @@ def crossmul_gdal(outfile, file1, file2, row_looks, col_looks, format="ROI_PAC")
     """Uses gdal_calc.py to multiply, then gdal_translate for looks"""
     tmp = "tmp.tif"
     cmd = """gdal_calc.py -A {f1} -B {f1} --outfile={tmp} \
-            --calc="A * conj(B)" --NoDataValue=0 """.format(
-        f1=file1, f2=file2, tmp=tmp
-    )
+            --calc="A * conj(B)" --NoDataValue=0 """.format(f1=file1, f2=file2, tmp=tmp)
     subprocess.check_call(cmd, shell=True)
     take_looks_gdal(outfile, tmp, row_looks, col_looks, format=format)
     os.remove(tmp)
@@ -1063,7 +1061,7 @@ def get_parent_dir(filepath):
         return os.path.dirname(os.path.split(os.path.abspath(filepath))[0])
 
 
-def get_cache_dir(force_posix=False, app_name="apertools"):
+def get_cache_dir(force_posix=False, app_name="apertools") -> Path:
     """Returns the config folder for the application.  The default behavior
     is to return whatever is most appropriate for the operating system.
 
@@ -1087,6 +1085,7 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
 
     Source: https://github.com/pallets/click/blob/master/click/utils.py#L368
     """
+
     if force_posix:
         path = os.path.join(os.path.expanduser("~/." + app_name))
     if sys.platform == "darwin":
@@ -1099,7 +1098,7 @@ def get_cache_dir(force_posix=False, app_name="apertools"):
     )
     if not os.path.exists(path):
         os.makedirs(path)
-    return path
+    return Path(path)
 
 
 def az_inc_to_enu(

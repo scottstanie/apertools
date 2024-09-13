@@ -10,6 +10,7 @@ Note: ^^ This file is stored in the `STATION_LLH_FILE`
 3. Map of stations: http://geodesy.unr.edu/NGLStationPages/gpsnetmap/GPSNetMap.html
 
 """
+
 from __future__ import annotations, division, print_function
 
 import datetime
@@ -19,7 +20,7 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from glob import glob
-from typing import List, Optional, Union
+from pathlib import Path
 
 import h5py
 import matplotlib.dates as mdates
@@ -39,41 +40,32 @@ from apertools.sario import LOS_FILENAME
 logger = get_log()
 
 # URL for ascii file of 24-hour final GPS solutions in east-north-vertical (NA12)
-# GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/NA12/{station}.NA12.tenv3"
-# UPDATE 4/20/20: noticed they changed it to
-GPS_BASE_URL = (
+GPS_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/tenv3/IGS14/{station}.tenv3"
+GPS_FILE_TEMPLATE = GPS_BASE_URL.split("/")[-1]
+# NOTE: if i also want IGS14 and plate, I need to divide directories and do more
+# The main web page per station
+GPS_PLATE_BASE_URL = (
     "http://geodesy.unr.edu/gps_timeseries/tenv3/plates/{plate}/{station}.{plate}.tenv3"
 )
-# NOTE: for now i'm assuming all plate-fixed data is the only one i care about...
-# if i also want IGS14, i'll need to divide directories and do more
-GPS_FILE = GPS_BASE_URL.split("/")[-1].replace(".{plate}", "")
-# The main web page per station
+GPS_PLATE_FILE_TEMPLATE = GPS_BASE_URL.split("/")[-1].replace(".{plate}", "")
 # We'll use this for now to scrape the plate information with a regex :(
 GPS_STATION_URL = "http://geodesy.unr.edu/NGLStationPages/stations/{station}.sta"
 
 GPS_XYZ_BASE_URL = "http://geodesy.unr.edu/gps_timeseries/txyz/IGS14/{station}.txyz2"
-
 GPS_XYZ_FILE = GPS_XYZ_BASE_URL.split("/")[-1]
 
 DIRNAME = os.path.dirname(os.path.abspath(__file__))
 
 
-def _get_gps_dir():
-    path = apertools.utils.get_cache_dir(force_posix=True)
-    if not os.path.exists(path):
-        os.makedirs(path)
-    return path
-
-
-GPS_DIR = _get_gps_dir()
+GPS_DIR = apertools.utils.get_cache_dir(force_posix=True)
 
 # These lists get update occasionally... to keep fresh, download one for current day
 # old ones will be removed upon new download
 STATION_LLH_URL = "http://geodesy.unr.edu/NGLStationPages/llh.out"
-STATION_LLH_FILE = os.path.join(GPS_DIR, "station_llh_all_{today}.csv")
+STATION_LLH_FILE = str(GPS_DIR / "station_llh_all_{today}.csv")
 
 STATION_XYZ_URL = "http://geodesy.unr.edu/NGLStationPages/DataHoldings.txt"
-STATION_XYZ_FILE = os.path.join(GPS_DIR, "station_xyz_all_{today}.csv")
+STATION_XYZ_FILE = str(GPS_DIR / "station_xyz_all_{today}.csv")
 
 
 @dataclass
@@ -87,7 +79,7 @@ class InsarGPSCompare:
     # If 2d, the pixels are cumulative defo., not velocities
     is_2d_cumulative: bool = False
 
-    los_da: Optional[xr.DataArray] = None
+    los_da: xr.DataArray | None = None
     los_dset: str = LOS_FILENAME.replace(".tif", "")
     # to measure GPS relative to some other station, set the reference station
     reference_station: str = None
@@ -96,7 +88,7 @@ class InsarGPSCompare:
     # These will get used by in the GPS df creation; they're set using the InSAR data
     start_date: datetime.date = None
     end_date: datetime.date = None
-    dates: Union[List[datetime.date], np.ndarray] = None
+    dates: list[datetime.date | np.ndarray] = None
     # To limit stations that have at least 60% coverage over the
     # time period we care about, set a nan threshold of 0.4
     max_nan_pct: float = 0.4
@@ -115,7 +107,7 @@ class InsarGPSCompare:
     insar_shift_cm_per_year: float = 0.0
 
     # List of stations to manually ignore (due to known bad GPS data, e.g.)
-    ignore_gps_stations: List = field(default_factory=list)
+    ignore_gps_stations: list[str] = field(default_factory=list)
     # Display a final summary
     print_summary: bool = True
 
@@ -601,7 +593,9 @@ def load_station_enu(
     if zero_by not in ("start", "mean"):
         raise ValueError("'zero_by' must be either 'start' or 'mean'")
     station_name = station_name.upper()
-    gps_data_file = os.path.join(GPS_DIR, GPS_FILE.format(station=station_name))
+    gps_data_file = os.path.join(
+        GPS_DIR, GPS_FILE_TEMPLATE.format(station=station_name)
+    )
     if not os.path.exists(gps_data_file):
         if download_if_missing:
             logger.info(f"Downloading {station_name} to {gps_data_file}")
@@ -872,15 +866,18 @@ def download_station_locations(filename, url):
         f.write(resp.text)
 
 
-def download_station_data(station_name, coords="enu"):
+def download_station_data(station_name, coords="enu", plate_fixed=False):
     station_name = station_name.upper()
     plate = _get_station_plate(station_name)
     # plate = "PA"
     if coords == "enu":
-        url = GPS_BASE_URL.format(station=station_name, plate=plate)
-        filename = os.path.join(
-            GPS_DIR, GPS_FILE.format(station=station_name, plate=plate)
-        )
+        if plate_fixed:
+            url = GPS_PLATE_BASE_URL.format(station=station_name, plate=plate)
+            filename = os.path.join(
+                GPS_DIR, GPS_FILE_TEMPLATE.format(station=station_name, plate=plate)
+            )
+        else:
+            url = GPS_BASE_URL.format(station=station_name, plate=plate)
     elif coords == "xyz":
         url = GPS_XYZ_BASE_URL.format(station=station_name)
         filename = os.path.join(GPS_DIR, GPS_XYZ_FILE.format(station=station_name))
@@ -956,9 +953,13 @@ def station_distance(station_name1, station_name2):
     Returns:
         float: distance (in meters)
     """
-    lonlat1 = station_lonlat(station_name1)
-    lonlat2 = station_lonlat(station_name2)
-    return apertools.latlon.latlon_to_dist(lonlat1[::-1], lonlat2[::-1])
+    from pyproj import Geod
+
+    lon1, lat1 = station_lonlat(station_name1)
+    lon2, lat2 = station_lonlat(station_name2)
+
+    g = Geod(ellps="WGS84")
+    return g.line_length([lon1, lon2], [lat1, lat2], radians=False)
 
 
 def station_std(station, to_cm=True, start_date=None, end_date=None):
