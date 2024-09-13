@@ -1,5 +1,12 @@
 """plotting.py: functions for visualizing insar products"""
 
+from math import ceil, sqrt
+
+import matplotlib.pyplot as plt
+from matplotlib.colors import Colormap
+import numpy as np
+
+
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -1733,3 +1740,92 @@ def scale_bar(
         zorder=zorder + 2,
         solid_capstyle="butt",
     )
+
+
+def plot_2d_arrays(
+    arrays: list[np.ndarray],
+    titles: list[str] | None = None,
+    cmaps: list[str] | None = None,
+    vmins: list[float] | None = None,
+    vmaxes: list[float] | None = None,
+    figsize: tuple[float, float] = (12, 12),
+) -> None:
+    """Plot a list of 2D arrays in a grid of subplots with shared axes and colorbars.
+
+    Parameters
+    ----------
+    arrays : List[np.ndarray]
+        List of 2D numpy arrays to plot.
+    titles : Optional[List[str]], optional
+        List of titles for each subplot. If None, no titles are displayed.
+    cmaps : Optional[List[str]], optional
+        List of colormaps for each subplot. If None, 'viridis' is used for all.
+    vmins : Optional[List[float]], optional
+        List of minimum values for color scaling. If None, each array's minimum is used.
+    vmaxes : Optional[List[float]], optional
+        List of maximum values for color scaling. If None, each array's maximum is used.
+    figsize : Tuple[float, float], optional
+        Base figure size (width, height) in inches. The actual size may be adjusted.
+
+    Returns
+    -------
+    None
+        This function displays the plot but does not return any value.
+
+    Notes
+    -----
+    This function creates a grid of subplots, each displaying one of the input 2D arrays.
+    The grid is made as square as possible, adjusting for the number of arrays provided.
+    Each subplot includes a colorbar and an optional title.
+    """
+    n = len(arrays)
+
+    # Calculate grid dimensions
+    nrows = ncols = ceil(sqrt(n))
+
+    # Adjust figsize based on the number of plots
+    aspect_ratio = figsize[0] / figsize[1]
+    adjusted_figsize = (
+        figsize[0] * ncols / sqrt(n),
+        figsize[1] * nrows / (sqrt(n) * aspect_ratio),
+    )
+
+    # Create figure and axes
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=adjusted_figsize, sharex=True, sharey=True, squeeze=False
+    )
+
+    # Flatten the axes array for easy iteration
+    axes = axes.flatten()
+    if isinstance(cmaps, (str, Colormap)):
+        cmaps = [cmaps] * len(arrays)
+    if isinstance(vmaxes, (float, int)):
+        vmaxes = [vmaxes] * len(arrays)
+    if isinstance(vmins, (float, int)):
+        vmins = [vmins] * len(arrays)
+
+    # Plot each array
+    for i, arr in enumerate(arrays):
+        # Get optional arguments for this subplot
+        title = titles[i] if titles and i < len(titles) else None
+        cmap = cmaps[i] if cmaps and i < len(cmaps) else "viridis"
+        vmin = vmins[i] if vmins and i < len(vmins) else None
+        vmax = vmaxes[i] if vmaxes and i < len(vmaxes) else None
+
+        # Create the plot
+        im = axes[i].imshow(arr, cmap=cmap, vmin=vmin, vmax=vmax)
+
+        # Add colorbar
+        fig.colorbar(im, ax=axes[i])
+
+        # Set title
+        if title:
+            axes[i].set_title(title)
+
+    # Remove extra subplots
+    for j in range(n, len(axes)):
+        fig.delaxes(axes[j])
+
+    # Adjust layout and display
+    fig.tight_layout()
+    return fig, axes
