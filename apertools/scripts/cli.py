@@ -1,6 +1,7 @@
 """
 Main command line entry point to manage all other sub commands
 """
+
 import os
 from os.path import abspath, join
 import glob
@@ -29,9 +30,11 @@ def _log_and_run(cmd):
     "--path",
     type=click.Path(exists=False, file_okay=False, writable=True),
     default=".",
-    help="Path of interest for command. "
-    "Will search for files path or change directory, "
-    "depending on command.",
+    help=(
+        "Path of interest for command. "
+        "Will search for files path or change directory, "
+        "depending on command."
+    ),
 )
 @click.pass_context
 def cli(ctx, verbose, path):
@@ -271,13 +274,15 @@ def kml(
     "--pause",
     "-p",
     default=200,
-    help="For --animate, time in milliseconds to pause"
-    " between stack layers (default 200).",
+    help=(
+        "For --animate, time in milliseconds to pause"
+        " between stack layers (default 200)."
+    ),
 )
 @click.option(
     "--save",
     "-s",
-    help="If you want to save the animation as a movie," " title to save file as.",
+    help="If you want to save the animation as a movie, title to save file as.",
 )
 @click.option(
     "--display/--no-display",
@@ -396,8 +401,10 @@ def dem_rate(rsc_file, compare_to):
 @click.option(
     "--filename",
     "-f",
-    help="(full) path to the dem.rsc or .geojson file. If not "
-    "included, will output all files matching the path/date criteria",
+    help=(
+        "(full) path to the dem.rsc or .geojson file. If not "
+        "included, will output all files matching the path/date criteria"
+    ),
 )
 @click.option(
     "--path-num", "-p", type=int, help="Select one orbit path number for overlaps"
@@ -567,9 +574,9 @@ def _args_to_dict(args):
 @click.option(
     "--resample",
     default="nearest",
-    type=click.Choice(
-        ["nearest", "bilinear", "cubic", "cubicspline", "lanczos", "average", "mode"]
-    ),
+    type=click.Choice([
+        "nearest", "bilinear", "cubic", "cubicspline", "lanczos", "average", "mode"
+    ]),
     help="GDAL Resampling method",
     show_default=True,
 )
@@ -644,7 +651,11 @@ def save_acq_times(safe_path, vrt_path=".", ext=".SAFE"):
     from apertools import stitching, sario
 
     stitched_acq_times = stitching.stitch_same_dates(
-        safe_path, output_path=vrt_path, overwrite=False, ext=ext, dry_run=True,
+        safe_path,
+        output_path=vrt_path,
+        overwrite=False,
+        ext=ext,
+        dry_run=True,
     )
     for f in stitched_acq_times:
         vrt_name = f + ".vrt"
@@ -749,9 +760,11 @@ def convert_to_enu(infile, outfile):
     "--operator",
     type=click.Choice([">", "<"]),
     default=">",
-    help="operator to use for masking "
-    "(e.g. using '>' will mask all values where the dem is greater "
-    "than the cutoff, keeping only the small values",
+    help=(
+        "operator to use for masking "
+        "(e.g. using '>' will mask all values where the dem is greater "
+        "than the cutoff, keeping only the small values"
+    ),
     show_default=True,
 )
 @click.option(
@@ -793,7 +806,7 @@ def mask_by_elevation(filenames, dem, cutoff, operator, largest_component):
 
             cmd = (
                 f"gdal_calc.py --quiet -A {f} -B {mask_fname} --outfile=tmp_out.tif "
-                f' --calc="A * B " --NoDataValue=0'
+                ' --calc="A * B " --NoDataValue=0'
             )
             _log_and_run(cmd)
             _log_and_run(f"mv tmp_out.tif {f}")

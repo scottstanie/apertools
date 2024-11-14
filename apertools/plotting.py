@@ -2000,19 +2000,17 @@ def create_los_marker(
 
     # Create points for gradient bar
     theta = np.arctan2(dy, dx)
-    rot_matrix = np.array(
-        [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
-    )
+    rot_matrix = np.array([
+        [np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]
+    ])
 
     # Base rectangle points for gradient bar
-    bar_points = np.array(
-        [
-            [-bar_length / 2, -bar_width / 2],
-            [bar_length / 2, -bar_width / 2],
-            [bar_length / 2, bar_width / 2],
-            [-bar_length / 2, bar_width / 2],
-        ]
-    )
+    bar_points = np.array([
+        [-bar_length / 2, -bar_width / 2],
+        [bar_length / 2, -bar_width / 2],
+        [bar_length / 2, bar_width / 2],
+        [-bar_length / 2, bar_width / 2],
+    ])
 
     cm = plt.get_cmap(cmap)
     # Create smooth gradient
@@ -2025,14 +2023,12 @@ def create_los_marker(
         x_start = bar_points[0, 0] + (bar_points[1, 0] - bar_points[0, 0]) * t_start
         x_end = bar_points[0, 0] + (bar_points[1, 0] - bar_points[0, 0]) * t_end
 
-        segment_points = np.array(
-            [
-                [x_start, -bar_width / 2],
-                [x_end, -bar_width / 2],
-                [x_end, bar_width / 2],
-                [x_start, bar_width / 2],
-            ]
-        )
+        segment_points = np.array([
+            [x_start, -bar_width / 2],
+            [x_end, -bar_width / 2],
+            [x_end, bar_width / 2],
+            [x_start, bar_width / 2],
+        ])
 
         # Rotate segment points
         rotated_segment = np.dot(segment_points, rot_matrix.T)

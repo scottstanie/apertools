@@ -2,6 +2,7 @@ import os
 from xml.etree import ElementTree
 
 import numpy as np
+
 # TODO: lots of stuff here can be done with pyproj.Geod
 # https://pyproj4.github.io/pyproj/stable/api/geod.html
 from pyproj import Geod
@@ -902,7 +903,7 @@ def convert_bbox_to_lonlat(bbox_xy, epsg=None, utm_zone=None):
     if epsg is None:
         if utm_zone is None:
             raise ValueError("need either epsg or utm_zon")
-        zone, hemi = utm_zone[:-1], utm_zone[-1] 
+        zone, hemi = utm_zone[:-1], utm_zone[-1]
         zone = int(zone)
         if hemi.upper() == "N":
             epsg = 32600 + zone
@@ -914,4 +915,4 @@ def convert_bbox_to_lonlat(bbox_xy, epsg=None, utm_zone=None):
     xmin, ymin, xmax, ymax = bbox_xy
     lons, lats = t.transform([xmin, xmax], [ymin, ymax])
     bbox_lonlat = [lons[0], lats[0], lons[1], lats[1]]
-    return bbox_lonlat 
+    return bbox_lonlat

@@ -141,14 +141,12 @@ def take_looks(arr, row_looks, col_looks, separate_complex=False, **kwargs):
     if isinstance(arr, dict):
         return take_looks_rsc(arr, row_looks, col_looks)
     if arr.ndim >= 3:
-        return np.stack(
-            [
-                take_looks(
-                    a, row_looks, col_looks, separate_complex=separate_complex, **kwargs
-                )
-                for a in arr
-            ]
-        )
+        return np.stack([
+            take_looks(
+                a, row_looks, col_looks, separate_complex=separate_complex, **kwargs
+            )
+            for a in arr
+        ])
     if np.iscomplexobj(arr) and separate_complex:
         mag_looked = take_looks(np.abs(arr), row_looks, col_looks)
         phase_looked = take_looks(np.angle(arr), row_looks, col_looks)
@@ -404,7 +402,8 @@ def filter_slclist_ifglist(
         ]
         if verbose:
             logger.info(
-                f"Ignoring {ll - len(valid_ifg_pairs)} longer than {max_temporal_baseline}"
+                f"Ignoring {ll - len(valid_ifg_pairs)} longer than"
+                f" {max_temporal_baseline}"
             )
     elif max_bandwidth is not None or min_bandwidth is not None:
         valid_ifg_pairs = limit_ifg_bandwidth(
@@ -445,7 +444,8 @@ def ignore_slc_dates(
         i for i in ifg_date_list if i[0] not in ignore_slcs and i[1] not in ignore_slcs
     ]
     logger.info(
-        f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in {slclist_ignore_file}"
+        f"Ignoring {len(ifg_date_list) - len(valid_igrams)} igrams listed in"
+        f" {slclist_ignore_file}"
     )
     return valid_slcs, valid_igrams
 
@@ -1125,19 +1125,31 @@ def az_inc_to_enu(
             negative.
         nodata (float): value to use for nodata if geocoding. Defaults to 0.
     """
-    cmd = f'gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile tmp_los_east.tif --calc="sin(deg2rad(A)) * cos(deg2rad(B+90))" '
+    cmd = (
+        f"gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile"
+        ' tmp_los_east.tif --calc="sin(deg2rad(A)) * cos(deg2rad(B+90))" '
+    )
     print(cmd)
     subprocess.run(cmd, check=True, shell=True)
 
-    cmd = f'gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile tmp_los_north.tif --calc="sin(deg2rad(A)) * sin(deg2rad(B+90))" '
+    cmd = (
+        f"gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile"
+        ' tmp_los_north.tif --calc="sin(deg2rad(A)) * sin(deg2rad(B+90))" '
+    )
     print(cmd)
     subprocess.run(cmd, check=True, shell=True)
 
-    cmd = f'gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile tmp_los_up.tif --calc="cos(deg2rad(A))" '
+    cmd = (
+        f"gdal_calc.py --quiet -A {infile} -B {infile} --A_band=1 --B_band=2 --outfile"
+        ' tmp_los_up.tif --calc="cos(deg2rad(A))" '
+    )
     print(cmd)
     subprocess.run(cmd, check=True, shell=True)
 
-    cmd = f"gdal_merge.py -separate -o {outfile} tmp_los_east.tif tmp_los_north.tif tmp_los_up.tif "
+    cmd = (
+        f"gdal_merge.py -separate -o {outfile} tmp_los_east.tif tmp_los_north.tif"
+        " tmp_los_up.tif "
+    )
     print(cmd)
     subprocess.run(cmd, check=True, shell=True)
     subprocess.run(
@@ -1192,8 +1204,9 @@ def enu_to_az_inc(infile, outfile="los_az_inc.tif"):
     # inc = atan2(sqrt(x**2 + y**2), abs(z))
     tmp_inc = "tmp_los_inc.tif"
     cmd = (
-        f"gdal_calc.py --quiet -A {infile} -B {infile} -C {infile} --A_band=1 --B_band=2 --C_band=3 "
-        f'--outfile {tmp_inc} --calc="rad2deg(arctan2(sqrt(A **2 + B**2), abs(C)))" '
+        f"gdal_calc.py --quiet -A {infile} -B {infile} -C {infile} --A_band=1"
+        f' --B_band=2 --C_band=3 --outfile {tmp_inc} --calc="rad2deg(arctan2(sqrt(A **2'
+        ' + B**2), abs(C)))" '
     )
     subprocess.run(cmd, check=True, shell=True)
     # -90 + rad2deg(arctan2( -yNorth, -xEast ))
@@ -1681,11 +1694,9 @@ def geodesic(start, end, steps, crs="EPSG:4326"):
 
     # Geod.npts only gives points *in between* the start and end, and we want to include
     # the endpoints.
-    geodesic = np.concatenate(
-        [
-            np.array(start)[None],
-            np.array(g.npts(*start, *end, steps - 2)),
-            np.array(end)[None],
-        ]
-    ).transpose()
+    geodesic = np.concatenate([
+        np.array(start)[None],
+        np.array(g.npts(*start, *end, steps - 2)),
+        np.array(end)[None],
+    ]).transpose()
     return np.stack(p(geodesic[0], geodesic[1], inverse=False, radians=False), axis=-1)

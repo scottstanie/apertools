@@ -53,9 +53,11 @@ def get_cli_args():
         nargs=4,
         metavar=("left", "bottom", "right", "top"),
         type=float,
-        help="Bounding box of area of interest "
-        " (e.g. --bbox -106.1 30.1 -103.1 33.1 ). "
-        "If none given, will get max extent of lat/lon file",
+        help=(
+            "Bounding box of area of interest "
+            " (e.g. --bbox -106.1 30.1 -103.1 33.1 ). "
+            "If none given, will get max extent of lat/lon file"
+        ),
     )
     parser.add_argument(
         "--lon-step",
@@ -84,8 +86,10 @@ def get_cli_args():
         "--dtype",
         default="float32",
         choices=["float32", "complex64", "int16", "uint8"],
-        help="(numpy-style) data type of binary array "
-        "(choices = %(choices)s, default=%(default)s)",
+        help=(
+            "(numpy-style) data type of binary array "
+            "(choices = %(choices)s, default=%(default)s)"
+        ),
     )
     parser.add_argument("--cleanup", help="Remove temp .vrt files after finished")
     return parser.parse_args()

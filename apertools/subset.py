@@ -40,8 +40,12 @@ def read_intersections(
     bounds = get_intersection_bounds(fname1, fname2, target_crs=target_crs)
     if verbose:
         logger.info(f"bounds: {bounds}")
-    im1 = copy_vrt(fname1, out_fname="", bbox=bounds, band=band1, dst_crs=target_crs, res=res)
-    im2 = copy_vrt(fname2, out_fname="", bbox=bounds, band=band2, dst_crs=target_crs, res=res)
+    im1 = copy_vrt(
+        fname1, out_fname="", bbox=bounds, band=band1, dst_crs=target_crs, res=res
+    )
+    im2 = copy_vrt(
+        fname2, out_fname="", bbox=bounds, band=band2, dst_crs=target_crs, res=res
+    )
     if mask_intersection:
         nodata1 = get_nodata(fname1)
         nodata2 = get_nodata(fname2)
@@ -338,12 +342,10 @@ def bbox_around_point(lons, lats, side_km=25):
     Returns (N, 4) array, where N = len(lons)"""
     side_deg = km_to_deg(side_km)
     buff = side_deg / 2
-    return np.array(
-        [
-            (lon - buff, lat - buff, lon + buff, lat + buff)
-            for (lon, lat) in zip(lons, lats)
-        ]
-    )
+    return np.array([
+        (lon - buff, lat - buff, lon + buff, lat + buff)
+        for (lon, lat) in zip(lons, lats)
+    ])
 
 
 def create_merged_files(

@@ -177,12 +177,10 @@ def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
             # Form the linear system as the reduced-size version of the Ax=b:
             # A^T A x = A^T b
             b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
-            A = np.array(
-                [
-                    [np.sum(weights), np.sum(weights * x)],
-                    [np.sum(weights * x), np.sum(weights * x * x)],
-                ]
-            )
+            A = np.array([
+                [np.sum(weights), np.sum(weights * x)],
+                [np.sum(weights * x), np.sum(weights * x * x)],
+            ])
 
             beta = np.linalg.lstsq(A, b)[0]
             yest[i] = beta[0] + beta[1] * x[i]
@@ -273,7 +271,8 @@ def lowess_mintpy(
                 del fid[out_dset]
             else:
                 raise ValueError(
-                    f"{out_dset} already exists in {filename}. Use `overwrite=True` to overwrite."
+                    f"{out_dset} already exists in {filename}. Use `overwrite=True` to"
+                    " overwrite."
                 )
         # Get the date strings
         dates = np.array(fid["date"][:]).astype(str)
@@ -289,7 +288,8 @@ def lowess_mintpy(
         fid.create_dataset(out_dset, shape=shape, dtype=fid[in_dset].dtype, chunks=True)
 
         logger.info(
-            f"Running lowess on {filename} with {n_jobs} jobs, {n_iter} iterations, and {frac} fraction of data"
+            f"Running lowess on {filename} with {n_jobs} jobs, {n_iter} iterations, and"
+            f" {frac} fraction of data"
         )
 
         # Iterate in blocks using block_slices
@@ -298,7 +298,9 @@ def lowess_mintpy(
             cur_block = fid[in_dset][:, slice(*rows), slice(*cols)]
 
             # Run lowess
-            out_stack = lowess_stack(cur_block, x, frac=frac, n_iter=n_iter, n_jobs=n_jobs)
+            out_stack = lowess_stack(
+                cur_block, x, frac=frac, n_iter=n_iter, n_jobs=n_jobs
+            )
             # Write to file
             fid[out_dset][:, slice(*rows), slice(*cols)] = out_stack
 
@@ -603,9 +605,9 @@ def bootstrap_lowess_xr(
     out_mean = xr.DataArray(stack_out_mean, coords=da.coords, dims=da.dims)
     out_std = xr.DataArray(stack_out_std, coords=da.coords, dims=da.dims)
     out_mean.attrs["description"] = "Bootstrap mean of lowess smoothed stack"
-    out_std.attrs[
-        "description"
-    ] = "Bootstrap standard deviation of lowess smoothed stack"
+    out_std.attrs["description"] = (
+        "Bootstrap standard deviation of lowess smoothed stack"
+    )
 
     out_mean = _write_attrs(
         out_mean, K=K, frac=frac, n_iter=n_iter, pct_bootstrap=pct_bootstrap
@@ -681,12 +683,10 @@ def demo_fit(x, y, w, i, delta=None):
     # Form the linear system as the reduced-size version of the Ax=b:
     # A^T A x = A^T b
     b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
-    A = np.array(
-        [
-            [np.sum(weights), np.sum(weights * x)],
-            [np.sum(weights * x), np.sum(weights * x * x)],
-        ]
-    )
+    A = np.array([
+        [np.sum(weights), np.sum(weights * x)],
+        [np.sum(weights * x), np.sum(weights * x * x)],
+    ])
 
     beta = np.linalg.lstsq(A, b)[0]
     return beta

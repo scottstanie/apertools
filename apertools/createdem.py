@@ -59,20 +59,25 @@ def cli():
         nargs=4,
         metavar=("left", "bottom", "right", "top"),
         type=float,
-        help="Bounding box of area of interest "
-        " (e.g. --bbox -106.1 30.1 -103.1 33.1 ). ",
+        help=(
+            "Bounding box of area of interest  (e.g. --bbox -106.1 30.1 -103.1 33.1 ). "
+        ),
     )
     parser.add_argument(
         "--geojson",
         "-g",
         type=FileType(),
-        help="Alternate to bbox specification: \n"
-        "File containing the geojson object for DEM bounds",
+        help=(
+            "Alternate to bbox specification: \n"
+            "File containing the geojson object for DEM bounds"
+        ),
     )
     parser.add_argument(
         "--wkt",
-        help="Alternate to bbox specification: \n"
-        "String of well known text (WKT) for DEM area",
+        help=(
+            "Alternate to bbox specification: \n"
+            "String of well known text (WKT) for DEM area"
+        ),
     )
     parser.add_argument(
         "--xrate",
@@ -142,7 +147,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     ptop = top + 0.1
 
     srtm_url = (
-        f"https://portal.opentopography.org/API/globaldem?"
+        "https://portal.opentopography.org/API/globaldem?"
         f"demtype=SRTMGL1_E&west={pleft}&south={pbottom}&east={pright}&north={ptop}"
         "&outputFormat=GTiff"
     )
@@ -157,9 +162,9 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
     # -r resampling method
     # -projwin <ulx> <uly> <lrx> <lry> Selects a subwindow from the source image for copying
     command = (
-        f"gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -a_nodata -32768 "
-        f"-projwin {left} {top} {right} {bottom} "
-        "-r bilinear tmp_elevation.tif tmp_elevation.dem"
+        f"gdal_translate -of ENVI -ot Int16 -tr {xres:.15f} {yres:.15f} -a_nodata"
+        f" -32768 -projwin {left} {top} {right} {bottom} -r bilinear tmp_elevation.tif"
+        " tmp_elevation.dem"
     )
 
     command = command.format(
@@ -171,7 +176,7 @@ def main(left, bottom, right, top, xrate=1, yrate=1, outname="elevation.dem"):
 
     # Set nodata (-32768) to 0
     command = (
-        f'gdal_calc.py --quiet --NoDataValue=0 --calc="A*(A!=-32768)" '
+        'gdal_calc.py --quiet --NoDataValue=0 --calc="A*(A!=-32768)" '
         f"-A tmp_elevation.dem --outfile={outname} --format=ENVI"
     )
     print(command)

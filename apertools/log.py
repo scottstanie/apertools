@@ -17,6 +17,7 @@ Usage:
     # Custom output for this module:
     logger.success("Something great happened: highlight this success")
 """
+
 import logging
 import time
 from functools import wraps
@@ -58,7 +59,10 @@ def format_log(logger, debug=False, verbose=False):
     }
 
     if COLORS:
-        format_ = "[%(asctime)s] [%(log_color)s%(levelname)s %(filename)s%(reset)s] %(message)s%(reset)s"
+        format_ = (
+            "[%(asctime)s] [%(log_color)s%(levelname)s %(filename)s%(reset)s]"
+            " %(message)s%(reset)s"
+        )
         formatter = ColoredFormatter(
             format_, datefmt="%m/%d %H:%M:%S", log_colors=log_colors
         )

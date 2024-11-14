@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 class HDF5Explorer:
     """Class which maps an HDF5 file and allows tab-completion to explore datasets."""
+
     def __init__(self, hdf5_filepath: str, load_less_than: float = 1e3):
         self.hdf5_filepath = hdf5_filepath
         self._hf = h5py.File(hdf5_filepath, "r")
@@ -69,6 +70,7 @@ def create_explorer_widget(hf: h5py.File, load_less_than: float = 1e3):
     >>> hf = h5py.File("file.h5", "r")
     >>> create_explorer_widget(hf)
     """
+
     def _make_thumbnail(image):
         # Create a thumbnail of the dataset
         fig, ax = plt.subplots(figsize=(5, 5))
@@ -79,7 +81,7 @@ def create_explorer_widget(hf: h5py.File, load_less_than: float = 1e3):
         plt.close(fig)
         buf.seek(0)
         # Display the thumbnail in an Image widget
-        return widgets.Image(value=buf.read(), format='png')
+        return widgets.Image(value=buf.read(), format="png")
 
     def _add_widgets(item, level: int = 0):
         """Recursively add widgets to the accordion widget."""

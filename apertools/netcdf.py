@@ -138,7 +138,7 @@ def hdf5_to_netcdf(
             if copy_data_attrs:
                 for k, v in dset.attrs.items():
                     # Manual skip for the slclist or ifglist, or dimension scale stuff
-                    if "dates" in k or 'dimension' in k.lower():
+                    if "dates" in k or "dimension" in k.lower():
                         continue
                     setattr(data_var, k, v)
             if nstack > 1:
@@ -380,7 +380,9 @@ def create_nc_stack(
 )
 @click.option(
     "--stack-dim",
-    help="Name of 3rd dimension for stack. If 'date' passed, will try to load date list",
+    help=(
+        "Name of 3rd dimension for stack. If 'date' passed, will try to load date list"
+    ),
 )
 @click.option(
     "--bbox",

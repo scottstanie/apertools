@@ -828,6 +828,7 @@ class OperaCslc(Base):
             by OPERA with the format of YYYYMMDDTHHMMSSZ
         Ext: file extension
     """
+
     FILE_REGEX = (
         r"(?P<project>OPERA)_"
         r"(?P<level>L2)_"

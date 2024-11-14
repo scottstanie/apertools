@@ -2,6 +2,7 @@
 Input/Output functions for loading/saving SAR data in binary formats
 Email: scott.stanie@utexas.edu
 """
+
 import datetime
 import fileinput
 import json
@@ -554,8 +555,8 @@ def is_complex(filename=None, ext=None):
 
     if ext not in COMPLEX_EXTS and ext not in REAL_EXTS:
         raise ValueError(
-            "Invalid filetype for load_file: %s\n "
-            "Allowed types: %s" % (ext, " ".join(COMPLEX_EXTS + REAL_EXTS))
+            "Invalid filetype for load_file: %s\n Allowed types: %s"
+            % (ext, " ".join(COMPLEX_EXTS + REAL_EXTS))
         )
 
     if ext in UAVSAR_POL_DEPENDENT:
@@ -1142,9 +1143,9 @@ def slclist_to_str(slc_date_list):
 
 def ifglist_to_str(ifg_date_list):
     """Date pairs to Nx2 numpy array of strings"""
-    return np.array(
-        [(a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in ifg_date_list]
-    ).astype("S")
+    return np.array([
+        (a.strftime(DATE_FMT), b.strftime(DATE_FMT)) for a, b in ifg_date_list
+    ]).astype("S")
 
 
 def slclist_to_num(slc_date_list):
@@ -1319,7 +1320,6 @@ def load_single_mask(
 
 
 def load_isce_combined_mask(geom_dir=ISCE_GEOM_DIR, mask_files=ISCE_MASK_FILES):
-
     masks = []
     for mf in ISCE_MASK_FILES:
         m = load(os.path.join(geom_dir, mf), use_gdal=True, band=1).astype(bool)
@@ -1482,7 +1482,8 @@ def save_vrt(
                 band, ds = None, None
             except:
                 print(
-                    f"Warning: Cant get geotransform from {filename}, no .rsc file or data given"
+                    f"Warning: Cant get geotransform from {filename}, no .rsc file or"
+                    " data given"
                 )
                 geotrans = None
                 srs = gdal.osr.SpatialReference()
@@ -1522,7 +1523,7 @@ def save_vrt(
         )
 
     assert rows == int(total_bytes / bytes_per_pix / cols / num_bands), (
-        f"rows = total_bytes / bytes_per_pix / cols / num_bands : "
+        "rows = total_bytes / bytes_per_pix / cols / num_bands : "
         f"{rows} = {total_bytes} / {bytes_per_pix} / {cols} / {num_bands} "
     )
     # assert total_bytes == bytes_per_pix * rows * cols
@@ -1854,7 +1855,7 @@ def make_cmy_colortable():
     vals = np.linspace(-np.pi, np.pi, len(rgbs))
     # set color for each value
     # out = "<ColorTable>\n"
-    for (val, (r, g, b)) in zip(vals, rgbs):
+    for val, (r, g, b) in zip(vals, rgbs):
         print(int(val))
         colors.SetColorEntry(int(val), (r, g, b))
         # out += '<Entry c1="{}" c2="{}" c3="{}" c4="255"/>\n'.format(r, g, b)
@@ -2063,6 +2064,7 @@ def load_xr_tifs(
     if units is not None:
         ds.attrs["units"] = units
     return ds
+
 
 def load_xr_nc(slcs, chunk_depth: bool = True):
     """Load stack of 1-band NetCDF rasters into 3D xarray.Dataset.

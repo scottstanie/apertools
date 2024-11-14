@@ -167,12 +167,10 @@ def parse_query_results(fname="asfquery.geojson"):
         return Counter(), []
 
     # Include both the number and direction (asc/desc) in Counter key
-    path_nums = Counter(
-        [
-            (f["properties"]["pathNumber"], f["properties"]["flightDirection"].lower())
-            for f in features
-        ]
-    )
+    path_nums = Counter([
+        (f["properties"]["pathNumber"], f["properties"]["flightDirection"].lower())
+        for f in features
+    ])
     print(f"Count by pathNumber: {path_nums.most_common()}")
     starts = Counter([f["properties"]["startTime"] for f in features])
     starts = [datetime.datetime.fromisoformat(s) for s in starts]
@@ -230,8 +228,9 @@ def cli():
         nargs=4,
         metavar=("left", "bottom", "right", "top"),
         type=float,
-        help="Bounding box of area of interest "
-        " (e.g. --bbox -106.1 30.1 -103.1 33.1 ). ",
+        help=(
+            "Bounding box of area of interest  (e.g. --bbox -106.1 30.1 -103.1 33.1 ). "
+        ),
     )
     p.add_argument(
         "--dem",

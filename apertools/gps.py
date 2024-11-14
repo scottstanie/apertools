@@ -849,7 +849,10 @@ def read_station_xyzs(filename=None):
             warn_bad_lines=True,
             error_bad_lines=False,
         )
-    orig_cols = "Sta Lat(deg) Long(deg) Hgt(m) X(m) Y(m) Z(m) Dtbeg Dtend Dtmod NumSol StaOrigName"
+    orig_cols = (
+        "Sta Lat(deg) Long(deg) Hgt(m) X(m) Y(m) Z(m) Dtbeg Dtend Dtmod NumSol"
+        " StaOrigName"
+    )
     new_cols = "name lat lon alt X Y Z dtbeg dtend dtmod numsol origname"
     mapping = dict(zip(orig_cols.split(), new_cols.split()))
     return df.rename(columns=mapping)

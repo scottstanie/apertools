@@ -9,13 +9,11 @@ def test_cov_matrix_tropo():
     assert out.shape == (3, 3)
     assert np.allclose(
         out,
-        np.array(
-            [
-                [2, 1, -1],
-                [1, 2, 1],
-                [-1, 1, 2],
-            ]
-        ),
+        np.array([
+            [2, 1, -1],
+            [1, 2, 1],
+            [-1, 1, 2],
+        ]),
     )
 
     sar_variances = [1, 4, 9]
@@ -23,11 +21,9 @@ def test_cov_matrix_tropo():
     assert out.shape == (3, 3)
     assert np.allclose(
         out,
-        np.array(
-            [
-                [5, 1, -4],
-                [1, 10, 9],
-                [-4, 9, 13],
-            ]
-        ),
+        np.array([
+            [5, 1, -4],
+            [1, 10, 9],
+            [-4, 9, 13],
+        ]),
     )

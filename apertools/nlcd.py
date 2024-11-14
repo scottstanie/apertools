@@ -1,4 +1,5 @@
 """Module for downloading and processing NLCD data."""
+
 import numpy as np
 from pathlib import Path
 from pydantic import NonNegativeFloat

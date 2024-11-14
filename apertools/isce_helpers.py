@@ -10,6 +10,7 @@ import h5py
 import isce  # noqa
 import isceobj
 import numpy as np
+
 # from osgeo import gdal
 import rasterio as rio
 from components.stdproc.stdproc import crossmul
@@ -133,7 +134,6 @@ def generateIgram(slcFile1, slcFile2, ifgFile, azLooks, rgLooks, compute_cor=Tru
 def _create_isce_image(
     filename, shape, image_class=None, data_type="FLOAT", bands=1, access_mode="write"
 ):
-
     length, width = shape
     filename = os.path.abspath(filename)
 
@@ -257,7 +257,8 @@ def get_square_pixel_looks(frame, posting, azlooks=None, rglooks=None):
 
     if posting is None:
         raise Exception(
-            "Input posting is none. Either specify (azlooks, rglooks) or posting in input file"
+            "Input posting is none. Either specify (azlooks, rglooks) or posting in"
+            " input file"
         )
 
     elp = Planet(pname="Earth").ellipsoid
@@ -374,7 +375,6 @@ def create_dem_header(dem_file, rsc_file=None, datum="EGM96"):
 def create_unfiltered_cor_for_project(
     project_dir, search_term="Igrams/**/2*.int", verbose=False
 ):
-
     ifglist = sario.find_ifgs(
         directory=project_dir, search_term=search_term, parse=False
     )

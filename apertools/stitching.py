@@ -13,7 +13,13 @@ from apertools.utils import rewrap_to_2pi
 
 
 def stitch_same_dates(
-    geo_path=".", output_path=".", reverse=True, overwrite=False, ext=".geo", dry_run=False, verbose=True, 
+    geo_path=".",
+    output_path=".",
+    reverse=True,
+    overwrite=False,
+    ext=".geo",
+    dry_run=False,
+    verbose=True,
 ):
     """Combines .geo files of the same date in one directory
 
@@ -101,7 +107,9 @@ def _make_groupby(slclist):
     ]
 
 
-def stitch_geos(slclist, reverse, output_path, overwrite=False, dry_run=False, verbose=True):
+def stitch_geos(
+    slclist, reverse, output_path, overwrite=False, dry_run=False, verbose=True
+):
     """Combines multiple .geo files of the same date into one image"""
     if verbose:
         print("Stitching geos for %s" % slclist[0].date)
@@ -164,7 +172,7 @@ def combine_complex(img_list, verbose=True):
     print("processing image 1 of %s" % (total))
 
     img_out = np.copy(img1)
-    for (idx, next_img) in enumerate(img_list[1:]):
+    for idx, next_img in enumerate(img_list[1:]):
         if verbose:
             print("processing image %s of %s" % (idx + 2, total))
         if not isinstance(next_img, np.ndarray):

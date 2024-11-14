@@ -6,7 +6,13 @@ logger = get_log()
 
 
 def remove_ramp(
-    z, deramp_order=1, mask=np.ma.nomask, copy=True, dtype=np.float32, dem=None, save_coeffs=False,
+    z,
+    deramp_order=1,
+    mask=np.ma.nomask,
+    copy=True,
+    dtype=np.float32,
+    dem=None,
+    save_coeffs=False,
 ):
     """Estimates a linear plane through data and subtracts to flatten
 
@@ -33,12 +39,10 @@ def remove_ramp(
             ), f"mask and z must have same length, but {len(mask) = } and {len(z) = }"
         else:
             mask = [mask] * len(z)
-        return np.stack(
-            [
-                remove_ramp(layer, deramp_order, m, copy, dtype, save_coeffs=save_coeffs)
-                for layer, m in zip(z, mask)
-            ]
-        )
+        return np.stack([
+            remove_ramp(layer, deramp_order, m, copy, dtype, save_coeffs=save_coeffs)
+            for layer, m in zip(z, mask)
+        ])
 
     z_masked = z.copy() if copy else z
     # Make a version of the image with nans in masked places
@@ -128,13 +132,11 @@ def estimate_ramp(z, deramp_order, dem=None, save_coeffs=False):
 
     # TODO: ever want dem + 2nd order? seems like a lot
     elif deramp_order == 2:
-        A = np.c_[
-            np.ones(xidxs.shape), xidxs, yidxs, xidxs * yidxs, xidxs ** 2, yidxs ** 2
-        ]
+        A = np.c_[np.ones(xidxs.shape), xidxs, yidxs, xidxs * yidxs, xidxs**2, yidxs**2]
         # coeffs will be 6 elements for the quadratic
         coeffs, _, _, _ = np.linalg.lstsq(A[good_idxs], zflat[good_idxs], rcond=None)
         yy, xx = matrix_indices(z.shape, flatten=True)
-        idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx ** 2, yy ** 2]
+        idx_matrix = np.c_[np.ones(xx.shape), xx, yy, xx * yy, xx**2, yy**2]
         z_fit = np.dot(idx_matrix, coeffs).reshape(z.shape)
 
     return z_fit if not save_coeffs else (z_fit, coeffs)
@@ -188,9 +190,9 @@ def remove_lowpass(
     from scipy.interpolate import NearestNDInterpolator
 
     if z.ndim > 2:
-        return np.stack(
-            [remove_lowpass(layer, lowpass_sigma_pct, mask, copy, dtype) for layer in z]
-        )
+        return np.stack([
+            remove_lowpass(layer, lowpass_sigma_pct, mask, copy, dtype) for layer in z
+        ])
 
     z_masked = z.copy() if copy else z
     # For FFT filtering, need 0s instead of nans (or all become nans)
@@ -224,8 +226,10 @@ def remove_ramp_xr(
     max_abs_val=None,
 ):
     from apertools import sario
+
     if not sario.check_dset(outfile, dset_name, overwrite):
         import xarray as xr
+
         return xr.open_dataset(outfile)
 
     logger.info("Removing ramp")
@@ -256,9 +260,12 @@ def remove_ramp_xr(
         # outfile = infile.replace(ext, "_ramp_removed" + out_format)
         if outfile.endswith("zarr"):
             from numcodecs import Blosc
+
             compressor = Blosc(cname="zstd", clevel=3, shuffle=Blosc.BITSHUFFLE)
             mode = "w" if not os.path.exists(outfile) else "a"
-            ds_out.to_zarr(outfile, encoding={"igrams": {"compressor": compressor}}, mode=mode)
+            ds_out.to_zarr(
+                outfile, encoding={"igrams": {"compressor": compressor}}, mode=mode
+            )
         elif outfile.endswith("nc"):
             mode = "w" if not os.path.exists(outfile) else "a"
             ds_out.to_netcdf(outfile, engine="h5netcdf", mode=mode)

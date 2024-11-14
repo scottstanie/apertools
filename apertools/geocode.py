@@ -25,7 +25,6 @@ def geocode(
 
     if not infile:
         raise ValueError("infile is required")
-    
 
     is_hdf5_dset = infile.startswith("HDF5")
     if not is_hdf5_dset and not os.path.exists(infile):
@@ -99,7 +98,8 @@ def geocode(
         # Specify resampling method
         f" -r {resampling}"
         # Add warp option: run on multiple threads. Give the output a latlon projection
-        ' -multi -wo GDAL_NUM_THREADS=ALL_CPUS -t_srs "+proj=longlat +datum=WGS84 +nodefs"'
+        ' -multi -wo GDAL_NUM_THREADS=ALL_CPUS -t_srs "+proj=longlat +datum=WGS84'
+        ' +nodefs"'
         # Add ENVI header suffix, not replace (.unw.geo.hdr, not .unw.hdr)
         f" -of {driver} "
         f"{suffix_option}"

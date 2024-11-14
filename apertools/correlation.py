@@ -1,5 +1,6 @@
 """Module for exploting the full coherence/correlation matrix per pixel
 """
+
 import itertools
 from datetime import datetime
 
@@ -209,7 +210,9 @@ def phsig(ifg, window=5):
 
 def phsig_bn(ifg, window=5, strides=(1, 1)):
     # doesn't do the defringing
-    ifg_move_mean =  utils.take_looks_bn(np.exp(1j * np.angle(ifg)), window, window, *strides)
+    ifg_move_mean = utils.take_looks_bn(
+        np.exp(1j * np.angle(ifg)), window, window, *strides
+    )
     return np.abs(ifg_move_mean)
 
 
@@ -229,7 +232,6 @@ def circ_std(image, window_size=10):
     phase_std = convolve2d(np.sin(phase_std - phase_mean) ** 2, kernel, mode="same")
     phase_std = np.sqrt(-2 * np.log(phase_std))
     return phase_std
-
 
 
 def cov_matrix_tropo(ifg_date_list, sar_date_variances):
@@ -485,7 +487,8 @@ def solve_cor_eigval(
         # valid_idx_chunks.append(valid_idxs)
 
         logger.info(
-            f"Loading {len(ifglist)} ifgs from {ngeos} SLCs, {min_date} through {max_date}"
+            f"Loading {len(ifglist)} ifgs from {ngeos} SLCs, {min_date} through"
+            f" {max_date}"
         )
         with h5py.File(cor_filename) as hf_cor, h5py.File(ifg_filename) as hf_ifg:
             cor_stack = hf_cor[dset][valid_idxs, :, :]

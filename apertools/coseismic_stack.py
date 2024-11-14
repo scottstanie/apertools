@@ -28,7 +28,6 @@ def stack_igrams(
     avg_cc_thresh=0.0,
     sigma_filter=0.3,
 ):
-
     print(f"Event date: {event_date}")
     gi_file = "slclist_ignore.txt" if ignore_geos else None
     slclist, ifglist = sario.load_slclist_ifglist(".", slclist_ignore_file=gi_file)

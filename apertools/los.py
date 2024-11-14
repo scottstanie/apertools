@@ -1,5 +1,6 @@
 """Functions to deal with Line of sight vector computation
 """
+
 import os
 import numpy as np
 from numpy import sin, cos
@@ -97,9 +98,10 @@ def solve_east_up(
         deramp_mask_thresh=deramp_mask_thresh,
     )
 
-
     if outfile:
-        transform = subset.get_intersect_transform(asc_img_fname, desc_img_fname, target_crs=crs)
+        transform = subset.get_intersect_transform(
+            asc_img_fname, desc_img_fname, target_crs=crs
+        )
         if crs is None:
             crs = subset.get_crs(asc_img_fname)
         if nodata is not None:
@@ -268,12 +270,9 @@ def los_to_enu(los_file=None, lat_lons=None, xyz_los_vecs=None):
 
 
 def convert_xyz_latlon_to_enu(lat_lons, xyz_array):
-    return np.array(
-        [
-            rotate_xyz_to_enu(xyz, lat, lon)
-            for (lat, lon), xyz in zip(lat_lons, xyz_array)
-        ]
-    )
+    return np.array([
+        rotate_xyz_to_enu(xyz, lat, lon) for (lat, lon), xyz in zip(lat_lons, xyz_array)
+    ])
 
 
 def rotate_xyz_to_enu(xyz, lat, lon):
