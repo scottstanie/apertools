@@ -1,22 +1,27 @@
 """plotting.py: functions for visualizing insar products"""
 
+from datetime import datetime
+from typing import Literal, Optional
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Circle
 from math import ceil, sqrt
+from pathlib import Path
 
-import matplotlib.pyplot as plt
-from matplotlib.colors import Colormap
-import numpy as np
-
-
-import numpy as np
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from matplotlib.widgets import Slider
 import matplotlib.dates as mdates
+import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import Colormap
+from matplotlib.widgets import Slider
+from osgeo import gdal
+
+from apertools import latlon, utils
 from apertools.log import get_log
-from apertools import utils, latlon
-from apertools.sario import slclist_to_str
-from .colors import make_shifted_cmap, make_dismph_colors
+
+from .colors import make_dismph_colors, make_shifted_cmap
 
 try:
     basestring = str
@@ -42,8 +47,8 @@ def get_style(size=15, grid_on=False, cmap="viridis", weight="bold", minor_ticks
     style_dict = {
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
-        # "font.family": "Helvetica",
-        "font.family": "sans-serif",
+        "font.family": "Helvetica",
+        # "font.family": "sans-serif",
         "font.size": size,
         "font.weight": weight,
         "legend.fontsize": "large",
@@ -266,8 +271,9 @@ def plot_image(
         fig, ax, axes_image
     """
     if filename and dset:
-        from apertools import sario
         import h5py
+
+        from apertools import sario
 
         with h5py.File(filename, "r") as f:
             img = f[dset][:]
@@ -320,7 +326,9 @@ def _abs_max(img):
     return np.nanmax(np.abs(img))
 
 
-def _bbox_to_extent(bbox):
+def _bbox_to_extent(
+    bbox: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
     return [bbox[0], bbox[2], bbox[1], bbox[3]]
 
 
@@ -349,8 +357,8 @@ def hvplot_stack(
     width=600,
 ):
     """Make a 2-panel interactive plot with clickable timeseries"""
-    import panel as pn
     import holoviews as hv
+    import panel as pn
 
     def get_timeseries(xc, yc):
         return da.sel(indexers={x: xc, y: yc}, method="nearest").hvplot(z)
@@ -526,11 +534,12 @@ def view_stack(
     plt.show(block=True)
 
 
-from ipywidgets import interact, widgets
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import numpy as np
 from datetime import datetime
+
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import numpy as np
+from ipywidgets import interact, widgets
 
 
 def view_stack_improved(
@@ -955,8 +964,8 @@ def create_marker_from_svg(
         >>> ax.plot(x, y, marker=marker)
     """
     import matplotlib as mpl
-    from svgpathtools import svg2paths
     from svgpath2mpl import parse_path
+    from svgpathtools import svg2paths
 
     path, attributes = svg2paths(filename)
     marker = parse_path(attributes[0]["d"])
@@ -1077,8 +1086,8 @@ def plot_image_with_background(
 ):
     import cartopy.crs as ccrs
     from cartopy.io import img_tiles
-    # Read the raster image and get its extent
 
+    # Read the raster image and get its extent
     # Create a figure and add a GeoAxes with a projection
     # import proplot as pplt
     # fig = pplt.figure(figsize=figsize)
@@ -1121,7 +1130,7 @@ def padded_extent(bbox, pad_pct):
 
 def add_ticks(ax, side="right", resolution: float = 1):
     import cartopy.crs as ccrs
-    from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
+    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 
     left, right, bot, top = ax.get_extent(ccrs.PlateCarree())
     # print(left, bot, right, top)
@@ -1201,6 +1210,7 @@ def generate_ticks(bounds, resolution, offset=0):
 
 def _make_line_collections(ax, *, ticks=None, loc="bottom", lw=2, **kwargs):
     import itertools
+
     from matplotlib.collections import LineCollection
 
     left, right, bot, top = ax.get_extent()
@@ -1253,6 +1263,7 @@ def _make_line_collections(ax, *, ticks=None, loc="bottom", lw=2, **kwargs):
 
 def add_zebra_frame(ax, lw=2, crs="pcarree", zorder=None):
     import itertools
+
     import matplotlib.patheffects as pe
 
     ax.spines["geo"].set_visible(False)
@@ -1293,10 +1304,11 @@ def add_zebra_frame(ax, lw=2, crs="pcarree", zorder=None):
 
 
 import itertools
-from matplotlib.patheffects import Stroke, Normal
-import numpy as np
-import cartopy.mpl.geoaxes
+
 import cartopy.crs as ccrs
+import cartopy.mpl.geoaxes
+import numpy as np
+from matplotlib.patheffects import Normal, Stroke
 
 
 def zebra_frame(self, lw=3, crs=None, zorder=None, iFlag_outer_frame_in=None):
@@ -1750,6 +1762,8 @@ def plot_2d_arrays(
     vmaxes: list[float] | None = None,
     figsize: tuple[float, float] = (12, 12),
     imshow_kwargs: list[dict] | None = None,
+    nrows: int | None = None,
+    ncols: int | None = None,
 ) -> None:
     """Plot a list of 2D arrays in a grid of subplots with shared axes and colorbars.
 
@@ -1781,19 +1795,22 @@ def plot_2d_arrays(
     """
     n = len(arrays)
 
-    # Calculate grid dimensions
-    nrows = ncols = ceil(sqrt(n))
+    if nrows is None and ncols is None:
+        # Calculate grid dimensions
+        nrows = ncols = ceil(sqrt(n))
 
-    # Adjust figsize based on the number of plots
-    aspect_ratio = figsize[0] / figsize[1]
-    adjusted_figsize = (
-        figsize[0] * ncols / sqrt(n),
-        figsize[1] * nrows / (sqrt(n) * aspect_ratio),
-    )
+    if figsize is None:
+        # Adjust figsize based on the number of plots
+        figsize = (8, 8)
+        aspect_ratio = figsize[0] / figsize[1]
+        figsize = (
+            figsize[0] * ncols / sqrt(n),
+            figsize[1] * nrows / (sqrt(n) * aspect_ratio),
+        )
 
     # Create figure and axes
     fig, axes = plt.subplots(
-        nrows, ncols, figsize=adjusted_figsize, sharex=True, sharey=True, squeeze=False
+        nrows, ncols, figsize=figsize, sharex=True, sharey=True, squeeze=False
     )
 
     # Flatten the axes array for easy iteration
@@ -1831,3 +1848,270 @@ def plot_2d_arrays(
     # Adjust layout and display
     fig.tight_layout()
     return fig, axes
+
+
+def compare_images(
+    tile1_path, tile2_path, subsample=1, titles=None, vm=None, cmap="RdBu"
+):
+    """
+    Display two georeferenced images side by side with a correlation scatterplot.
+
+    Parameters:
+    -----------
+    tile1_path : str
+        Path to first image file
+    tile2_path : str
+        Path to second image file
+    subsample : int, optional
+        Subsample factor for loading data (default=1)
+    titles : tuple of str, optional
+        (title1, title2) for the two images
+    vm : float, optional
+        Maximum absolute value for symmetric colorbar range (-vm to vm)
+    cmap : str, optional
+        Matplotlib colormap name (default='RdBu')
+    """
+
+    def load_gdal(filename, subsample_factor=1):
+        ds = gdal.Open(filename)
+        arr = ds.ReadAsArray()
+        if subsample_factor > 1:
+            arr = arr[::subsample_factor, ::subsample_factor]
+        return arr
+
+    # Load the data
+    img1 = load_gdal(tile1_path, subsample_factor=subsample)
+    img2 = load_gdal(tile2_path, subsample_factor=subsample)
+
+    # Set up the figure with GridSpec for better control of subplot sizes
+    fig = plt.figure(figsize=(15, 5))
+    gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1, 1.2])
+
+    # Create axes
+    ax1 = plt.subplot(gs[0])
+    ax2 = plt.subplot(gs[1], sharex=ax1, sharey=ax1)
+    ax3 = plt.subplot(gs[2])
+
+    # Set titles
+    if titles is None:
+        titles = ("Image 1", "Image 2")
+
+    # Set up common parameters for imshow
+    imshow_kwargs = {"cmap": cmap, "aspect": "equal"}
+    if vm is not None:
+        imshow_kwargs.update({"vmax": vm, "vmin": -vm})
+
+    # Display images
+    im1 = ax1.imshow(img1, **imshow_kwargs)
+    im2 = ax2.imshow(img2, **imshow_kwargs)
+
+    # Add colorbars
+    plt.colorbar(im1, ax=ax1)
+    plt.colorbar(im2, ax=ax2)
+
+    # Create scatter plot
+    ax3.scatter(img1.flatten(), img2.flatten(), alpha=0.1, s=1)
+    ax3.set_xlabel(titles[0])
+    ax3.set_ylabel(titles[1])
+
+    # Add 1:1 line
+    lims = [
+        min(ax3.get_xlim()[0], ax3.get_ylim()[0]),
+        max(ax3.get_xlim()[1], ax3.get_ylim()[1]),
+    ]
+    ax3.plot(lims, lims, "k--", alpha=0.5, zorder=0)
+    ax3.set_aspect("equal")
+
+    # Set titles
+    ax1.set_title(titles[0])
+    ax2.set_title(titles[1])
+
+    # Add correlation coefficient
+    valid = ~(np.isnan(img1) | np.isnan(img2))
+    corr = np.corrcoef(img1[valid].flatten(), img2[valid].flatten())[0, 1]
+    ax3.set_title(f"Correlation: {corr:.3f}")
+
+    # Make layout tight
+    plt.tight_layout()
+
+    return fig, (ax1, ax2, ax3)
+
+
+def create_los_marker(
+    incidence_angle: float,
+    direction: Literal["ascending", "descending"],
+    looking: Literal["right", "left"] = "right",
+    cmap: str = "RdBu_r",
+    size: float = 1.5,
+    output_pdf: Optional[str] = None,
+) -> plt.Figure:
+    """Create a Line of Sight (LOS) marker showing incidence angle with color gradient.
+
+    Parameters
+    ----------
+    incidence_angle : float
+        Angle in degrees from vertical
+    direction : Literal["ascending", "descending"]
+        Satellite orbit direction
+    looking : Literal["right", "left"]
+        Side the satellite is looking towards.
+        Defaults to "right"
+    cmap : str, optional
+        Matplotlib colormap name, by default 'RdBu_r'
+    size : float, optional
+        Scaling factor for marker size, by default 1.0
+    output_pdf : str, optional
+        If provided, save figure to this PDF path
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure containing the LOS marker
+    """
+    fig = plt.figure(figsize=(2 * size, 2 * size))
+    ax = fig.add_subplot(111)
+
+    # Draw compass points with full words
+    compass_points = {
+        "west": (-1.3, 0),
+        "east": (1.3, 0),
+        "up": (0, 1.2),
+        "down": (0, -1.2),
+    }
+    for label, (x, y) in compass_points.items():
+        ax.text(x, y, label, ha="center", va="center", fontsize=12)
+    circle = Circle((0, 0), 1, fill=False, color="black", linewidth=1.5)
+    ax.add_patch(circle)
+
+    # Add light cross grid
+    ax.plot([-1, 1], [0, 0], "lightgray", linewidth=0.5)
+    ax.plot([0, 0], [-1, 1], "lightgray", linewidth=0.5)
+
+    # Calculate arrow endpoint based on incidence angle
+    angle_rad = np.radians(
+        _get_incidence_bar_angle(incidence_angle, direction=direction, looking=looking)
+    )
+    dx = np.cos(angle_rad)
+    dy = np.sin(angle_rad)
+
+    # Create gradient bar
+    bar_width = 0.15
+    bar_length = 2
+
+    # Create points for gradient bar
+    theta = np.arctan2(dy, dx)
+    rot_matrix = np.array(
+        [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+    )
+
+    # Base rectangle points for gradient bar
+    bar_points = np.array(
+        [
+            [-bar_length / 2, -bar_width / 2],
+            [bar_length / 2, -bar_width / 2],
+            [bar_length / 2, bar_width / 2],
+            [-bar_length / 2, bar_width / 2],
+        ]
+    )
+
+    cm = plt.get_cmap(cmap)
+    # Create smooth gradient
+    num_segments = 150  # More segments for smoother gradient
+    for i in range(num_segments):
+        t_start = i / num_segments
+        t_end = (i + 1) / num_segments
+
+        # Calculate points for this segment
+        x_start = bar_points[0, 0] + (bar_points[1, 0] - bar_points[0, 0]) * t_start
+        x_end = bar_points[0, 0] + (bar_points[1, 0] - bar_points[0, 0]) * t_end
+
+        segment_points = np.array(
+            [
+                [x_start, -bar_width / 2],
+                [x_end, -bar_width / 2],
+                [x_end, bar_width / 2],
+                [x_start, bar_width / 2],
+            ]
+        )
+
+        # Rotate segment points
+        rotated_segment = np.dot(segment_points, rot_matrix.T)
+
+        # Plot segment with gradient color
+        color = cm(1 - t_start)
+        ax.fill(
+            rotated_segment[:, 0], rotated_segment[:, 1], color=color, edgecolor=None
+        )
+
+    # Plot the satellite icon above the circle.
+    #  Need to flip/rotate so it's pointing the right way
+    flip = direction == "ascending"
+    sat_icon = create_marker_from_svg(
+        Path(__file__).parent / "data/satellite.svg",
+        rotation=180 if direction == "descending" else 0,
+        flip=flip,
+    )
+    # Position is R cos(theta), R sin(theta), where R is 1.3
+    R = -1.3
+    sat_x = R * dx
+    sat_y = R * dy
+    ax.plot(sat_x, sat_y, marker=sat_icon, ms=40, color="black")
+
+    # Set equal aspect ratio and limits
+    ax.set_aspect("equal")
+    ax.set_xlim(-1.5, 1.5)
+    ax.set_ylim(-1.5, 1.5)
+    ax.axis("off")
+
+    if output_pdf:
+        fig.savefig(output_pdf, bbox_inches="tight", dpi=300)
+
+    return fig
+
+
+def _get_incidence_bar_angle(
+    incidence_angle: float,
+    direction: Literal["ascending", "descending"],
+    looking: Literal["right", "left"] = "right",
+) -> float:
+    """Calculate the angle for the incidence bar based on orbital parameters.
+
+    Parameters
+    ----------
+    incidence_angle : float
+        The incidence angle in degrees from vertical
+    direction : Literal["ascending", "descending"]
+        Satellite orbit direction
+    looking : Literal["right", "left"]
+        Side the satellite is looking towards, defaults to "right"
+
+    Returns
+    -------
+    float
+        Angle in degrees to use for the incidence bar orientation
+
+    Notes
+    -----
+    - Ascending + right-looking: down & right (original -90° based system)
+    - Ascending + left-looking: down & left
+    - Descending + right-looking: down & left (as in second example)
+    - Descending + left-looking: down & right
+    """
+    # Base angle from incidence angle
+    base_angle = incidence_angle
+
+    # Adjust for orbit direction
+    if direction == "ascending":
+        if looking == "right":
+            # Original case: down and to the right
+            return base_angle - 90
+        else:  # looking left
+            # Mirror across vertical
+            return -base_angle - 90
+    else:  # descending
+        if looking == "right":
+            # Down and to the left (as in second example)
+            return -base_angle - 90
+        else:  # looking left
+            # Mirror of descending right-looking
+            return base_angle - 90
