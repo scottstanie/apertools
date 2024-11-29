@@ -1020,10 +1020,11 @@ def map_background(
     from cartopy.io import img_tiles
 
     # tiler = img_tiles.Stamen("terrain-background")
-    # tiler = img_tiles.GoogleTiles(style="satellite")
-    mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
+    tiler = img_tiles.GoogleTiles(style="satellite")
+    # # old dead test token:
+    # mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
     # https://github.com/SciTools/cartopy/issues/1965#issuecomment-992603403
-    tiler = img_tiles.MapboxTiles(map_id="satellite-v9", access_token=mykey)
+    # tiler = img_tiles.MapboxTiles(map_id="satellite-v9", access_token=mykey)
     # tiler = img_tiles.GoogleTiles(style="satellite")
     # crs = tiler.crs
     crs = getattr(ccrs, cartopy_crs_name)()
