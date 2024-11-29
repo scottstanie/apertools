@@ -5,6 +5,10 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 import matplotlib.pyplot as plt
 import numpy as np
+import cmap
+
+DEFAULT_CMAP = cmap.Colormap("vik").to_mpl()
+VIK = DEFAULT_CMAP
 
 
 MATLAB_COLORS = [
@@ -34,29 +38,33 @@ def discrete_seismic_colors(n=5):
     """From http://colorbrewer2.org/#type=diverging&scheme=RdBu&n=7"""
     if n == 5:
         return list(
-            np.array([
-                (5, 113, 176, 256),
-                (146, 197, 222, 256),
-                # (247, 247, 247, 245),  # To make red-white-blue
-                (247, 247, 191, 245),  # To make red-yellow-blue
-                (244, 165, 130, 256),
-                (202, 0, 32, 256),
-            ])
+            np.array(
+                [
+                    (5, 113, 176, 256),
+                    (146, 197, 222, 256),
+                    # (247, 247, 247, 245),  # To make red-white-blue
+                    (247, 247, 191, 245),  # To make red-yellow-blue
+                    (244, 165, 130, 256),
+                    (202, 0, 32, 256),
+                ]
+            )
             / 256
         )
     elif n == 7:
         # Really this is red-yellow-blue
         # http://colorbrewer2.org/#type=diverging&scheme=RdYlBu&n=7
         return list(
-            np.array([
-                (69, 117, 199, 256),
-                (145, 191, 219, 256),
-                (224, 243, 248, 256),
-                (255, 255, 191, 255),
-                (254, 224, 144, 256),
-                (252, 141, 89, 256),
-                (215, 48, 39, 256),
-            ])
+            np.array(
+                [
+                    (69, 117, 199, 256),
+                    (145, 191, 219, 256),
+                    (224, 243, 248, 256),
+                    (255, 255, 191, 255),
+                    (254, 224, 144, 256),
+                    (252, 141, 89, 256),
+                    (215, 48, 39, 256),
+                ]
+            )
             / 256
         )
         # Using the Red-white-blue
@@ -197,10 +205,12 @@ def shifted_color_map(cmap, start=0, midpoint=0.5, stop=1.0, num_levels=None):
     reg_index = np.linspace(start, stop, N + 1)
 
     # shifted index to match the data
-    shift_index = np.hstack([
-        np.linspace(0.0, midpoint, N // 2, endpoint=False),
-        np.linspace(midpoint, 1.0, N // 2 + 1, endpoint=True),
-    ])
+    shift_index = np.hstack(
+        [
+            np.linspace(0.0, midpoint, N // 2, endpoint=False),
+            np.linspace(midpoint, 1.0, N // 2 + 1, endpoint=True),
+        ]
+    )
 
     for ri, si in zip(reg_index, shift_index):
         r, g, b, a = cmap(ri)
