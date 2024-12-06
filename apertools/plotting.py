@@ -3,30 +3,37 @@
 import itertools
 from math import ceil, sqrt
 from pathlib import Path
-from mpl_toolkits.axes_grid1 import AxesGrid
-import numpy as np
+from typing import Any
 
-from cartopy.mpl.geoaxes import GeoAxes
-from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 import cartopy.crs as ccrs
 import cartopy.mpl.geoaxes
+import contextily as cx
+import geopandas as gpd
 import matplotlib as mpl
 import matplotlib.animation as animation
 import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import axes_divider, axes_size
 import numpy as np
+from cartopy.mpl.geoaxes import GeoAxes
+from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
 from ipywidgets import interact, widgets
+from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
+from matplotlib.figure import Figure
 from matplotlib.patheffects import Normal, Stroke
 from matplotlib.widgets import Slider
+from mpl_toolkits.axes_grid1 import AxesGrid, axes_divider, axes_size
 from osgeo import gdal
 
 from apertools import latlon, utils
 from apertools.log import get_log
 
 from .colors import make_dismph_colors, make_shifted_cmap
+
+STATES_50_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/refs/heads/master/geojson/ne_50m_admin_1_states_provinces.geojson"
+STATES_10_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/refs/heads/master/geojson/ne_10m_admin_1_states_provinces.geojson"
+STATES_110_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/refs/heads/master/geojson/ne_110m_admin_1_states_provinces.geojson"
 
 try:
     basestring = str
@@ -1017,10 +1024,11 @@ def map_background(
         bbox (tuple[float]): (left, bottom, right, top)
         fig (matplotlib.figure): optional, existing figure to use
     """
-    from cartopy.io import img_tiles
+    from cartopy.io import img_tiles, srtm
 
-    # tiler = img_tiles.Stamen("terrain-background")
-    tiler = img_tiles.GoogleTiles(style="satellite")
+    tiler = img_tiles.StadiaMapsTiles("terrain-background")
+    # tiler = img_tiles.GoogleTiles(style="satellite")
+    # tiler = srtm.SRTM1Source()
     # # old dead test token:
     # mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
     # https://github.com/SciTools/cartopy/issues/1965#issuecomment-992603403
@@ -1093,6 +1101,82 @@ def map_background(
     return fig, ax, axim
 
 
+DEFAULT_PLOT_KWARGS = {"edgecolor": "k", "linewidth": 2}
+# TODO: good way to track basemaps I like?
+# source = cx.providers.OpenTopoMap
+# source = cx.providers.CartoDB.Positron
+# source = cx.providers.Stadia.StamenTerrainBackground
+DEFAULT_SOURCE = cx.providers.Esri.WorldTerrain
+
+
+def plot_area_of_interest(
+    gdf: gpd.GeoDataFrame,
+    basemap_source: Any = DEFAULT_SOURCE,
+    add_labels: bool = True,
+    add_zebra: bool = True,
+    ax: Axes = None,
+    contextily_kwargs: dict[str, Any] = {},
+    plot_kwargs: dict[str, Any] = DEFAULT_PLOT_KWARGS,
+) -> tuple[Figure, Axes]:
+    """
+    Plot area of interest with optional background map.
+
+    Parameters
+    ----------
+    gdf : geopandas.GeoDataFrame
+        GeoDataFrame containing geometries to plot
+    basemap_source : Any, optional
+        A source passed to [contextily.add_basemap](https://contextily.readthedocs.io/en/latest/reference.html#contextily.add_basemap)
+    add_labels : bool
+        Add a label for each row in `gdf` based on the index name.
+        Default is True.
+    add_zebra : bool
+        Flag to add a zebra frame around border.
+        Default is True.
+    contextily_kwargs : dict, optional
+        Additional keywords to pass to contextily.add_basemap
+    plot_kwargs : dict, optional
+        Additional arguments passed to gdf.plot()
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    ax : matplotlib.axes.Axes
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    gdf.boundary.plot(ax=ax, **plot_kwargs)
+
+    if add_labels:
+        # Add frame ID labels
+        for idx, row in gdf.iterrows():
+            # Get centroid of polygon for label placement
+            centroid = row.geometry.centroid
+            ax.text(
+                centroid.x,
+                centroid.y,
+                str(idx),
+                horizontalalignment="center",
+                verticalalignment="center",
+                fontsize=10,
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=2),
+            )
+
+    if basemap_source is not None:
+        cx_kwargs = contextily_kwargs or {}
+        cx.add_basemap(ax, crs=gdf.crs, source=basemap_source, **cx_kwargs)
+
+    # ax.set_xlabel("")
+    # ax.set_ylabel("")
+    if add_zebra:
+        add_zebra_frame(ax=ax)
+
+    return fig, ax
+
+
 def padded_extent(bbox, pad_pct):
     """Return a padded extent, given a bbox and a percentage of padding"""
     left, bot, right, top = bbox
@@ -1101,19 +1185,16 @@ def padded_extent(bbox, pad_pct):
     return (left - padx, right + padx, bot - pady, top + pady)
 
 
-def add_ticks(ax, side="right", resolution: float = 1):
-    import cartopy.crs as ccrs
-    from cartopy.mpl.ticker import LatitudeFormatter, LongitudeFormatter
-
-    left, right, bot, top = ax.get_extent(ccrs.PlateCarree())
+def add_ticks(ax, side="right", resolution: float = 1, projection=ccrs.PlateCarree()):
+    left, right, bot, top = ax.get_extent(projection)
     # print(left, bot, right, top)
     # lon_ticks = np.arange(np.ceil(left), np.floor(right), step=resolution)
     # lat_ticks = np.arange(np.ceil(bot), np.floor(top), step=resolution)
     bounds = (left, bot, right, top)
     lon_ticks, lat_ticks = generate_ticks(bounds, resolution=resolution)
     print(lon_ticks, lat_ticks)
-    ax.set_xticks(lon_ticks, crs=ccrs.PlateCarree())
-    ax.set_yticks(lat_ticks, crs=ccrs.PlateCarree())
+    ax.set_xticks(lon_ticks, crs=projection)
+    ax.set_yticks(lat_ticks, crs=projection)
     lon_formatter = LongitudeFormatter(zero_direction_label=True)
     lat_formatter = LatitudeFormatter()
     ax.xaxis.set_major_formatter(lon_formatter)
@@ -1239,7 +1320,8 @@ def add_zebra_frame(ax, lw=2, crs="pcarree", zorder=None):
 
     import matplotlib.patheffects as pe
 
-    ax.spines["geo"].set_visible(False)
+    if "geo" in ax.spines:
+        ax.spines["geo"].set_visible(False)
     left, right, bot, top = ax.get_extent()
     bws = itertools.cycle(["k", "white"])
 
