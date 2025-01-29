@@ -1044,29 +1044,72 @@ def cmap_to_dict(cmap_name, vmin=None, vmax=None):
 
 def map_background(
     *,
-    bbox=None,
-    image=None,
-    pad_pct=0.3,
-    bbox_image=None,
-    zoom_level=8,
-    fig=None,
-    ax=None,
-    add_coastlines=False,
-    show_ticks=True,
+    bbox: tuple[float, float, float, float] | None = None,
+    image: np.ndarray | None = None,
+    pad_pct: float = 0.3,
+    bbox_image: tuple[float, float, float, float] | None = None,
+    zoom_level: int = 8,
+    fig: plt.Figure | None = None,
+    ax: GeoAxes | None = None,
+    add_coastlines: bool = False,
+    show_ticks: bool = True,
     add_colorbar: bool = True,
     cbar_label: str | None = None,
-    tickside="left",
-    img_zorder=2,
-    figsize=None,
+    tickside: str = "left",
+    img_zorder: int = 2,
+    figsize: tuple[float, float] | None = None,
     cartopy_crs_name: str = "PlateCarree",
     tick_resolution: float = 1.0,
     **imshow_kwargs,
-):
-    """Plot the raster `img` on top of background tiles
-    Inputs:
-        img (ndarray): raster image
-        bbox (tuple[float]): (left, bottom, right, top)
-        fig (matplotlib.figure): optional, existing figure to use
+) -> tuple[plt.Figure, GeoAxes, plt.AxesImage]:
+    """
+    Plot a raster image on top of background map tiles.
+
+    Parameters
+    ----------
+    bbox : tuple of float, optional
+        Bounding box of the map (left, bottom, right, top).
+    image : numpy.ndarray, optional
+        Raster image to be plotted.
+    pad_pct : float, default 0.3
+        Percentage to pad the bounding box.
+    bbox_image : tuple of float, optional
+        Bounding box of the image (left, bottom, right, top).
+    zoom_level : int, default 8
+        Zoom level for the background tiles.
+    fig : matplotlib.figure.Figure, optional
+        Existing figure to use.
+    ax : cartopy.mpl.geoaxes.GeoAxes, optional
+        Existing axes to use.
+    add_coastlines : bool, default False
+        Whether to add coastlines to the map.
+    show_ticks : bool, default True
+        Whether to show ticks on the axes.
+    add_colorbar : bool, default True
+        Whether to add a colorbar for the image.
+    cbar_label : str, optional
+        Label for the colorbar.
+    tickside : str, default "left"
+        Side of the axes to place the ticks.
+    img_zorder : int, default 2
+        Z-order of the plotted image.
+    figsize : tuple of float, optional
+        Figure size (width, height) in inches.
+    cartopy_crs_name : str, default "PlateCarree"
+        Name of the Cartopy coordinate reference system to use.
+    tick_resolution : float, default 1.0
+        Resolution of the ticks.
+    **imshow_kwargs
+        Additional keyword arguments to pass to imshow.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The figure object.
+    ax : cartopy.mpl.geoaxes.GeoAxes
+        The axes object.
+    axim : matplotlib.image.AxesImage or None
+        The image object if an image was plotted, otherwise None.
     """
     from cartopy.io import img_tiles, srtm
 
