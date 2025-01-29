@@ -29,7 +29,7 @@ from osgeo import gdal
 from apertools import latlon, utils
 from apertools.log import get_log
 
-from .colors import make_dismph_colors, make_shifted_cmap
+from .colors import make_dismph_colors, make_shifted_cmap, VIK
 
 STATES_50_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/refs/heads/master/geojson/ne_50m_admin_1_states_provinces.geojson"
 STATES_10_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/refs/heads/master/geojson/ne_10m_admin_1_states_provinces.geojson"
@@ -55,12 +55,12 @@ class DateSlider(Slider):
             return mdates.num2date(val).strftime("%Y-%m-%d")
 
 
-def get_style(size=15, grid_on=False, cmap="vik", weight="bold", minor_ticks=False):
+def get_style(size=15, grid_on=False, cmap=VIK, weight="bold", minor_ticks=False):
     style_dict = {
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
-        "font.family": "Helvetica",
-        # "font.family": "sans-serif",
+        # "font.family": "Helvetica",
+        "font.family": "sans-serif",
         "font.size": size,
         "font.weight": weight,
         "legend.fontsize": "large",
@@ -80,7 +80,7 @@ def set_style(
     size=15,
     nolatex=True,
     grid_on=False,
-    cmap="vik",
+    cmap=VIK,
     weight="bold",
     minor_ticks=False,
 ):
@@ -89,16 +89,60 @@ def set_style(
     # As of version 2.0.0, you need to add import scienceplots before setting the style
     style = ["science", "no-latex"] if nolatex else "science"
     plt.style.use(style)
-    style_dict = get_style(
-        size, grid_on=grid_on, cmap=cmap, weight=weight, minor_ticks=minor_ticks
-    )
-    plt.rcParams.update(style_dict)
+    # style_dict = get_style(
+    #     size, grid_on=grid_on, cmap=cmap, weight=weight, minor_ticks=minor_ticks
+    # )
+    # plt.rcParams.update(style_dict)
     try:
         import xarray as xr
 
-        xr.set_options(cmap_divergent="vik")
+        xr.set_options(cmap_divergent=VIK)
     except:
         pass
+    bigger_size = size
+    medium_size = size - 2
+    small_size = size - 4
+
+    try:
+        import proplot as pplt
+    except ImportError:
+        pplt = None
+    # for plot_lib in [pplt, plt]:
+    for plot_lib in [plt]:
+        if plot_lib is None:
+            continue
+        # controls default text sizes
+        plot_lib.rc("font", size=small_size, family="Arial")
+        plot_lib.rc("axes", titlesize=small_size)  # fontsize of the axes title
+        plot_lib.rc("axes", labelsize=medium_size)  # fontsize of the x and y labels
+        plot_lib.rc("xtick", labelsize=small_size)  # fontsize of the tick labels
+        plot_lib.rc("ytick", labelsize=small_size)  # fontsize of the tick labels
+        plot_lib.rc("legend", fontsize=small_size)  # legend fontsize
+        plot_lib.rc("figure", titlesize=bigger_size)  # fontsize of the figure title
+
+
+def set_science_style(size: float = 15):
+    import scienceplots
+
+    plt.style.use(
+        [
+            "science",
+            "nature",
+            "bright",
+        ]
+    )
+
+    bigger_size = size
+    medium_size = size - 2
+    small_size = size - 4
+
+    plt.rc("font", size=small_size)  # controls default text sizes
+    plt.rc("axes", titlesize=small_size)  # fontsize of the axes title
+    plt.rc("axes", labelsize=medium_size)  # fontsize of the x and y labels
+    plt.rc("xtick", labelsize=small_size)  # fontsize of the tick labels
+    plt.rc("ytick", labelsize=small_size)  # fontsize of the tick labels
+    plt.rc("legend", fontsize=small_size)  # legend fontsize
+    plt.rc("figure", titlesize=bigger_size)  # fontsize of the figure title
 
 
 def scale_mag(img, expval=0.3, max_pct=99.95):
@@ -1026,8 +1070,7 @@ def map_background(
     """
     from cartopy.io import img_tiles, srtm
 
-    tiler = img_tiles.StadiaMapsTiles("terrain-background")
-    # tiler = img_tiles.GoogleTiles(style="satellite")
+    tiler = img_tiles.GoogleTiles(style="satellite")
     # tiler = srtm.SRTM1Source()
     # # old dead test token:
     # mykey = "pk.eyJ1Ijoic2NvdHRzdGFuaWUiLCJhIjoiY2s3Nno3bmE5MDJlbDNmcGNpanV0ZzJ3MCJ9.PyaQ_iwKFcFcRr-EveCObA"
@@ -1192,7 +1235,7 @@ def add_ticks(ax, side="right", resolution: float = 1, projection=ccrs.PlateCarr
     # lat_ticks = np.arange(np.ceil(bot), np.floor(top), step=resolution)
     bounds = (left, bot, right, top)
     lon_ticks, lat_ticks = generate_ticks(bounds, resolution=resolution)
-    print(lon_ticks, lat_ticks)
+    print("Adding (lon, lat) ticks:", lon_ticks, lat_ticks)
     ax.set_xticks(lon_ticks, crs=projection)
     ax.set_yticks(lat_ticks, crs=projection)
     lon_formatter = LongitudeFormatter(zero_direction_label=True)
@@ -1964,3 +2007,113 @@ def compare_images(
     plt.tight_layout()
 
     return fig, (ax1, ax2, ax3)
+
+
+def plot_area_of_interest_minimap(
+    state: str | None = None,
+    bbox: tuple[float, float, float, float] | None = None,
+    area_coordinates: list[tuple[float, float]] | None = None,
+    buffer: float = 0.0,
+    grid_step: float | None = 1.0,
+    ax=None,
+) -> tuple:
+    """Make a basic map to highlight an area of interest.
+
+    Parameters
+    ----------
+    state : str
+        The name of the state to center on the plot
+    bbox : tuple of float, optional
+        A tuple representing the bounding box (minx, miny, maxx, maxy) of the AOI
+    area_coordinates : list of tuple of float, optional
+        A list of tuples representing the coordinates of the area of interest.
+    buffer : float, optional
+        The buffer distance for the state's geometry. Default is 0.0, meaning no buffer.
+    grid_step : float
+        Frequency to plot the grid in degrees. if `None`, skips the grid
+    ax : matplotlib.axes._subplots.AxesSubplot, optional
+        An Axes object to plot on. If None, a new figure and axes are created.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        The created matplotlib Figure instance.
+    ax : matplotlib.axes._subplots.AxesSubplot
+        The created or used Axes instance.
+    """
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    import geopandas as gpd
+    from cartopy.io import shapereader
+    from cartopy.mpl.gridliner import LATITUDE_FORMATTER, LONGITUDE_FORMATTER
+    import matplotlib.ticker as mticker
+    from shapely.geometry import box, Polygon
+
+    # Create a GeoAxes object if one wasn't provided
+    if ax is None:
+        # Use cartopy's GeoAxes
+        fig, ax = plt.subplots(subplot_kw={"projection": ccrs.PlateCarree()})
+    else:
+        fig = ax.figure
+
+    # Add a background
+    ax.add_feature(cfeature.LAND)
+    ax.add_feature(cfeature.COASTLINE)
+    if state is not None:
+        # Load the US States geometry
+        states_shp = shapereader.natural_earth(
+            resolution="110m",
+            category="cultural",
+            name="admin_1_states_provinces_lakes",
+        )
+        us_states = gpd.read_file(states_shp)
+
+        # Filter for the state of interest
+        state_geo = us_states[us_states.name.str.lower() == state.lower()]
+        g = state_geo.geometry.iloc[0]
+        buffered_state = g.buffer(buffer)
+        left, bottom, right, top = buffered_state.bounds
+        extent = (left, right, bottom, top)
+        # Filter the GeoDataFrame to only include states that intersect
+        intersecting_states = us_states[us_states.geometry.intersects(buffered_state)]
+        # Plot the states
+        intersecting_states.plot(ax=ax, color="none", edgecolor="black")
+    else:
+        states_provinces = cfeature.NaturalEarthFeature(
+            category="cultural",
+            name="admin_1_states_provinces_lines",
+            scale="110m",
+            facecolor="none",
+        )
+        buffered_bounds = box(*bbox).buffer(buffer).bounds
+        left, bottom, right, top = buffered_bounds
+        extent = (left, right, bottom, top)
+        ax.add_feature(states_provinces, edgecolor="gray")
+
+    ax.set_extent(extent, crs=ccrs.PlateCarree())
+    # Set extent using the correct coordinate system
+
+    if grid_step is not None:
+        gl = ax.gridlines(draw_labels=True, alpha=0.2)
+
+        gl.xlocator = mticker.FixedLocator(np.arange(-180, 180, grid_step))
+        gl.ylocator = mticker.FixedLocator(np.arange(-90, 90, grid_step))
+
+        gl.xformatter = LONGITUDE_FORMATTER
+        gl.yformatter = LATITUDE_FORMATTER
+        gl.right_labels = False
+        gl.top_labels = False
+
+    aoi = None
+    # Create a polygon for the area of interest
+    if bbox is not None:
+        aoi = box(*bbox)
+    elif area_coordinates is not None:
+        aoi = Polygon(area_coordinates)
+    if aoi is not None:
+        # Create a GeoDataFrame for the area of interest
+        area_gdf = gpd.GeoDataFrame([1], geometry=[aoi], crs=state_geo.crs)
+
+        # Plot the area of interest
+        area_gdf.plot(ax=ax, edgecolor="red", facecolor="None", lw=2)
+    return fig, ax

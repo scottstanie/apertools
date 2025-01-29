@@ -177,10 +177,12 @@ def _lowess(y, x, delta, frac=0.4, n_iter=2, x_out=None):
             # Form the linear system as the reduced-size version of the Ax=b:
             # A^T A x = A^T b
             b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
-            A = np.array([
-                [np.sum(weights), np.sum(weights * x)],
-                [np.sum(weights * x), np.sum(weights * x * x)],
-            ])
+            A = np.array(
+                [
+                    [np.sum(weights), np.sum(weights * x)],
+                    [np.sum(weights * x), np.sum(weights * x * x)],
+                ]
+            )
 
             beta = np.linalg.lstsq(A, b)[0]
             yest[i] = beta[0] + beta[1] * x[i]
@@ -228,7 +230,7 @@ def lowess_xr(da, x_dset="date", min_days_weighted=2 * 365.25, frac=0.7, n_iter=
     out_da = xr.DataArray(out_stack, coords=da.coords, dims=da.dims)
     out_da.attrs["description"] = "Lowess smoothed stack"
 
-    out_da = _write_attrs(out_da, frac=frac, n_iter=n_iter)
+    out_da = _write_attrs(out_da, frac=frac, n_iter=n_iter, in_attrs=da.attrs)
     return out_da
 
 
@@ -610,10 +612,20 @@ def bootstrap_lowess_xr(
     )
 
     out_mean = _write_attrs(
-        out_mean, K=K, frac=frac, n_iter=n_iter, pct_bootstrap=pct_bootstrap
+        out_mean,
+        K=K,
+        frac=frac,
+        n_iter=n_iter,
+        pct_bootstrap=pct_bootstrap,
+        in_attrs=da.attrs,
     )
     out_std = _write_attrs(
-        out_std, K=K, frac=frac, n_iter=n_iter, pct_bootstrap=pct_bootstrap
+        out_std,
+        K=K,
+        frac=frac,
+        n_iter=n_iter,
+        pct_bootstrap=pct_bootstrap,
+        in_attrs=da.attrs,
     )
 
     # TODO: If there's an existing mean/std, update using
@@ -628,7 +640,9 @@ def bootstrap_lowess_xr(
     return out_mean, out_std
 
 
-def _write_attrs(da, K=None, n_iter=None, frac=None, pct_bootstrap=None):
+def _write_attrs(
+    da, K=None, n_iter=None, frac=None, pct_bootstrap=None, in_attrs: dict = {}
+):
     """Write attributes to a DataArray"""
     attr_names = []
     attr_values = []
@@ -647,6 +661,7 @@ def _write_attrs(da, K=None, n_iter=None, frac=None, pct_bootstrap=None):
 
     for attr_name, val in zip(attr_names, attr_values):
         da.attrs[attr_name] = val
+    da.attrs |= in_attrs
     return da
 
 
@@ -683,10 +698,12 @@ def demo_fit(x, y, w, i, delta=None):
     # Form the linear system as the reduced-size version of the Ax=b:
     # A^T A x = A^T b
     b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
-    A = np.array([
-        [np.sum(weights), np.sum(weights * x)],
-        [np.sum(weights * x), np.sum(weights * x * x)],
-    ])
+    A = np.array(
+        [
+            [np.sum(weights), np.sum(weights * x)],
+            [np.sum(weights * x), np.sum(weights * x * x)],
+        ]
+    )
 
     beta = np.linalg.lstsq(A, b)[0]
     return beta
