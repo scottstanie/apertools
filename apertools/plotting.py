@@ -1061,7 +1061,7 @@ def map_background(
     cartopy_crs_name: str = "PlateCarree",
     tick_resolution: float = 1.0,
     **imshow_kwargs,
-) -> tuple[plt.Figure, GeoAxes, plt.AxesImage]:
+) -> tuple[plt.Figure, GeoAxes, plt.Axes]:
     """
     Plot a raster image on top of background map tiles.
 
