@@ -1,19 +1,36 @@
-from typing import Literal, Optional
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "cmap",
+#     "matplotlib",
+#     "numpy",
+#     "svgpath2mpl",
+#     "svgpathtools",
+#     "tyro",
+#     "ultraplot",
+# ]
+# ///
+from pathlib import Path
+from typing import Literal
+import tyro
+
+import matplotlib as mpl
+import ultraplot as uplt
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Circle
-from pathlib import Path
-
-from apertools.plotting import create_marker_from_svg
+from svgpath2mpl import parse_path
+from svgpathtools import svg2paths
+from cmap import Colormap
 
 
 def create_los_marker(
-    incidence_angle: float,
     direction: Literal["ascending", "descending"],
+    incidence_angle: float = 37,  # mid swath for sentinel
     looking: Literal["right", "left"] = "right",
     cmap: str = "RdBu_r",
     size: float = 1.5,
-    output_pdf: Optional[str] = None,
+    output_pdf: str | None = None,
 ) -> plt.Figure:
     """Create a Line of Sight (LOS) marker showing incidence angle with color gradient.
 
@@ -38,6 +55,12 @@ def create_los_marker(
     matplotlib.figure.Figure
         Figure containing the LOS marker
     """
+    if output_pdf is None:
+        output_pdf = (
+            f"los_marker_{direction}_{looking}_{str(cmap)}_inc{incidence_angle}.pdf"
+        )
+        print(f"Saving to {output_pdf}")
+    cmap = Colormap(cmap)
     fig = plt.figure(figsize=(2 * size, 2 * size))
     ax = fig.add_subplot(111)
 
@@ -50,8 +73,8 @@ def create_los_marker(
     }
     for label, (x, y) in compass_points.items():
         ax.text(x, y, label, ha="center", va="center", fontsize=12)
-    circle = Circle((0, 0), 1, fill=False, color="black", linewidth=1.5)
-    ax.add_patch(circle, zorder=5)
+    circle = Circle((0, 0), 1, fill=False, color="black", linewidth=1.5, zorder=5)
+    ax.add_patch(circle)
 
     # Add light cross grid
     ax.plot([-1, 1], [0, 0], "lightgray", linewidth=0.5)
@@ -84,7 +107,7 @@ def create_los_marker(
         ]
     )
 
-    cm = plt.get_cmap(cmap)
+    cm = cmap.to_mpl()
     # Create smooth gradient
     num_segments = 150  # More segments for smoother gradient
     for i in range(num_segments):
@@ -121,7 +144,7 @@ def create_los_marker(
     #  Need to flip/rotate so it's pointing the right way
     flip = direction == "ascending"
     sat_icon = create_marker_from_svg(
-        Path(__file__).parent / "data/satellite.svg",
+        Path(__file__).parent.parent / "apertools/data/satellite.svg",
         rotation=180 if direction == "descending" else 0,
         flip=flip,
     )
@@ -137,8 +160,7 @@ def create_los_marker(
     ax.set_ylim(-1.5, 1.5)
     ax.axis("off")
 
-    if output_pdf:
-        fig.savefig(output_pdf, bbox_inches="tight", dpi=300)
+    fig.savefig(output_pdf, bbox_inches="tight", dpi=300)
 
     return fig
 
@@ -189,3 +211,31 @@ def _get_incidence_bar_angle(
         else:  # looking left
             # Mirror of descending right-looking
             return base_angle - 90
+
+
+def create_marker_from_svg(
+    filename, rotation=0, shift=True, flip=True, scale=1, **kwargs
+):
+    """Create a marker from an SVG file
+
+    Based on https://petercbsmith.github.io/marker-tutorial.html
+    Requires svgpathtools and svgpath2mpl
+
+    Example:
+        >>> marker = create_marker_from_svg("/path/to/marker.svg", rotation=45)
+        >>> ax.plot(x, y, marker=marker)
+    """
+    path, attributes = svg2paths(filename)
+    marker = parse_path(attributes[0]["d"])
+    if shift:
+        marker.vertices -= marker.vertices.mean(axis=0)
+    if flip:
+        marker = marker.transformed(mpl.transforms.Affine2D().rotate_deg(180))
+        marker = marker.transformed(mpl.transforms.Affine2D().scale(-1, 1))
+    if rotation:
+        marker = marker.transformed(mpl.transforms.Affine2D().rotate_deg(rotation))
+    return marker
+
+
+if __name__ == "__main__":
+    tyro.cli(create_los_marker)

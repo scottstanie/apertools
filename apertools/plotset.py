@@ -8,12 +8,13 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 import matplotlib.pyplot as plt
+import ultraplot as uplt
 import colorcet as cc
 from matplotlib import colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable  # noqa  (used in user code)
 
 # Global figure parameters
-GLOB_FIG_PARAMS = {
+GLOBAL_FIG_PARAMS = {
     "fontsize": 8,
     "family": "serif",
     "usetex": True,
@@ -26,6 +27,7 @@ GLOB_FIG_PARAMS = {
     "linewidth": 0.5,
     "ticklength": 2.50,
     "minorticklength": 1.1,
+    "cmap": "RdBu",
 }
 
 # Example color list
@@ -44,29 +46,36 @@ def initialize_matplotlib() -> None:
     """
     Initialize Matplotlib rcParams for consistent publication-quality plots.
 
-    This function applies a global style defined by the GLOB_FIG_PARAMS dictionary.
+    This function applies a global style defined by the GLOBAL_FIG_PARAMS dictionary.
     """
-    plt.rc("font", size=GLOB_FIG_PARAMS["fontsize"], family=GLOB_FIG_PARAMS["family"])
-    plt.rcParams["text.usetex"] = GLOB_FIG_PARAMS["usetex"]
-    plt.rcParams["text.latex.preamble"] = GLOB_FIG_PARAMS["preamble"]
-    plt.rcParams["legend.fontsize"] = GLOB_FIG_PARAMS["fontsize"]
-    plt.rcParams["font.size"] = GLOB_FIG_PARAMS["fontsize"]
-    plt.rcParams["axes.linewidth"] = GLOB_FIG_PARAMS["linewidth"]
-    plt.rcParams["axes.labelcolor"] = GLOB_FIG_PARAMS["fontcolour"]
-    plt.rcParams["axes.edgecolor"] = GLOB_FIG_PARAMS["fontcolour"]
-    plt.rcParams["xtick.color"] = GLOB_FIG_PARAMS["fontcolour"]
-    plt.rcParams["xtick.direction"] = GLOB_FIG_PARAMS["tickdirection"]
-    plt.rcParams["ytick.direction"] = GLOB_FIG_PARAMS["tickdirection"]
-    plt.rcParams["ytick.color"] = GLOB_FIG_PARAMS["fontcolour"]
-    plt.rcParams["xtick.major.width"] = GLOB_FIG_PARAMS["linewidth"]
-    plt.rcParams["ytick.major.width"] = GLOB_FIG_PARAMS["linewidth"]
-    plt.rcParams["xtick.minor.width"] = GLOB_FIG_PARAMS["linewidth"]
-    plt.rcParams["ytick.minor.width"] = GLOB_FIG_PARAMS["linewidth"]
-    plt.rcParams["ytick.major.size"] = GLOB_FIG_PARAMS["ticklength"]
-    plt.rcParams["xtick.major.size"] = GLOB_FIG_PARAMS["ticklength"]
-    plt.rcParams["ytick.minor.size"] = GLOB_FIG_PARAMS["minorticklength"]
-    plt.rcParams["xtick.minor.size"] = GLOB_FIG_PARAMS["minorticklength"]
-    plt.rcParams["text.color"] = GLOB_FIG_PARAMS["fontcolour"]
+    plt.rc(
+        "font", size=GLOBAL_FIG_PARAMS["fontsize"], family=GLOBAL_FIG_PARAMS["family"]
+    )
+
+    def _set_param(rc_key, global_key):
+        plt.rcParams[rc_key] = GLOBAL_FIG_PARAMS[global_key]
+
+    _set_param("text.usetex", "usetex")
+    _set_param("text.latex.preamble", "preamble")
+    _set_param("legend.fontsize", "fontsize")
+    _set_param("font.size", "fontsize")
+    _set_param("axes.linewidth", "linewidth")
+    _set_param("axes.labelcolor", "fontcolour")
+    _set_param("axes.edgecolor", "fontcolour")
+    _set_param("xtick.color", "fontcolour")
+    _set_param("xtick.direction", "tickdirection")
+    _set_param("ytick.direction", "tickdirection")
+    _set_param("ytick.color", "fontcolour")
+    _set_param("xtick.major.width", "linewidth")
+    _set_param("ytick.major.width", "linewidth")
+    _set_param("xtick.minor.width", "linewidth")
+    _set_param("ytick.minor.width", "linewidth")
+    _set_param("ytick.major.size", "ticklength")
+    _set_param("xtick.major.size", "ticklength")
+    _set_param("ytick.minor.size", "minorticklength")
+    _set_param("xtick.minor.size", "minorticklength")
+    _set_param("text.color", "fontcolour")
+    _set_param("image.cmap", "cmap")
 
 
 def prepare_figure(
@@ -100,7 +109,7 @@ def prepare_figure(
         depending on `figsizeunit`, by default (1.7, 0.8).
     figsizeunit : {'col', 'in'}, optional
         If 'col', multiply the width and height of figsize by `column_inch`
-        from GLOB_FIG_PARAMS. If 'in', no scaling is applied, by default 'col'.
+        from GLOBAL_FIG_PARAMS. If 'in', no scaling is applied, by default 'col'.
     sharex : {'none', 'all', 'row', 'col', bool}, optional
         Controls sharing of properties among x axes, by default 'col'.
     sharey : {'none', 'all', 'row', 'col', bool}, optional
@@ -136,7 +145,7 @@ def prepare_figure(
     initialize_matplotlib()
 
     if figsizeunit == "col":
-        scale_factor = GLOB_FIG_PARAMS["column_inch"]
+        scale_factor = GLOBAL_FIG_PARAMS["column_inch"]
     elif figsizeunit == "in":
         scale_factor = 1.0
     else:
