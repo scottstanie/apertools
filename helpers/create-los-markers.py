@@ -30,7 +30,7 @@ def create_los_marker(
     looking: Literal["right", "left"] = "right",
     cmap: str = "RdBu_r",
     size: float = 1.5,
-    output_pdf: str | None = None,
+    output: str | None = None,
 ) -> plt.Figure:
     """Create a Line of Sight (LOS) marker showing incidence angle with color gradient.
 
@@ -47,7 +47,7 @@ def create_los_marker(
         Matplotlib colormap name, by default 'RdBu_r'
     size : float, optional
         Scaling factor for marker size, by default 1.0
-    output_pdf : str, optional
+    output : str, optional
         If provided, save figure to this PDF path
 
     Returns
@@ -55,11 +55,11 @@ def create_los_marker(
     matplotlib.figure.Figure
         Figure containing the LOS marker
     """
-    if output_pdf is None:
-        output_pdf = (
-            f"los_marker_{direction}_{looking}_{str(cmap)}_inc{incidence_angle}.pdf"
+    if output is None:
+        output = (
+            f"los_marker_{direction}_{looking}_{str(cmap)}_inc{incidence_angle}.svg"
         )
-        print(f"Saving to {output_pdf}")
+        print(f"Saving to {output}")
     cmap = Colormap(cmap)
     fig = plt.figure(figsize=(2 * size, 2 * size))
     ax = fig.add_subplot(111)
@@ -160,7 +160,7 @@ def create_los_marker(
     ax.set_ylim(-1.5, 1.5)
     ax.axis("off")
 
-    fig.savefig(output_pdf, bbox_inches="tight", dpi=300)
+    fig.savefig(output, bbox_inches="tight", dpi=300)
 
     return fig
 
